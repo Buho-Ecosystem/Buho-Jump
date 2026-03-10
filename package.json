@@ -1,0 +1,57 @@
+{
+  "name": "buho-jump",
+  "description": "Buho Jump — Nostr key manager, NIP-07 signer, NIP-46 remote signing, NWC wallet & WebLN provider",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "author": "Buho (https://github.com/DoktorShift)",
+  "contributors": [
+    "DoktorShift (https://github.com/DoktorShift)",
+    "Pratik227 (https://github.com/Pratik227)"
+  ],
+  "homepage": "https://github.com/DoktorShift/buho-jump",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DoktorShift/buho-jump.git"
+  },
+  "scripts": {
+    "dev": "wxt",
+    "dev:brave": "wxt --chrome-binary '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'",
+    "dev:edge": "wxt -b edge",
+    "dev:opera": "wxt --chrome-binary '/Applications/Opera.app/Contents/MacOS/Opera'",
+    "dev:vivaldi": "wxt --chrome-binary '/Applications/Vivaldi.app/Contents/MacOS/Vivaldi'",
+    "dev:arc": "wxt --chrome-binary '/Applications/Arc.app/Contents/MacOS/Arc'",
+    "dev:firefox": "wxt -b firefox --mv3",
+    "build": "wxt build",
+    "build:edge": "wxt build -b edge",
+    "build:firefox": "wxt build -b firefox --mv3",
+    "build:all": "wxt build && wxt build -b edge && wxt build -b firefox --mv3",
+    "zip": "wxt zip",
+    "zip:edge": "wxt zip -b edge",
+    "zip:firefox": "wxt zip -b firefox --mv3",
+    "zip:all": "wxt zip && wxt zip -b edge && wxt zip -b firefox --mv3",
+    "open:chrome": "open .output/chrome-mv3",
+    "open:edge": "open .output/edge-mv3",
+    "open:firefox": "open .output/firefox-mv3",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "html5-qrcode": "^2.3.8",
+    "lucide-vue-next": "^0.575.0",
+    "nostr-core": "file:../nostr-core",
+    "qrcode": "^1.5.4",
+    "tailwind-merge": "^3.5.0",
+    "vue": "^3.5.27",
+    "vue-i18n": "^11.3.0",
+    "vue-sonner": "^2.0.9"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.0",
+    "@wxt-dev/module-vue": "^1.0.3",
+    "tailwindcss": "^4.2.0",
+    "wxt": "^0.20.17"
+  },
+  "license": "MIT"
+}

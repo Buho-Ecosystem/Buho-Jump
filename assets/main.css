@@ -1,0 +1,249 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+/*
+ * All colors come from CSS custom properties set by the theme composable.
+ * This file only defines the Tailwind mapping and base styles.
+ * Never hardcode colors — always use var(--token-name).
+ */
+
+@theme {
+  /* Map semantic tokens to Tailwind utilities */
+  --color-brand: var(--brand-primary);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-light: var(--brand-light);
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-surface: var(--brand-surface);
+
+  --color-surface-base: var(--surface-base);
+  --color-surface-card: var(--surface-card);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-hover: var(--surface-hover);
+
+  --color-border: var(--border);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --color-success: var(--semantic-success);
+  --color-error: var(--semantic-error);
+  --color-warning: var(--semantic-warning);
+  --color-info: var(--semantic-info);
+  --color-incoming: var(--semantic-incoming);
+  --color-outgoing: var(--semantic-outgoing);
+
+  --color-action-send: var(--action-send);
+  --color-action-receive: var(--action-receive);
+
+  --font-family-sans: 'Manrope', system-ui, -apple-system, sans-serif;
+}
+
+/* Buho gradient — available when buho-green theme is active */
+[data-theme="buho-green"] {
+  --gradient-green: linear-gradient(90deg, #059573 0%, #78D53C 100%);
+}
+.buho-gradient {
+  background: var(--gradient-green, var(--brand-primary));
+}
+
+/* Base reset */
+body {
+  margin: 0;
+  font-family: var(--font-family-sans);
+  background: var(--surface-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Extension popup container */
+.popup-container {
+  position: relative;
+  width: 380px;
+  min-height: 520px;
+  max-height: 600px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Bottom tab bar */
+.bottom-tabs {
+  display: flex;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.bottom-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+  position: relative;
+}
+.bottom-tab:hover {
+  color: var(--text-secondary);
+}
+.bottom-tab.active {
+  color: var(--brand-primary);
+}
+.bottom-tab.active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 24px;
+  right: 24px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--brand-primary);
+}
+
+.tab-badge {
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 24px);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--surface-base);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Animations ── */
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s ease-out both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s ease-out both;
+}
+
+/* Staggered entrance delays */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+
+/* Better skeleton shimmer */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--surface-elevated) 0%,
+    var(--surface-hover) 40%,
+    var(--surface-elevated) 80%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* Smooth button press feedback */
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* Primary action button base style */
+.btn-primary {
+  transition: background-color 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+/* Card hover lift */
+.card-interactive {
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+.card-interactive:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+/* ── BuhoGO-style action buttons ── */
+
+/* Receive button — from theme brand palette */
+.btn-action-receive {
+  background: var(--action-receive);
+}
+.btn-action-receive:hover {
+  filter: brightness(1.08);
+}
+
+/* Send button — from theme brand palette (deeper shade) */
+.btn-action-send {
+  background: var(--action-send);
+}
+.btn-action-send:hover {
+  filter: brightness(1.08);
+}
+
+/* ── Chat bubbles ── */
+
+.chat-bubble-sent {
+  background: linear-gradient(135deg, var(--semantic-success), color-mix(in srgb, var(--semantic-success) 70%, #78D53C));
+  color: #fff;
+}
+
+.chat-bubble-received {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.chat-bubble-zap {
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  color: #fff;
+}
+

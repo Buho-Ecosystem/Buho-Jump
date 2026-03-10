@@ -1,0 +1,880 @@
+/**
+ * Background service worker — handles all extension logic:
+ * - Master password / lock state
+ * - NIP-07 signing (local keys OR NIP-46 remote signer)
+ * - NWC wallet operations (via nostr-core NWC client)
+ * - WebLN compatibility layer
+ * - Permission enforcement with blocklist + anti-spam
+ * - Account management
+ * - Profile publishing/fetching
+ */
+
+import { finalizeEvent, hexToBytes, nip04, nip44, NWC } from 'nostr-core'
+import {
+  getActiveAccount,
+  getAccounts,
+  getActiveAccountId,
+  setActiveAccount,
+  createLocalAccount,
+  importAccount,
+  createNip46Account,
+  updateAccount,
+  removeAccount,
+  getAccountSummaries,
+} from '../lib/accounts.js'
+import {
+  checkPermission,
+  setPermission,
+  getPermissions,
+  removePermission,
+  removeDomainPermissions,
+} from '../lib/permissions.js'
+import {
+  isPasswordSet,
+  setupPassword,
+  verifyPassword,
+  changePassword,
+  encryptData,
+  decryptData,
+} from '../lib/crypto.js'
+import { isBlocked, getBlocklist, addToBlocklist, removeFromBlocklist } from '../lib/blocklist.js'
+import { getWalletConfig, saveWalletConfig, clearWalletConfig } from '../lib/wallet.js'
+import {
+  getAllowances, getAllowance, setAllowance,
+  recordSpend, checkBudget, removeAllowance, resetAllowanceSpend,
+} from '../lib/allowances.js'
+import { publishProfile, fetchProfile } from '../lib/profile.js'
+import {
+  getRelayConfig, getPoolRelays, setPoolRelays,
+  addRelay as addRelayToPool, removeRelay as removeRelayFromPool,
+  resetPoolToDefaults, fetchNip65, fetchRelayInfo,
+  createNip65Event, DEFAULT_ACCOUNT_RELAYS,
+} from '../lib/relays.js'
+import { getPool } from '../lib/relayPool.js'
+import { connectBunker } from '../lib/nip46-bridge.js'
+import { openPromptWindow, supportsWindowsApi } from '../lib/browser/capabilities.js'
+import { notifyDm, notifyPayment, setupNotificationClickHandler } from '../lib/notifications.js'
+import { saveSession, getSession, clearSession } from '../lib/session.js'
+
+// ── In-memory state ──────────────────────────────────────────────
+let nwcClient = null
+let nwcNotifUnsub = null // NIP-47 notification subscription cleanup
+let remoteSigner = null
+let pendingPermissions = new Map()
+let _cachedPassword = null // In-memory cache of session password
+let rejectedOrigins = new Set() // Anti-spam: tracks rejected origins
+
+// ── Session restore (service worker wake-up) ─────────────────────
+let _sessionLoadPromise = null
+
+async function ensureSessionLoaded() {
+  if (_cachedPassword !== null) return
+  if (_sessionLoadPromise) return _sessionLoadPromise
+  _sessionLoadPromise = (async () => {
+    const session = await getSession()
+    if (!session) return
+    // Check auto-lock expiry
+    const { autoLockMinutes } = await chrome.storage.local.get('autoLockMinutes')
+    const minutes = autoLockMinutes ?? 5
+    if (minutes > 0) {
+      const elapsed = (Date.now() - session.unlockedAt) / 1000 / 60
+      if (elapsed >= minutes) {
+        await clearSession()
+        return
+      }
+    }
+    _cachedPassword = session.password
+  })()
+  try { await _sessionLoadPromise } finally { _sessionLoadPromise = null }
+}
+
+// ── Lock / Unlock ────────────────────────────────────────────────
+function isUnlocked() {
+  return _cachedPassword !== null
+}
+
+// ── Permission prompt ────────────────────────────────────────────
+// All standard permission methods for "allow all" feature
+const ALL_PERMISSION_METHODS = [
+  'getPublicKey', 'signEvent',
+  'nip04_encrypt', 'nip04_decrypt',
+  'nip44_encrypt', 'nip44_decrypt',
+  'weblnEnable',
+]
+
+async function requestPermission(host, method, kind) {
+  const activeId = await getActiveAccountId()
+  const existing = await checkPermission(host, method, kind, activeId)
+  if (existing === 'allow') return true
+  if (existing === 'deny') return false
+
+  // Check if this is the first time this host is asking for any permission
+  const allPerms = await getPermissions(activeId)
+  const hostPerms = allPerms[host]
+  const firstVisit = !hostPerms || Object.keys(hostPerms).length === 0
+
+  return new Promise((resolve) => {
+    const requestId = crypto.randomUUID()
+    pendingPermissions.set(requestId, { resolve })
+
+    const url = chrome.runtime.getURL(
+      `/prompt.html?requestId=${requestId}&host=${encodeURIComponent(host)}&method=${encodeURIComponent(method)}&kind=${kind ?? ''}&firstVisit=${firstVisit}`
+    )
+
+    openPromptWindow(url).then((win) => {
+      // Prompt window guard: reject if window/tab is closed without response
+      if (supportsWindowsApi && win?.id) {
+        const onRemoved = (windowId) => {
+          if (windowId === win.id && pendingPermissions.has(requestId)) {
+            pendingPermissions.delete(requestId)
+            resolve(false)
+            chrome.windows.onRemoved.removeListener(onRemoved)
+          }
+        }
+        chrome.windows.onRemoved.addListener(onRemoved)
+      }
+    })
+  })
+}
+
+// ── NIP-46 connection management ─────────────────────────────────
+async function ensureRemoteSigner() {
+  if (remoteSigner?.connected) return remoteSigner
+
+  const account = await getActiveAccount()
+  if (!account || account.mode !== 'nip46') return null
+  if (!account.nip46Session?.bunkerUri || !account.nip46ClientSecretHex) return null
+
+  try {
+    remoteSigner = await connectBunker(
+      account.nip46Session.bunkerUri,
+      account.nip46ClientSecretHex
+    )
+    return remoteSigner
+  } catch {
+    return null
+  }
+}
+
+// ── Lock gate — prompts user to unlock when locked ───────────────
+let pendingUnlock = null // shared promise so only one unlock prompt opens
+
+async function requireUnlocked(origin) {
+  await ensureSessionLoaded()
+  if (isUnlocked()) return
+
+  // If an unlock prompt is already open, wait for it
+  if (pendingUnlock) {
+    const ok = await pendingUnlock
+    if (!ok) throw new Error('Extension is locked')
+    return
+  }
+
+  // Open unlock prompt and wait
+  const promise = new Promise((resolve) => {
+    const requestId = crypto.randomUUID()
+    pendingPermissions.set(requestId, { resolve })
+
+    const originParam = origin ? `&origin=${encodeURIComponent(origin)}` : ''
+    const url = chrome.runtime.getURL(
+      `/prompt.html?requestId=${requestId}&mode=unlock${originParam}`
+    )
+
+    openPromptWindow(url, { width: 400, height: 440 }).then((win) => {
+      if (supportsWindowsApi && win?.id) {
+        const onRemoved = (windowId) => {
+          if (windowId === win.id && pendingPermissions.has(requestId)) {
+            pendingPermissions.delete(requestId)
+            resolve(false)
+            chrome.windows.onRemoved.removeListener(onRemoved)
+          }
+        }
+        chrome.windows.onRemoved.addListener(onRemoved)
+      }
+    })
+  })
+
+  pendingUnlock = promise.finally(() => { pendingUnlock = null })
+  const ok = await pendingUnlock
+  if (!ok) throw new Error('Extension is locked')
+}
+
+// ── NIP-07 Handlers ──────────────────────────────────────────────
+async function handleGetPublicKey(sender) {
+  const host = new URL(sender.url).hostname
+  await requireUnlocked(host)
+  const allowed = await requestPermission(host, 'getPublicKey')
+  if (!allowed) return { error: 'Permission denied' }
+
+  const account = await getActiveAccount()
+  if (!account) return { error: 'No active account' }
+
+  if (account.mode === 'local') {
+    return { result: account.pubkey }
+  }
+
+  if (account.mode === 'nip46') {
+    const signer = await ensureRemoteSigner()
+    if (!signer) return { error: 'Not connected to remote signer' }
+    const pubkey = await signer.getPublicKey()
+    return { result: pubkey }
+  }
+
+  return { error: 'No signer available' }
+}
+
+async function handleSignEvent(params, sender) {
+  const host = new URL(sender.url).hostname
+  await requireUnlocked(host)
+  const event = params[0]
+  if (!event) return { error: 'No event provided' }
+  const allowed = await requestPermission(host, 'signEvent', event.kind)
+  if (!allowed) return { error: 'Permission denied' }
+
+  const account = await getActiveAccount()
+  if (!account) return { error: 'No active account' }
+
+  if (account.mode === 'local') {
+    const secretKey = hexToBytes(account.secretHex)
+    const signed = finalizeEvent(event, secretKey)
+    return { result: signed }
+  }
+
+  if (account.mode === 'nip46') {
+    const signer = await ensureRemoteSigner()
+    if (!signer) return { error: 'Not connected to remote signer' }
+    const signed = await signer.signEvent(event)
+    return { result: signed }
+  }
+
+  return { error: 'No signer available' }
+}
+
+async function handleGetRelays() {
+  const account = await getActiveAccount()
+
+  if (account?.mode === 'nip46') {
+    const signer = await ensureRemoteSigner()
+    if (signer) {
+      try {
+        return { result: await signer.getRelays() }
+      } catch { /* fall through */ }
+    }
+  }
+
+  // Return stored account relays as NIP-07 relay map
+  if (account?.pubkey) {
+    const relays = await getPoolRelays(account.pubkey, 'account')
+    const map = {}
+    for (const url of relays) {
+      map[url] = { read: true, write: true }
+    }
+    return { result: map }
+  }
+
+  return { result: {} }
+}
+
+async function handleEncryptDecrypt(type, params, sender) {
+  const host = new URL(sender.url).hostname
+  await requireUnlocked(host)
+  const [pubkey, text] = params
+  const method = type.toLowerCase()
+  const allowed = await requestPermission(host, method)
+  if (!allowed) return { error: 'Permission denied' }
+
+  const account = await getActiveAccount()
+  if (!account) return { error: 'No active account' }
+
+  // NIP-46 remote encryption
+  if (account.mode === 'nip46') {
+    const signer = await ensureRemoteSigner()
+    if (!signer) return { error: 'Not connected to remote signer' }
+
+    if (type === 'NIP04_ENCRYPT') return { result: await signer.nip04Encrypt(pubkey, text) }
+    if (type === 'NIP04_DECRYPT') return { result: await signer.nip04Decrypt(pubkey, text) }
+    if (type === 'NIP44_ENCRYPT') return { result: await signer.nip44Encrypt(pubkey, text) }
+    if (type === 'NIP44_DECRYPT') return { result: await signer.nip44Decrypt(pubkey, text) }
+  }
+
+  // Local encryption
+  if (account.mode !== 'local') return { error: 'No signer available' }
+  const secretKey = hexToBytes(account.secretHex)
+
+  if (type === 'NIP04_ENCRYPT') return { result: await nip04.encrypt(secretKey, pubkey, text) }
+  if (type === 'NIP04_DECRYPT') return { result: await nip04.decrypt(secretKey, pubkey, text) }
+  if (type === 'NIP44_ENCRYPT') {
+    const ck = nip44.getConversationKey(secretKey, pubkey)
+    return { result: nip44.encrypt(text, ck) }
+  }
+  if (type === 'NIP44_DECRYPT') {
+    const ck = nip44.getConversationKey(secretKey, pubkey)
+    return { result: nip44.decrypt(text, ck) }
+  }
+
+  return { error: 'Unknown encrypt/decrypt method' }
+}
+
+// ── Bolt11 amount parser ─────────────────────────────────────────
+/** Extract amount in sats from a bolt11 invoice string. Returns null if unknown. */
+function parseBolt11Amount(invoice) {
+  if (!invoice || typeof invoice !== 'string') return null
+  const lower = invoice.toLowerCase()
+  const match = lower.match(/^ln(?:bc|tb|bcrt)(\d+)([munp])?/)
+  if (!match) return null
+  const num = parseInt(match[1], 10)
+  const multiplier = match[2]
+  // Amount is in BTC by default, convert to sats
+  const btcMultipliers = { m: 0.001, u: 0.000001, n: 0.000000001, p: 0.000000000001 }
+  const btc = multiplier ? num * btcMultipliers[multiplier] : num
+  return Math.round(btc * 1e8) // BTC → sats
+}
+
+// ── NWC / WebLN Handlers ─────────────────────────────────────────
+async function ensureNWC() {
+  if (nwcClient?.connected) return nwcClient
+  const config = await getWalletConfig(_cachedPassword)
+  if (!config?.connectionUri) throw new Error('No wallet connected')
+  if (nwcNotifUnsub) { try { nwcNotifUnsub() } catch {} nwcNotifUnsub = null }
+  if (nwcClient) { try { nwcClient.close() } catch {} }
+  nwcClient = new NWC(config.connectionUri)
+  await nwcClient.connect()
+  subscribeNwcNotifications()
+  return nwcClient
+}
+
+/**
+ * Subscribe to NIP-47 wallet notifications (payment_received, payment_sent).
+ * Triggers browser notifications via lib/notifications.js.
+ */
+function subscribeNwcNotifications() {
+  if (!nwcClient || nwcNotifUnsub) return
+  try {
+    nwcClient.on('payment_received', (notification) => {
+      const amountSats = notification?.amount ? Math.floor(notification.amount / 1000) : 0
+      const hash = notification?.payment_hash || ''
+      if (amountSats > 0) {
+        notifyPayment(amountSats, hash)
+      }
+    })
+    nwcClient.on('payment_sent', () => {
+      // Could notify on outgoing payments too — currently a no-op
+    })
+    nwcNotifUnsub = () => {
+      try {
+        nwcClient?.off('payment_received')
+        nwcClient?.off('payment_sent')
+      } catch { /* cleanup best-effort */ }
+    }
+  } catch {
+    // Wallet may not support notifications — that's fine
+  }
+}
+
+async function handleWeblnEnable(sender) {
+  const host = new URL(sender.url).hostname
+  await requireUnlocked(host)
+  const allowed = await requestPermission(host, 'weblnEnable')
+  if (!allowed) return { error: 'Permission denied' }
+  try { await ensureNWC(); return { result: { enabled: true } } }
+  catch (err) { return { error: err.message } }
+}
+
+async function handleWeblnGetInfo(sender) {
+  const host = sender?.url ? new URL(sender.url).hostname : null
+  await requireUnlocked(host)
+  try { const nwc = await ensureNWC(); return { result: await nwc.getInfo() } }
+  catch (err) { return { error: err.message } }
+}
+
+async function handleWeblnSendPayment(params, sender) {
+  const host = new URL(sender.url).hostname
+  await requireUnlocked(host)
+
+  // Check if this payment fits within the site's budget allowance
+  const invoice = params[0]
+  const amountSats = parseBolt11Amount(invoice)
+  if (amountSats && await checkBudget(host, amountSats)) {
+    // Auto-approve: within budget
+    try {
+      const nwc = await ensureNWC()
+      const result = await nwc.payInvoice(invoice)
+      await recordSpend(host, amountSats)
+      return { result: { preimage: result.preimage } }
+    } catch (err) { return { error: err.message } }
+  }
+
+  // No budget or over budget — prompt user
+  const allowed = await requestPermission(host, 'weblnSendPayment')
+  if (!allowed) return { error: 'Permission denied' }
+  try {
+    const nwc = await ensureNWC()
+    const result = await nwc.payInvoice(invoice)
+    if (amountSats) await recordSpend(host, amountSats)
+    return { result: { preimage: result.preimage } }
+  } catch (err) { return { error: err.message } }
+}
+
+async function handleWeblnMakeInvoice(params, sender) {
+  const host = sender?.url ? new URL(sender.url).hostname : null
+  await requireUnlocked(host)
+  try {
+    const args = params[0]
+    const amount = typeof args === 'number' ? args : args?.amount
+    const description = typeof args === 'object' ? args?.defaultMemo || '' : ''
+    const nwc = await ensureNWC()
+    const result = await nwc.makeInvoice({ amount: amount * 1000, description })
+    return { result: { paymentRequest: result.invoice } }
+  } catch (err) { return { error: err.message } }
+}
+
+async function handleWeblnGetBalance(sender) {
+  const host = sender?.url ? new URL(sender.url).hostname : null
+  await requireUnlocked(host)
+  try {
+    const nwc = await ensureNWC()
+    const result = await nwc.getBalance()
+    return { result: { balance: Math.floor(result.balance / 1000) } }
+  } catch (err) { return { error: err.message } }
+}
+
+// ── Public routes — callable from content scripts (web pages) ────
+const PUBLIC_HANDLERS = {
+  NIP07_GET_PUBLIC_KEY: (params, sender) => handleGetPublicKey(sender),
+  NIP07_SIGN_EVENT: (params, sender) => handleSignEvent(params, sender),
+  NIP07_GET_RELAYS: () => handleGetRelays(),
+  NIP04_ENCRYPT: (params, sender) => handleEncryptDecrypt('NIP04_ENCRYPT', params, sender),
+  NIP04_DECRYPT: (params, sender) => handleEncryptDecrypt('NIP04_DECRYPT', params, sender),
+  NIP44_ENCRYPT: (params, sender) => handleEncryptDecrypt('NIP44_ENCRYPT', params, sender),
+  NIP44_DECRYPT: (params, sender) => handleEncryptDecrypt('NIP44_DECRYPT', params, sender),
+  WEBLN_ENABLE: (params, sender) => handleWeblnEnable(sender),
+  WEBLN_GET_INFO: (params, sender) => handleWeblnGetInfo(sender),
+  WEBLN_SEND_PAYMENT: (params, sender) => handleWeblnSendPayment(params, sender),
+  WEBLN_MAKE_INVOICE: (params, sender) => handleWeblnMakeInvoice(params, sender),
+  WEBLN_GET_BALANCE: (params, sender) => handleWeblnGetBalance(sender),
+}
+
+// ── Main message listener ────────────────────────────────────────
+export default defineBackground(() => {
+  // Set up notification click handler (opens popup to relevant tab)
+  setupNotificationClickHandler()
+
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const { type, params } = message
+
+    const handle = async () => {
+      try {
+        // ── Public routes (from content scripts) ──
+        if (type === 'PUBLIC') {
+          const { action, params: publicParams } = params?.[0] || {}
+
+          // Anti-spam: reject if origin was previously denied
+          const origin = sender.tab?.url ? new URL(sender.tab.url).origin : null
+          if (origin && rejectedOrigins.has(origin)) {
+            return { error: 'Access denied. Reload the page to try again.' }
+          }
+
+          const handler = PUBLIC_HANDLERS[action]
+          if (!handler) return { error: `Unknown public action: ${action}` }
+
+          try {
+            return await handler(publicParams || [], sender)
+          } catch (err) {
+            // Track rejected permissions for anti-spam
+            if (err.message === 'Permission denied' && origin) {
+              rejectedOrigins.add(origin)
+            }
+            throw err
+          }
+        }
+
+        // ── Internal routes (from popup / options / prompt) ──
+        switch (type) {
+
+          // ── Lock / Unlock ──
+          case 'GET_LOCK_STATE': {
+            await ensureSessionLoaded()
+            const hasPassword = await isPasswordSet()
+            return { result: { locked: !isUnlocked(), passwordSet: hasPassword } }
+          }
+          case 'SETUP_PASSWORD': {
+            const pw = params?.[0]
+            if (!pw || pw.length < 8) return { error: 'Password must be at least 8 characters' }
+            await setupPassword(pw)
+            _cachedPassword = pw
+            await saveSession({ password: pw, unlockedAt: Date.now() })
+            return { result: { ok: true } }
+          }
+          case 'UNLOCK': {
+            const pw = params?.[0]
+            const valid = await verifyPassword(pw)
+            if (!valid) throw new Error('Wrong password')
+            _cachedPassword = pw
+            await saveSession({ password: pw, unlockedAt: Date.now() })
+            rejectedOrigins.clear()
+            return { result: { ok: true } }
+          }
+          case 'LOCK':
+            _cachedPassword = null
+            await clearSession()
+            if (nwcNotifUnsub) { try { nwcNotifUnsub() } catch {} nwcNotifUnsub = null }
+            if (nwcClient) { nwcClient.close(); nwcClient = null }
+            if (remoteSigner) { remoteSigner.close(); remoteSigner = null }
+            return { result: { ok: true } }
+          case 'CHANGE_PASSWORD': {
+            const [oldPw, newPw] = params || []
+            await changePassword(oldPw, newPw)
+            _cachedPassword = newPw
+            await saveSession({ password: newPw, unlockedAt: Date.now() })
+            return { result: { ok: true } }
+          }
+
+          // ── Injection check ──
+          case 'SHOULD_INJECT': {
+            const host = message.host || ''
+            if (!host) return { inject: false }
+            const blocked = await isBlocked(host)
+            return { inject: !blocked }
+          }
+
+          // ── Blocklist ──
+          case 'GET_BLOCKLIST':
+            return { result: await getBlocklist() }
+          case 'ADD_TO_BLOCKLIST':
+            await addToBlocklist(params?.[0])
+            return { result: { ok: true } }
+          case 'REMOVE_FROM_BLOCKLIST':
+            await removeFromBlocklist(params?.[0])
+            return { result: { ok: true } }
+
+          // ── Settings ──
+          case 'GET_SETTINGS': {
+            const data = await chrome.storage.local.get(['autoLockMinutes', 'theme', 'mode'])
+            return { result: { autoLockMinutes: data.autoLockMinutes ?? 5, theme: data.theme, mode: data.mode } }
+          }
+          case 'SET_AUTO_LOCK': {
+            await chrome.storage.local.set({ autoLockMinutes: params?.[0] ?? 5 })
+            // Refresh session timestamp so new timeout applies from now
+            if (isUnlocked()) {
+              await saveSession({ password: _cachedPassword, unlockedAt: Date.now() })
+            }
+            return { result: { ok: true } }
+          }
+          case 'RESET_AUTO_LOCK': {
+            if (isUnlocked()) {
+              await saveSession({ password: _cachedPassword, unlockedAt: Date.now() })
+            }
+            return { result: { ok: true } }
+          }
+
+          // ── Account management ──
+          case 'GET_ACCOUNTS':
+            return { result: await getAccountSummaries() }
+          case 'CREATE_ACCOUNT':
+            return { result: await createLocalAccount(params?.[0]) }
+          case 'IMPORT_ACCOUNT':
+            return { result: await importAccount(params?.[0], params?.[1]) }
+          case 'CREATE_NIP46_ACCOUNT':
+            return { result: await createNip46Account(params?.[0]) }
+          case 'SWITCH_ACCOUNT':
+            await setActiveAccount(params?.[0])
+            if (remoteSigner) { remoteSigner.close(); remoteSigner = null }
+            return { result: { switched: true } }
+          case 'REMOVE_ACCOUNT':
+            await removeAccount(params?.[0])
+            if (remoteSigner) { remoteSigner.close(); remoteSigner = null }
+            return { result: { removed: true } }
+
+          // ── NIP-46 connection ──
+          case 'CONNECT_NIP46': {
+            const [bunkerUri, accountId] = params
+            try {
+              const signer = await connectBunker(bunkerUri, (await getAccounts())[accountId]?.nip46ClientSecretHex)
+              remoteSigner = signer
+              const pubkey = await signer.getPublicKey()
+              await updateAccount(accountId, {
+                pubkey,
+                nip46Session: {
+                  signerPubkey: signer.remotePubkey,
+                  relays: signer.relayUrls,
+                  bunkerUri,
+                },
+              })
+              return { result: { pubkey, connected: true } }
+            } catch (err) {
+              return { error: err.message }
+            }
+          }
+          case 'DISCONNECT_NIP46':
+            if (remoteSigner) { remoteSigner.close(); remoteSigner = null }
+            return { result: { disconnected: true } }
+
+          // ── Profile ──
+          case 'PUBLISH_PROFILE': {
+            const [profileData] = params
+            const account = await getActiveAccount()
+            if (!account || account.mode !== 'local') return { error: 'Local account required to publish profile' }
+            const relays = account.pubkey ? await getPoolRelays(account.pubkey, 'account') : undefined
+            const result = await publishProfile(profileData, account.secretHex, relays)
+            if (profileData.name) {
+              await updateAccount(account.id, { name: profileData.name })
+            }
+            return { result }
+          }
+          case 'FETCH_PROFILE': {
+            const [pubkey] = params
+            const relays = pubkey ? await getPoolRelays(pubkey, 'account').catch(() => undefined) : undefined
+            const profile = await fetchProfile(pubkey, relays)
+            return { result: profile }
+          }
+
+          // ── Wallet ──
+          case 'CONNECT_WALLET': {
+            const uri = params?.[0]
+            await saveWalletConfig({ connectionUri: uri }, _cachedPassword)
+            if (nwcClient) { try { nwcClient.close() } catch {} }
+            nwcClient = null
+            try { await ensureNWC(); return { result: { connected: true } } }
+            catch (err) { return { error: err.message } }
+          }
+          case 'DISCONNECT_WALLET':
+            if (nwcNotifUnsub) { try { nwcNotifUnsub() } catch {} nwcNotifUnsub = null }
+            if (nwcClient) { try { nwcClient.close() } catch {}; nwcClient = null }
+            await clearWalletConfig()
+            return { result: { disconnected: true } }
+          case 'GET_WALLET_STATUS': {
+            const config = await getWalletConfig(_cachedPassword)
+            try {
+              if (config?.connectionUri) {
+                const nwc = await ensureNWC()
+                const bal = await nwc.getBalance()
+                return { result: { connected: true, balance: Math.floor(bal.balance / 1000) } }
+              }
+            } catch { /* fall through */ }
+            return { result: { connected: false, balance: null } }
+          }
+          case 'WALLET_GET_INFO': {
+            const nwc = await ensureNWC()
+            const info = await nwc.getInfo()
+            return { result: info }
+          }
+          case 'WALLET_GET_BALANCE': {
+            const nwc = await ensureNWC()
+            const bal = await nwc.getBalance()
+            return { result: { balance: Math.floor(bal.balance / 1000) } }
+          }
+          case 'WALLET_GET_BUDGET': {
+            const nwc = await ensureNWC()
+            const budget = await nwc.getBudget()
+            return { result: budget }
+          }
+          case 'WALLET_PAY_INVOICE': {
+            const [invoice, amountSats] = params || []
+            const nwc = await ensureNWC()
+            const payResult = await nwc.payInvoice(invoice, amountSats ? amountSats * 1000 : undefined)
+            return { result: payResult }
+          }
+          case 'WALLET_MAKE_INVOICE': {
+            const [amountSats, description] = params || []
+            const nwc = await ensureNWC()
+            const inv = await nwc.makeInvoice({ amount: amountSats * 1000, description: description || '' })
+            return { result: inv }
+          }
+          case 'WALLET_LOOKUP_INVOICE': {
+            const [lookupParams] = params || []
+            const nwc = await ensureNWC()
+            const inv = await nwc.lookupInvoice(lookupParams)
+            return { result: inv }
+          }
+          case 'WALLET_LIST_TRANSACTIONS': {
+            const [txParams] = params || []
+            const nwc = await ensureNWC()
+            const txs = await nwc.listTransactions(txParams || {})
+            return { result: txs }
+          }
+          case 'WALLET_PAY_KEYSEND': {
+            const [keysendParams] = params || []
+            const nwc = await ensureNWC()
+            const ksResult = await nwc.payKeysend(keysendParams)
+            return { result: ksResult }
+          }
+          case 'WALLET_SIGN_MESSAGE': {
+            const [msg] = params || []
+            const nwc = await ensureNWC()
+            const sigResult = await nwc.signMessage(msg)
+            return { result: sigResult }
+          }
+
+          // ── Allowances (budgets) ──
+          case 'GET_ALLOWANCES':
+            return { result: await getAllowances() }
+          case 'GET_ALLOWANCE':
+            return { result: await getAllowance(params?.[0]) }
+          case 'SET_ALLOWANCE':
+            await setAllowance(params?.[0], params?.[1])
+            return { result: { ok: true } }
+          case 'REMOVE_ALLOWANCE':
+            await removeAllowance(params?.[0])
+            return { result: { ok: true } }
+          case 'RESET_ALLOWANCE':
+            await resetAllowanceSpend(params?.[0])
+            return { result: { ok: true } }
+
+          // ── Permissions ──
+          case 'GET_PERMISSIONS': {
+            const activeId = await getActiveAccountId()
+            return { result: await getPermissions(activeId) }
+          }
+          case 'REMOVE_PERMISSION': {
+            const activeId = await getActiveAccountId()
+            await removePermission(params?.[0], params?.[1], activeId)
+            return { result: { removed: true } }
+          }
+          case 'REMOVE_DOMAIN_PERMISSIONS': {
+            const activeId = await getActiveAccountId()
+            await removeDomainPermissions(params?.[0], activeId)
+            return { result: { removed: true } }
+          }
+
+          // ── Relay management ──
+          case 'GET_RELAY_CONFIG': {
+            const account = await getActiveAccount()
+            if (!account?.pubkey) return { error: 'No active account' }
+            return { result: await getRelayConfig(account.pubkey) }
+          }
+          case 'SET_RELAY_CONFIG': {
+            const [pool, urls] = params || []
+            if (!['account', 'wallet', 'chat'].includes(pool)) return { error: 'Invalid pool' }
+            if (!Array.isArray(urls)) return { error: 'URLs must be an array' }
+            const account = await getActiveAccount()
+            if (!account?.pubkey) return { error: 'No active account' }
+            await setPoolRelays(account.pubkey, pool, urls)
+            return { result: { ok: true } }
+          }
+          case 'ADD_RELAY': {
+            const [pool, url] = params || []
+            const account = await getActiveAccount()
+            if (!account?.pubkey) return { error: 'No active account' }
+            const config = await addRelayToPool(account.pubkey, pool, url)
+            return { result: config }
+          }
+          case 'REMOVE_RELAY': {
+            const [pool, url] = params || []
+            const account = await getActiveAccount()
+            if (!account?.pubkey) return { error: 'No active account' }
+            const config = await removeRelayFromPool(account.pubkey, pool, url)
+            return { result: config }
+          }
+          case 'RESET_RELAYS': {
+            const [pool] = params || []
+            const account = await getActiveAccount()
+            if (!account?.pubkey) return { error: 'No active account' }
+            const config = await resetPoolToDefaults(account.pubkey, pool)
+            return { result: config }
+          }
+          case 'FETCH_NIP65': {
+            const [pubkey] = params || []
+            const account = await getActiveAccount()
+            const pk = pubkey || account?.pubkey
+            if (!pk) return { error: 'No pubkey' }
+            const relays = await getPoolRelays(pk, 'account').catch(() => DEFAULT_ACCOUNT_RELAYS)
+            const result = await fetchNip65(pk, relays)
+            return { result }
+          }
+          case 'PUBLISH_NIP65': {
+            const [relayList] = params || []
+            const account = await getActiveAccount()
+            if (!account || account.mode !== 'local') return { error: 'Local account required' }
+            const template = createNip65Event(relayList, account.pubkey)
+            const secretKey = hexToBytes(account.secretHex)
+            const event = finalizeEvent(template, secretKey)
+            const relays = await getPoolRelays(account.pubkey, 'account')
+            const pool = getPool()
+            const published = []
+            const failed = []
+            const results = await Promise.allSettled(
+              relays.map(async (url) => { await pool.publish([url], event); return url })
+            )
+            for (let i = 0; i < results.length; i++) {
+              if (results[i].status === 'fulfilled') published.push(results[i].value)
+              else failed.push(relays[i])
+            }
+            return { result: { published, failed } }
+          }
+          case 'FETCH_RELAY_INFO': {
+            const [url] = params || []
+            if (!url) return { error: 'No relay URL' }
+            const info = await fetchRelayInfo(url)
+            return { result: info }
+          }
+
+          // ── Notifications ──
+          case 'NOTIFY_DM': {
+            const { senderName, preview, messageId } = params?.[0] || {}
+            await notifyDm(senderName, preview, messageId)
+            return { result: { ok: true } }
+          }
+          case 'NOTIFY_PAYMENT': {
+            const { amountSats, paymentHash } = params?.[0] || {}
+            await notifyPayment(amountSats, paymentHash)
+            return { result: { ok: true } }
+          }
+
+          // ── Unlock prompt response ──
+          case 'UNLOCK_RESPONSE': {
+            const { requestId: unlockReqId, password } = params?.[0] || {}
+            const pendingUnlockEntry = pendingPermissions.get(unlockReqId)
+            if (!pendingUnlockEntry) return { error: 'Unknown request' }
+            try {
+              const valid = await verifyPassword(password)
+              if (!valid) return { error: 'Wrong password' }
+              _cachedPassword = password
+              await saveSession({ password, unlockedAt: Date.now() })
+              rejectedOrigins.clear()
+              pendingPermissions.delete(unlockReqId)
+              pendingUnlockEntry.resolve(true)
+              return { result: { ok: true } }
+            } catch (err) {
+              return { error: err.message || 'Wrong password' }
+            }
+          }
+
+          // ── Permission prompt response ──
+          case 'PERMISSION_RESPONSE': {
+            const { requestId, decision, host, method, kind } = params?.[0] || {}
+            const pending = pendingPermissions.get(requestId)
+            if (!pending) return { error: 'Unknown request' }
+            pendingPermissions.delete(requestId)
+            const activeId = await getActiveAccountId()
+
+            if (decision === 'allow_all') {
+              // Grant all standard permissions for this host
+              for (const m of ALL_PERMISSION_METHODS) {
+                await setPermission(host, m, 'allow', null, activeId)
+              }
+              // Also grant the specific method+kind that triggered this
+              if (method && !ALL_PERMISSION_METHODS.includes(method)) {
+                await setPermission(host, method, 'allow', kind || null, activeId)
+              }
+              pending.resolve(true)
+            } else if (decision === 'allow_always' || decision === 'deny_always') {
+              await setPermission(host, method, decision === 'allow_always' ? 'allow' : 'deny', kind || null, activeId)
+              pending.resolve(decision === 'allow_always')
+            } else {
+              pending.resolve(decision === 'allow_once')
+            }
+            return { result: { ok: true } }
+          }
+
+          default:
+            return { error: `Unknown message type: ${type}` }
+        }
+      } catch (err) {
+        return { error: err.message || 'Unknown error' }
+      }
+    }
+
+    handle().then(sendResponse)
+    return true
+  })
+})

@@ -1,0 +1,125 @@
+/**
+ * Lock composable — manages master password state for popup UI.
+ * Handles lock/unlock, auto-lock timer, and rate-limited attempts.
+ */
+
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useMessaging } from './useMessaging.js'
+
+const locked = ref(true)
+const passwordSet = ref(false)
+const loading = ref(true)
+const failedAttempts = ref(0)
+const lockoutUntil = ref(0)
+
+const { send } = useMessaging()
+
+let autoLockTimer = null
+
+export function useLock() {
+  async function checkState() {
+    loading.value = true
+    try {
+      const state = await send('GET_LOCK_STATE')
+      locked.value = state.locked
+      passwordSet.value = state.passwordSet
+    } catch {
+      locked.value = true
+      passwordSet.value = false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function setup(password) {
+    await send('SETUP_PASSWORD', password)
+    passwordSet.value = true
+    locked.value = false
+    failedAttempts.value = 0
+    startAutoLock()
+  }
+
+  async function unlock(password) {
+    // Rate limiting: progressive delay after failed attempts
+    const now = Date.now()
+    if (lockoutUntil.value > now) {
+      const remaining = Math.ceil((lockoutUntil.value - now) / 1000)
+      throw new Error(`Too many attempts. Try again in ${remaining}s`)
+    }
+
+    try {
+      await send('UNLOCK', password)
+      locked.value = false
+      failedAttempts.value = 0
+      lockoutUntil.value = 0
+      startAutoLock()
+    } catch (err) {
+      failedAttempts.value++
+      if (failedAttempts.value >= 3) {
+        // Progressive delay: 2s, 4s, 8s, 16s, max 30s
+        const delay = Math.min(Math.pow(2, failedAttempts.value - 2) * 1000, 30000)
+        lockoutUntil.value = Date.now() + delay
+      }
+      throw err
+    }
+  }
+
+  async function lock() {
+    await send('LOCK')
+    locked.value = true
+    clearAutoLock()
+  }
+
+  async function changePassword(oldPassword, newPassword) {
+    await send('CHANGE_PASSWORD', oldPassword, newPassword)
+  }
+
+  // Auto-lock timer
+  function startAutoLock() {
+    clearAutoLock()
+    chrome.storage.local.get('autoLockMinutes').then(({ autoLockMinutes }) => {
+      const minutes = autoLockMinutes ?? 5
+      if (minutes <= 0) return // "never" option
+      autoLockTimer = setTimeout(() => {
+        lock()
+      }, minutes * 60 * 1000)
+    })
+  }
+
+  function clearAutoLock() {
+    if (autoLockTimer) {
+      clearTimeout(autoLockTimer)
+      autoLockTimer = null
+    }
+  }
+
+  function resetAutoLock() {
+    if (!locked.value) {
+      startAutoLock()
+      // Also reset the background session timer so it doesn't expire
+      send('RESET_AUTO_LOCK').catch(() => {})
+    }
+  }
+
+  onMounted(() => {
+    checkState()
+  })
+
+  onBeforeUnmount(() => {
+    clearAutoLock()
+  })
+
+  return {
+    locked,
+    passwordSet,
+    loading,
+    failedAttempts,
+    lockoutUntil,
+    checkState,
+    setup,
+    unlock,
+    lock,
+    changePassword,
+    resetAutoLock,
+  }
+}
