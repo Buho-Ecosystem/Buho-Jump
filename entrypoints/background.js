@@ -9,7 +9,7 @@
  * - Profile publishing/fetching
  */
 
-import { finalizeEvent, hexToBytes, nip04, nip44, NWC } from 'nostr-core'
+import { finalizeEvent, getPublicKey, hexToBytes, bytesToHex, randomBytes, nip04, nip44, nip19, NWC } from 'nostr-core'
 import {
   getActiveAccount,
   getAccounts,
@@ -51,7 +51,7 @@ import {
   createNip65Event, DEFAULT_ACCOUNT_RELAYS,
 } from '../lib/relays.js'
 import { getPool } from '../lib/relayPool.js'
-import { connectBunker } from '../lib/nip46-bridge.js'
+import { connectBunker, createNostrConnectURI, awaitNostrConnect } from '../lib/nip46-bridge.js'
 import { openPromptWindow, supportsWindowsApi } from '../lib/browser/capabilities.js'
 import { notifyDm, notifyPayment, setupNotificationClickHandler } from '../lib/notifications.js'
 import { saveSession, getSession, clearSession } from '../lib/session.js'
@@ -63,6 +63,7 @@ let remoteSigner = null
 let pendingPermissions = new Map()
 let _cachedPassword = null // In-memory cache of session password
 let rejectedOrigins = new Set() // Anti-spam: tracks rejected origins
+let _nostrConnectAbort = null // Abort handle for pending nostrconnect flow
 
 // ── Session restore (service worker wake-up) ─────────────────────
 let _sessionLoadPromise = null
@@ -102,7 +103,7 @@ const ALL_PERMISSION_METHODS = [
   'weblnEnable',
 ]
 
-async function requestPermission(host, method, kind) {
+async function requestPermission(host, method, kind, eventData) {
   const activeId = await getActiveAccountId()
   const existing = await checkPermission(host, method, kind, activeId)
   if (existing === 'allow') return true
@@ -117,11 +118,18 @@ async function requestPermission(host, method, kind) {
     const requestId = crypto.randomUUID()
     pendingPermissions.set(requestId, { resolve })
 
+    // Store event data for signEvent so prompt can display it
+    if (method === 'signEvent' && eventData) {
+      chrome.storage.local.set({ [`prompt_event_${requestId}`]: eventData })
+    }
+
     const url = chrome.runtime.getURL(
       `/prompt.html?requestId=${requestId}&host=${encodeURIComponent(host)}&method=${encodeURIComponent(method)}&kind=${kind ?? ''}&firstVisit=${firstVisit}`
     )
 
-    openPromptWindow(url).then((win) => {
+    // Dynamic sizing: taller for signEvent (event data) and first-visit (all permissions)
+    const promptHeight = (method === 'signEvent' || firstVisit) ? 560 : 440
+    openPromptWindow(url, { width: 400, height: promptHeight }).then((win) => {
       // Prompt window guard: reject if window/tab is closed without response
       if (supportsWindowsApi && win?.id) {
         const onRemoved = (windowId) => {
@@ -145,6 +153,7 @@ async function ensureRemoteSigner() {
   if (!account || account.mode !== 'nip46') return null
   if (!account.nip46Session?.bunkerUri || !account.nip46ClientSecretHex) return null
 
+  nip46Reconnecting = true
   try {
     remoteSigner = await connectBunker(
       account.nip46Session.bunkerUri,
@@ -153,6 +162,8 @@ async function ensureRemoteSigner() {
     return remoteSigner
   } catch {
     return null
+  } finally {
+    nip46Reconnecting = false
   }
 }
 
@@ -228,7 +239,7 @@ async function handleSignEvent(params, sender) {
   await requireUnlocked(host)
   const event = params[0]
   if (!event) return { error: 'No event provided' }
-  const allowed = await requestPermission(host, 'signEvent', event.kind)
+  const allowed = await requestPermission(host, 'signEvent', event.kind, event)
   if (!allowed) return { error: 'Permission denied' }
 
   const account = await getActiveAccount()
@@ -452,12 +463,76 @@ const PUBLIC_HANDLERS = {
   WEBLN_SEND_PAYMENT: (params, sender) => handleWeblnSendPayment(params, sender),
   WEBLN_MAKE_INVOICE: (params, sender) => handleWeblnMakeInvoice(params, sender),
   WEBLN_GET_BALANCE: (params, sender) => handleWeblnGetBalance(sender),
+  NOSTR_CONNECT_LINK: async (params) => {
+    // Intercepted nostrconnect: link from a web page — open popup or handle directly
+    const [href] = params
+    if (!href) return { error: 'No URI provided' }
+    // Store the URI so the popup can pick it up
+    await chrome.storage.local.set({ pendingNostrConnect: href })
+    // Open the popup (not all browsers support this — fallback to notification)
+    try { await chrome.action.openPopup() } catch {}
+    return { result: { received: true } }
+  },
 }
 
 // ── Main message listener ────────────────────────────────────────
+// ── NIP-46 reconnection state (visible to popup) ────────────────
+let nip46Reconnecting = false
+
+async function proactiveReconnect() {
+  await ensureSessionLoaded()
+  if (!isUnlocked()) return
+  const account = await getActiveAccount()
+  if (!account || account.mode !== 'nip46') return
+  if (!account.nip46Session?.bunkerUri || !account.nip46ClientSecretHex) return
+  if (remoteSigner?.connected) return
+
+  nip46Reconnecting = true
+  try {
+    remoteSigner = await connectBunker(
+      account.nip46Session.bunkerUri,
+      account.nip46ClientSecretHex
+    )
+  } catch {
+    remoteSigner = null
+  } finally {
+    nip46Reconnecting = false
+  }
+}
+
 export default defineBackground(() => {
   // Set up notification click handler (opens popup to relevant tab)
   setupNotificationClickHandler()
+
+  // Proactively reconnect NIP-46 signer on service worker startup
+  proactiveReconnect()
+
+  // ── Extension badge: show permission count for active tab ──
+  async function updateBadgeForTab(tabId) {
+    try {
+      const tab = await chrome.tabs.get(tabId)
+      if (!tab?.url) { chrome.action.setBadgeText({ tabId, text: '' }); return }
+      const host = new URL(tab.url).hostname
+      if (!host) { chrome.action.setBadgeText({ tabId, text: '' }); return }
+      const activeId = await getActiveAccountId()
+      const perms = await getPermissions(activeId)
+      const hostPerms = perms[host]
+      if (!hostPerms || Object.keys(hostPerms).length === 0) {
+        chrome.action.setBadgeText({ tabId, text: '' })
+      } else {
+        const count = Object.keys(hostPerms).length
+        chrome.action.setBadgeText({ tabId, text: String(count) })
+        chrome.action.setBadgeBackgroundColor({ tabId, color: '#059573' })
+      }
+    } catch {
+      // Tab may not exist or URL may be restricted
+    }
+  }
+
+  chrome.tabs.onActivated.addListener(({ tabId }) => updateBadgeForTab(tabId))
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.url || changeInfo.status === 'complete') updateBadgeForTab(tabId)
+  })
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const { type, params } = message
@@ -567,6 +642,13 @@ export default defineBackground(() => {
             return { result: { ok: true } }
           }
 
+          // ── NIP-46 status ──
+          case 'GET_NIP46_STATUS':
+            return { result: {
+              connected: !!remoteSigner?.connected,
+              reconnecting: nip46Reconnecting,
+            } }
+
           // ── Account management ──
           case 'GET_ACCOUNTS':
             return { result: await getAccountSummaries() }
@@ -582,32 +664,109 @@ export default defineBackground(() => {
             return { result: { switched: true } }
           case 'REMOVE_ACCOUNT':
             await removeAccount(params?.[0])
-            if (remoteSigner) { remoteSigner.close(); remoteSigner = null }
+            if (remoteSigner) { await remoteSigner.disconnect(); remoteSigner = null }
             return { result: { removed: true } }
+          case 'EXPORT_NSEC': {
+            const acct = await getActiveAccount()
+            if (!acct || acct.mode !== 'local' || !acct.secretHex) {
+              return { error: 'No local key to export' }
+            }
+            return { result: { nsec: nip19.nsecEncode(hexToBytes(acct.secretHex)) } }
+          }
 
           // ── NIP-46 connection ──
           case 'CONNECT_NIP46': {
             const [bunkerUri, accountId] = params
             try {
+              // Gracefully disconnect any existing remote signer before connecting
+              if (remoteSigner) { try { await remoteSigner.disconnect() } catch {} remoteSigner = null }
               const signer = await connectBunker(bunkerUri, (await getAccounts())[accountId]?.nip46ClientSecretHex)
               remoteSigner = signer
               const pubkey = await signer.getPublicKey()
-              await updateAccount(accountId, {
+              const updates = {
                 pubkey,
                 nip46Session: {
                   signerPubkey: signer.remotePubkey,
                   relays: signer.relayUrls,
                   bunkerUri,
                 },
-              })
+              }
+              // Fetch profile to use real name instead of "Remote Signer"
+              try {
+                const profile = await fetchProfile(pubkey)
+                if (profile?.display_name || profile?.name) {
+                  updates.name = profile.display_name || profile.name
+                }
+              } catch { /* non-critical */ }
+              await updateAccount(accountId, updates)
+              // Always activate the newly connected NIP-46 account
+              await setActiveAccount(accountId)
               return { result: { pubkey, connected: true } }
+            } catch (err) {
+              // Clean up the failed account so it doesn't linger
+              try { await removeAccount(accountId) } catch {}
+              const msg = err.message || ''
+              if (/already.connect/i.test(msg)) {
+                return { error: 'Session already active on signer. Please generate a new bunker URI from your signer app.' }
+              }
+              return { error: msg }
+            }
+          }
+          case 'DISCONNECT_NIP46':
+            if (remoteSigner) { await remoteSigner.disconnect(); remoteSigner = null }
+            if (_nostrConnectAbort) { _nostrConnectAbort(); _nostrConnectAbort = null }
+            return { result: { disconnected: true } }
+
+          // ── Nostr Connect (reverse flow — signer scans our QR) ──
+          case 'START_NOSTR_CONNECT': {
+            const [accountId, relayUrl] = params
+            try {
+              const account = (await getAccounts())[accountId]
+              if (!account?.nip46ClientSecretHex) return { error: 'Account not found' }
+              const clientPubkey = getPublicKey(hexToBytes(account.nip46ClientSecretHex))
+              const secret = bytesToHex(randomBytes(16))
+              const uri = createNostrConnectURI({
+                clientPubkey,
+                relayUrl: relayUrl || 'wss://relay.nsec.app',
+                secret,
+                name: 'Buho Jump',
+              })
+              // Start listening in background — store abort handle
+              if (_nostrConnectAbort) { _nostrConnectAbort(); _nostrConnectAbort = null }
+              const connectPromise = awaitNostrConnect({
+                secretKey: account.nip46ClientSecretHex,
+                relayUrl: relayUrl || 'wss://relay.nsec.app',
+                secret,
+                timeout: 90000,
+              })
+              _nostrConnectAbort = () => { /* timeout will clean up */ }
+              // Handle result async — popup polls GET_NIP46_STATUS
+              connectPromise.then(async (signer) => {
+                remoteSigner = signer
+                const pubkey = await signer.getPublicKey()
+                const updates = { pubkey, nip46Session: {
+                  signerPubkey: signer.remotePubkey,
+                  relays: signer.relayUrls,
+                  bunkerUri: `bunker://${signer.remotePubkey}?relay=${encodeURIComponent(relayUrl || 'wss://relay.nsec.app')}`,
+                } }
+                try {
+                  const profile = await fetchProfile(pubkey)
+                  if (profile?.display_name || profile?.name) updates.name = profile.display_name || profile.name
+                } catch {}
+                await updateAccount(accountId, updates)
+                await setActiveAccount(accountId)
+                nip46Reconnecting = false
+              }).catch(() => {
+                _nostrConnectAbort = null
+              })
+              return { result: { uri, secret } }
             } catch (err) {
               return { error: err.message }
             }
           }
-          case 'DISCONNECT_NIP46':
-            if (remoteSigner) { remoteSigner.close(); remoteSigner = null }
-            return { result: { disconnected: true } }
+          case 'CANCEL_NOSTR_CONNECT':
+            if (_nostrConnectAbort) { _nostrConnectAbort(); _nostrConnectAbort = null }
+            return { result: { cancelled: true } }
 
           // ── Profile ──
           case 'PUBLISH_PROFILE': {
@@ -845,6 +1004,8 @@ export default defineBackground(() => {
             const pending = pendingPermissions.get(requestId)
             if (!pending) return { error: 'Unknown request' }
             pendingPermissions.delete(requestId)
+            // Clean up stored event data
+            chrome.storage.local.remove(`prompt_event_${requestId}`)
             const activeId = await getActiveAccountId()
 
             if (decision === 'allow_all') {

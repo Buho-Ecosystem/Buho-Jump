@@ -103,10 +103,10 @@ onMounted(() => load())
   <div class="animate-fade-in-up">
     <!-- Header -->
     <div class="flex items-center gap-2 mb-3">
-      <button @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-colors">
+      <button @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
-      <span class="text-sm font-semibold">{{ t('wallet.historyTitle') }}</span>
+      <span class="text-sm font-extrabold">{{ t('wallet.historyTitle') }}</span>
     </div>
 
     <!-- Filter tabs -->
@@ -115,7 +115,7 @@ onMounted(() => load())
         v-for="f in filters"
         :key="f.id"
         @click="setFilter(f.id)"
-        class="flex-1 py-1.5 text-[10px] font-semibold rounded-md transition-all"
+        class="flex-1 py-1.5 text-[10px] font-semibold rounded-md transition-all duration-200"
         :class="activeFilter === f.id
           ? 'bg-surface-card text-text-primary shadow-sm'
           : 'text-text-muted hover:text-text-secondary'"
@@ -126,7 +126,7 @@ onMounted(() => load())
 
     <!-- Loading -->
     <div v-if="loading && transactions.length === 0" class="space-y-2">
-      <div v-for="i in 6" :key="i" class="skeleton-shimmer h-12 rounded-xl" />
+      <div v-for="i in 6" :key="i" class="skeleton-shimmer h-12 rounded-3xl" />
     </div>
 
     <!-- Grouped list -->
@@ -166,7 +166,7 @@ onMounted(() => load())
         v-if="hasMore"
         @click="loadMore"
         :disabled="loading"
-        class="w-full py-2.5 text-xs text-text-muted hover:text-brand transition-colors font-medium flex items-center justify-center gap-1.5"
+        class="w-full py-2.5 text-xs text-text-muted hover:text-brand transition-all duration-200 font-medium flex items-center justify-center gap-1.5"
       >
         <Loader2 v-if="loading" class="w-3 h-3 animate-spin" />
         {{ loading ? t('common.loading') : t('wallet.loadMore') }}

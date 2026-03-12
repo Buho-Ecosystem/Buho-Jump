@@ -85,31 +85,31 @@ function copy(text, field) {
   <div class="animate-fade-in-up">
     <!-- Header with dev toggle -->
     <div class="flex items-center justify-between mb-4">
-      <span class="text-xs font-semibold text-text-muted">{{ t('wallet.detailTitle') }}</span>
+      <span class="text-xs font-extrabold text-text-muted">{{ t('wallet.detailTitle') }}</span>
       <div class="flex items-center gap-1">
         <button
           v-if="hasTechnicalData"
           @click="showTechnical = !showTechnical"
-          class="p-1 rounded-md hover:bg-surface-elevated transition-colors"
+          class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200"
           :class="showTechnical ? 'text-brand' : 'text-text-muted'"
         >
           <Code class="w-4 h-4" />
         </button>
-        <button @click="emit('close')" class="p-1 rounded-md hover:bg-surface-elevated transition-colors">
+        <button @click="emit('close')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
           <X class="w-4 h-4 text-text-muted" />
         </button>
       </div>
     </div>
 
     <!-- Hero card — BuhoGO style with type + status header, then amounts -->
-    <div class="bg-surface-card rounded-2xl border border-border p-4 mb-4">
+    <div class="bg-surface-card rounded-3xl border border-border p-4 mb-4 shadow-md">
       <!-- Top: icon + type + status -->
       <div class="flex items-center gap-3 mb-3">
-        <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" :class="statusColor">
+        <div class="w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0" :class="statusColor">
           <component :is="statusIcon" class="w-5 h-5" />
         </div>
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-bold">{{ typeLabel }}</div>
+          <div class="text-sm font-extrabold">{{ typeLabel }}</div>
           <div class="flex items-center gap-1 text-[10px] font-medium" :class="statusColor.split(' ')[0]">
             <component :is="statusIcon" class="w-3 h-3" />
             {{ statusLabel }}
@@ -133,7 +133,7 @@ function copy(text, field) {
     </div>
 
     <!-- User-friendly details -->
-    <div class="bg-surface-card rounded-xl border border-border divide-y divide-border overflow-hidden mb-3">
+    <div class="bg-surface-card rounded-3xl border border-border divide-y divide-border overflow-hidden mb-3 shadow-sm">
       <!-- Description -->
       <div class="px-4 py-3">
         <div class="text-[9px] text-text-muted font-semibold uppercase tracking-wider mb-0.5">{{ t('wallet.description') }}</div>
@@ -163,7 +163,7 @@ function copy(text, field) {
 
     <!-- Technical details — toggled from header code icon -->
     <div v-if="hasTechnicalData && showTechnical">
-      <div class="bg-surface-card rounded-xl border border-border divide-y divide-border overflow-hidden mt-3 animate-fade-in-up">
+      <div class="bg-surface-card rounded-3xl border border-border divide-y divide-border overflow-hidden mt-3 animate-fade-in-up shadow-sm">
         <div class="px-4 py-2 bg-surface-elevated/50 flex items-center gap-1.5">
           <Code class="w-3 h-3 text-text-muted" />
           <span class="text-[9px] text-text-muted font-semibold uppercase tracking-wider">{{ t('wallet.technicalDetails') }}</span>
@@ -174,7 +174,7 @@ function copy(text, field) {
             <span class="text-[9px] text-text-muted font-semibold uppercase tracking-wider">{{ t('wallet.paymentHash') }}</span>
             <button
               @click="copy(tx.payment_hash, 'hash')"
-              class="p-0.5 rounded hover:bg-surface-elevated transition-colors"
+              class="p-0.5 rounded hover:bg-surface-elevated transition-all duration-200"
             >
               <Check v-if="copiedField === 'hash'" class="w-3 h-3 text-success" />
               <Copy v-else class="w-3 h-3 text-text-muted" />
@@ -191,7 +191,7 @@ function copy(text, field) {
             <span class="text-[9px] text-text-muted font-semibold uppercase tracking-wider">{{ t('wallet.preimage') }}</span>
             <button
               @click="copy(tx.preimage, 'preimage')"
-              class="p-0.5 rounded hover:bg-surface-elevated transition-colors"
+              class="p-0.5 rounded hover:bg-surface-elevated transition-all duration-200"
             >
               <Check v-if="copiedField === 'preimage'" class="w-3 h-3 text-success" />
               <Copy v-else class="w-3 h-3 text-text-muted" />

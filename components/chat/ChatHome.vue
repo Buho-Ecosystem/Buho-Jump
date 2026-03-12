@@ -1,7 +1,7 @@
 <script setup>
 /**
- * Chat home — conversation list with search and new chat button.
- * Empty state when no conversations exist.
+ * Telegram-style chat home — conversation list with pill search bar
+ * and floating action button for new chat.
  */
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -34,37 +34,32 @@ onMounted(() => init())
 </script>
 
 <template>
-  <div class="animate-fade-in-up">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-sm font-semibold">{{ t('chat.title') }}</span>
-      <button
-        @click="emit('new-chat')"
-        class="p-1.5 rounded-lg hover:bg-surface-elevated transition-colors"
-        :title="t('chat.newChat')"
-        aria-label="New chat"
-      >
-        <PenSquare class="w-4 h-4 text-text-muted" />
-      </button>
+  <div class="relative h-full">
+    <!-- Search bar (Telegram pill style) -->
+    <div class="px-3 pb-2">
+      <div class="relative">
+        <Search class="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input
+          v-model="search"
+          :placeholder="t('chat.searchPlaceholder')"
+          class="chat-input-pill w-full pl-10 pr-4"
+        />
+      </div>
     </div>
 
-    <!-- Search -->
-    <div v-if="conversations.length > 3" class="relative mb-3">
-      <Search class="w-3 h-3 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
-      <input
-        v-model="search"
-        :placeholder="t('chat.searchPlaceholder')"
-        class="w-full bg-surface-base border border-border rounded-lg pl-8 pr-3 py-2 text-xs outline-none focus:border-brand transition-colors placeholder:text-text-muted"
-      />
-    </div>
-
-    <!-- Loading -->
-    <div v-if="!initialized" class="space-y-2">
-      <div v-for="i in 4" :key="i" class="skeleton-shimmer h-14 rounded-xl" />
+    <!-- Loading skeleton -->
+    <div v-if="!initialized" class="px-3 space-y-1">
+      <div v-for="i in 5" :key="i" class="flex items-center gap-3 py-2.5">
+        <div class="w-[48px] h-[48px] rounded-full skeleton-shimmer shrink-0" />
+        <div class="flex-1 space-y-2">
+          <div class="skeleton-shimmer h-3.5 rounded w-28" />
+          <div class="skeleton-shimmer h-3 rounded w-44" />
+        </div>
+      </div>
     </div>
 
     <!-- Conversation list -->
-    <div v-else-if="filtered.length > 0" class="space-y-0.5">
+    <div v-else-if="filtered.length > 0" class="divide-y divide-border/30 pb-16">
       <ConversationItem
         v-for="conv in filtered"
         :key="conv.pubkey"
@@ -76,20 +71,24 @@ onMounted(() => init())
     </div>
 
     <!-- Empty state -->
-    <div v-else class="flex flex-col items-center justify-center py-12 text-center space-y-3">
-      <div class="w-12 h-12 rounded-2xl bg-brand/10 flex items-center justify-center">
-        <MessageSquare class="w-6 h-6 text-brand" />
+    <div v-else class="flex flex-col items-center justify-center py-16 text-center space-y-3">
+      <div class="w-14 h-14 rounded-full bg-brand/10 flex items-center justify-center">
+        <MessageSquare class="w-7 h-7 text-brand" />
       </div>
       <div>
         <p class="text-sm font-semibold">{{ t('chat.emptyTitle') }}</p>
-        <p class="text-[10px] text-text-muted mt-0.5">{{ t('chat.emptyDesc') }}</p>
+        <p class="text-xs text-text-muted mt-1">{{ t('chat.emptyDesc') }}</p>
       </div>
-      <button
-        @click="emit('new-chat')"
-        class="px-4 py-2 text-xs rounded-xl bg-brand text-surface-base hover:bg-brand-hover transition-colors font-semibold btn-primary"
-      >
-        {{ t('chat.startChat') }}
-      </button>
     </div>
+
+    <!-- FAB (Telegram-style floating action button) -->
+    <button
+      @click="emit('new-chat')"
+      class="chat-fab absolute bottom-4 right-4 z-10"
+      :title="t('chat.newChat')"
+      aria-label="New chat"
+    >
+      <PenSquare class="w-5 h-5" />
+    </button>
   </div>
 </template>

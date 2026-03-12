@@ -43,6 +43,8 @@ const showPassword = ref(false)
 
 // Favicon state
 const faviconFailed = ref(false)
+const eventData = ref(null)
+const showEventData = ref(false)
 
 // Profile fetch with timeout
 async function fetchWithTimeout(message, ms = 5000) {
@@ -90,9 +92,18 @@ onMounted(async () => {
     }
   } catch {
     // Non-critical — continue without profile data
-  } finally {
-    loading.value = false
   }
+
+  // Load event data for signEvent prompts
+  if (method.value === 'signEvent' && requestId.value) {
+    try {
+      const key = `prompt_event_${requestId.value}`
+      const data = await chrome.storage.local.get(key)
+      if (data[key]) eventData.value = data[key]
+    } catch {}
+  }
+
+  loading.value = false
 })
 
 // ── Permission metadata ──
@@ -338,20 +349,20 @@ async function submitUnlock() {
             <Lock class="w-7 h-7 text-brand" />
           </div>
           <div>
-            <h1 class="text-base font-bold">{{ t('prompt.lockedTitle') }}</h1>
+            <h1 class="text-base font-extrabold">{{ t('prompt.lockedTitle') }}</h1>
             <p class="text-[11px] text-text-muted mt-1 leading-relaxed">{{ t('prompt.lockedDesc') }}</p>
           </div>
         </div>
 
         <!-- Requesting site context -->
         <div v-if="unlockOriginDisplay"
-          class="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-surface-card border border-border mb-4">
-          <div class="w-6 h-6 rounded-md bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
+          class="flex items-center gap-2.5 px-3 py-2 rounded-3xl bg-surface-card border border-border shadow-sm mb-4">
+          <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
             <img
               v-if="unlockOriginFavicon && !unlockFaviconFailed"
               :src="unlockOriginFavicon"
               @error="unlockFaviconFailed = true"
-              class="w-4 h-4"
+              class="w-5 h-5"
               alt=""
             />
             <Globe v-else class="w-3.5 h-3.5 text-text-muted" />
@@ -378,7 +389,7 @@ async function submitUnlock() {
               @click="showPassword = !showPassword"
               type="button"
               tabindex="-1"
-              class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-elevated transition-colors"
+              class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-elevated transition-all duration-200"
             >
               <Eye v-if="!showPassword" class="w-3.5 h-3.5" />
               <EyeOff v-else class="w-3.5 h-3.5" />
@@ -399,7 +410,7 @@ async function submitUnlock() {
           <button
             @click="submitUnlock"
             :disabled="!unlockPassword || unlockBusy"
-            class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all btn-primary"
+            class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all duration-200 btn-primary"
           >
             <Loader2 v-if="unlockBusy" class="w-4 h-4 animate-spin" />
             <KeyRound v-else class="w-4 h-4" />
@@ -408,7 +419,7 @@ async function submitUnlock() {
           <button
             @click="closeWindow"
             :disabled="unlockBusy"
-            class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all"
+            class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all duration-200"
           >
             {{ t('common.cancel') }}
           </button>
@@ -425,7 +436,7 @@ async function submitUnlock() {
 
         <!-- ── Site identity card (Alby PublisherCard pattern) ── -->
         <div class="flex items-center gap-3 stagger-1 animate-fade-in-up">
-          <div class="w-11 h-11 rounded-xl border border-border flex items-center justify-center shrink-0 overflow-hidden"
+          <div class="w-11 h-11 rounded-2xl border border-border flex items-center justify-center shrink-0 overflow-hidden"
             :class="faviconFailed ? 'bg-brand text-surface-base' : 'bg-surface-elevated'">
             <img
               v-if="faviconUrl && !faviconFailed"
@@ -437,7 +448,7 @@ async function submitUnlock() {
             <span v-else class="text-sm font-bold">{{ hostInitial }}</span>
           </div>
           <div class="min-w-0 flex-1">
-            <div class="text-sm font-bold truncate">{{ displayHost }}</div>
+            <div class="text-sm font-extrabold truncate">{{ displayHost }}</div>
             <div class="text-[10px] text-text-muted mt-0.5 truncate font-mono">{{ fullOrigin }}</div>
           </div>
         </div>
@@ -450,15 +461,15 @@ async function submitUnlock() {
         </div>
 
         <!-- ── What the site wants ── -->
-        <div class="bg-surface-card rounded-xl border border-border overflow-hidden stagger-2 animate-fade-in-up">
+        <div class="bg-surface-card rounded-3xl border border-border shadow-sm overflow-hidden stagger-2 animate-fade-in-up">
           <!-- Permission header -->
           <div class="px-4 py-3 flex items-start gap-3">
-            <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+            <div class="w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0 mt-0.5"
               :class="riskBadge.class">
               <component :is="permInfo.icon" class="w-[18px] h-[18px]" />
             </div>
             <div class="min-w-0 flex-1">
-              <span class="text-[13px] font-bold leading-snug">{{ permInfo.label }}</span>
+              <span class="text-[13px] font-extrabold leading-snug">{{ permInfo.label }}</span>
               <p class="text-[11px] text-text-muted mt-1 leading-relaxed">{{ permInfo.what }}</p>
             </div>
           </div>
@@ -480,10 +491,22 @@ async function submitUnlock() {
           <div v-if="permInfo.detail" class="px-4 py-2.5 border-t border-border bg-surface-elevated/40">
             <p class="text-[10px] text-text-muted leading-relaxed">{{ permInfo.detail }}</p>
           </div>
+
+          <!-- Raw event data (signEvent only) -->
+          <div v-if="eventData" class="border-t border-border">
+            <button @click="showEventData = !showEventData"
+              class="w-full flex items-center gap-2 px-4 py-2 text-[10px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
+              <FileSignature class="w-3 h-3 shrink-0" />
+              {{ showEventData ? t('prompt.hideEvent') : t('prompt.viewEvent') }}
+            </button>
+            <div v-if="showEventData" class="px-4 pb-3">
+              <pre class="text-[9px] leading-relaxed font-mono bg-surface-base rounded-lg p-3 max-h-[160px] overflow-auto border border-border text-text-secondary whitespace-pre-wrap break-all">{{ JSON.stringify(eventData, null, 2) }}</pre>
+            </div>
+          </div>
         </div>
 
         <!-- ── Account identity ── -->
-        <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-card border border-border stagger-3 animate-fade-in-up">
+        <div class="flex items-center gap-3 px-3 py-2.5 rounded-3xl bg-surface-card border border-border shadow-sm stagger-3 animate-fade-in-up">
           <div class="w-8 h-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
             :class="profilePicture ? '' : 'bg-brand text-surface-base'">
             <img v-if="profilePicture" :src="profilePicture" alt="" class="w-full h-full object-cover" />
@@ -515,12 +538,12 @@ async function submitUnlock() {
           <button
             @click="respond('allow_all')"
             :disabled="!!deciding"
-            class="w-full p-3.5 rounded-xl bg-brand/8 border border-brand/20 hover:bg-brand/12 disabled:opacity-50 transition-all text-left"
+            class="w-full p-3.5 rounded-2xl bg-brand/8 border border-brand/20 hover:bg-brand/12 disabled:opacity-50 transition-all duration-200 text-left"
           >
             <div class="flex items-center gap-2 mb-2.5">
               <ShieldPlus v-if="deciding !== 'allow_all'" class="w-4 h-4 text-brand shrink-0" />
               <Loader2 v-else class="w-4 h-4 text-brand animate-spin shrink-0" />
-              <span class="text-[13px] font-bold text-brand">{{ t('prompt.allowAll') }}</span>
+              <span class="text-[13px] font-extrabold text-brand">{{ t('prompt.allowAll') }}</span>
               <span class="text-[7px] px-1.5 py-0.5 rounded-full bg-brand/15 text-brand font-bold uppercase tracking-wider ml-auto">{{ t('prompt.allowAllRecommended') }}</span>
             </div>
 
@@ -556,7 +579,7 @@ async function submitUnlock() {
           <button
             @click="firstVisit = false"
             :disabled="!!deciding"
-            class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all"
+            class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all duration-200"
           >
             <ShieldCheck class="w-4 h-4 text-text-muted" />
             {{ t('prompt.decideSeparately') }}
@@ -566,7 +589,7 @@ async function submitUnlock() {
           <button
             @click="respond('deny_always')"
             :disabled="!!deciding"
-            class="w-full flex items-center justify-center gap-1.5 py-2 text-[10px] text-text-muted hover:text-error transition-colors font-medium"
+            class="w-full flex items-center justify-center gap-1.5 py-2 text-[10px] text-text-muted hover:text-error transition-all duration-200 font-medium"
           >
             <Ban class="w-3 h-3" />
             {{ t('prompt.blockSite') }}
@@ -582,7 +605,7 @@ async function submitUnlock() {
             <button
               @click="respond('allow_always')"
               :disabled="!!deciding"
-              class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all btn-primary"
+              class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all duration-200 btn-primary"
             >
               <Check v-if="deciding !== 'allow_always'" class="w-4 h-4" />
               <Loader2 v-else class="w-4 h-4 animate-spin" />
@@ -593,7 +616,7 @@ async function submitUnlock() {
             <button
               @click="respond('deny_once')"
               :disabled="!!deciding"
-              class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all"
+              class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all duration-200"
             >
               <X v-if="deciding !== 'deny_once'" class="w-4 h-4" />
               <Loader2 v-else class="w-4 h-4 animate-spin" />
@@ -605,7 +628,7 @@ async function submitUnlock() {
               <button
                 @click="respond('allow_once')"
                 :disabled="!!deciding"
-                class="flex items-center gap-1 text-[10px] text-text-muted hover:text-success transition-colors font-medium disabled:opacity-50"
+                class="flex items-center gap-1 text-[10px] text-text-muted hover:text-success transition-all duration-200 font-medium disabled:opacity-50"
               >
                 <Clock class="w-3 h-3" />
                 {{ t('prompt.allowOnce') }}
@@ -614,7 +637,7 @@ async function submitUnlock() {
               <button
                 @click="respond('deny_always')"
                 :disabled="!!deciding"
-                class="flex items-center gap-1 text-[10px] text-text-muted hover:text-error transition-colors font-medium disabled:opacity-50"
+                class="flex items-center gap-1 text-[10px] text-text-muted hover:text-error transition-all duration-200 font-medium disabled:opacity-50"
               >
                 <ShieldOff class="w-3 h-3" />
                 {{ t('prompt.denyAlways') }}

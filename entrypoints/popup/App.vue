@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, onErrorCaptured } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLock } from '../../composables/useLock.js'
 import { useAccounts } from '../../composables/useAccounts.js'
@@ -10,6 +10,8 @@ import { useToast } from '../../composables/useToast.js'
 import { useFiat, CURRENCIES } from '../../composables/useFiat.js'
 import { useLocale } from '../../composables/useLocale.js'
 import { truncateKey } from '../../lib/utils.js'
+import { nip19 } from 'nostr-core'
+import QRCode from 'qrcode'
 import LockScreen from '../../components/LockScreen.vue'
 import IdentityWizard from '../../components/IdentityWizard.vue'
 import LanguagePicker from '../../components/LanguagePicker.vue'
@@ -35,15 +37,23 @@ import TransactionHistory from '../../components/wallet/TransactionHistory.vue'
 import TransactionDetail from '../../components/wallet/TransactionDetail.vue'
 import RelaySettings from '../../components/RelaySettings.vue'
 import NotificationSettings from '../../components/NotificationSettings.vue'
+import OpenInBrowserButton from '../../components/OpenInBrowserButton.vue'
 import {
   Wallet, Plus, ArrowLeft, Globe, Coins,
   Copy, Check, Trash2, User, Zap, Sun, Moon, Palette,
   Lock, ShieldCheck, ChevronDown, AlertTriangle, AtSign, ExternalLink,
   Settings, X, Loader2, CheckCircle, Languages, MessageSquare, Radio, Bell,
+  QrCode, Maximize2,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { locale, locales, switchLocale } = useLocale()
+
+// Catch rendering errors from child components
+onErrorCaptured((err) => {
+  console.error('[App] Component error caught:', err)
+  return false // let it propagate for visibility
+})
 
 const activeTab = ref('wallet')
 const showLanguagePicker = ref(false)
@@ -84,12 +94,50 @@ const confirmRevokeDomain = ref(null) // domain pending confirmation
 // Permissions popup
 const showPermissionsPopup = ref(false)
 
+// Pubkey format cycling: 0 = npub, 1 = hex, 2 = nprofile
+const pubkeyFormat = ref(0)
+const showPubkeyQr = ref(false)
+const pubkeyQrDataUrl = ref('')
+
+const formattedPubkey = computed(() => {
+  const acct = activeAccount.value
+  if (!acct) return ''
+  if (pubkeyFormat.value === 0) return acct.npub || ''
+  if (pubkeyFormat.value === 1) return acct.pubkey || ''
+  if (pubkeyFormat.value === 2 && acct.pubkey) {
+    try { return nip19.nprofileEncode({ pubkey: acct.pubkey, relays: [] }) } catch { return acct.npub || '' }
+  }
+  return acct.npub || ''
+})
+
+const pubkeyFormatLabel = computed(() => {
+  const labels = ['npub', 'hex', 'nprofile']
+  return labels[pubkeyFormat.value] || 'npub'
+})
+
+function cyclePubkeyFormat() {
+  pubkeyFormat.value = (pubkeyFormat.value + 1) % 3
+}
+
+async function togglePubkeyQr() {
+  if (showPubkeyQr.value) {
+    showPubkeyQr.value = false
+    return
+  }
+  const val = formattedPubkey.value
+  if (!val) return
+  try {
+    pubkeyQrDataUrl.value = await QRCode.toDataURL(val, { width: 200, margin: 2, color: { dark: '#000', light: '#fff' } })
+    showPubkeyQr.value = true
+  } catch { /* ignore */ }
+}
+
 // Profile data fetched from relays
 const profileData = ref(null)
 const profileLoading = ref(false)
 
 const { locked, passwordSet, loading: lockLoading, setup: setupPassword, unlock, lock } = useLock()
-const { accounts, activeAccount, load: loadAccounts, switchTo, remove, fetchProfile } = useAccounts()
+const { accounts, activeAccount, nip46Status, load: loadAccounts, switchTo, remove, fetchProfile, loadNip46Status } = useAccounts()
 const { status: walletStatus, loadStatus: loadWallet, disconnect: disconnectWallet } = useWallet()
 const { policies: permissions, load: loadPermissions, revokeDomain } = usePermissions()
 const { currentTheme, currentMode, themes, themeIds, setTheme, toggleMode } = useTheme()
@@ -97,7 +145,7 @@ const toast = useToast()
 const { currency: fiatCurrency, setCurrency: setFiatCurrency } = useFiat()
 const { switchAccount: switchChatAccount, unreadTotal: chatUnreadTotal } = useChat()
 const { resetContacts } = useContacts()
-const { loadRelays } = useRelays()
+const { relayConfig, loadRelays } = useRelays()
 const showCurrencyPicker = ref(false)
 const showRelaySettings = ref(false)
 const showNotificationSettings = ref(false)
@@ -107,6 +155,11 @@ function toggleIdentity() {
 }
 
 const permissionCount = computed(() => Object.keys(permissions.value).length)
+
+const accountRelayCount = computed(() => relayConfig.value.account?.length || 0)
+const walletRelayCount = computed(() => relayConfig.value.wallet?.length || 0)
+const chatRelayCount = computed(() => relayConfig.value.chat?.length || 0)
+const totalRelayCount = computed(() => accountRelayCount.value + walletRelayCount.value + chatRelayCount.value)
 
 // Reset sub-views when switching tabs
 watch(activeTab, () => {
@@ -175,11 +228,15 @@ function onClickOutside(e) {
   }
 }
 onMounted(() => document.addEventListener('click', onClickOutside, true))
-onUnmounted(() => document.removeEventListener('click', onClickOutside, true))
+onUnmounted(() => {
+  document.removeEventListener('click', onClickOutside, true)
+  if (nip46PollTimer) clearInterval(nip46PollTimer)
+})
 
 function copyPubkey() {
-  if (!activeAccount.value?.npub) return
-  navigator.clipboard.writeText(activeAccount.value.npub)
+  const val = formattedPubkey.value
+  if (!val) return
+  navigator.clipboard.writeText(val)
   copied.value = true
   toast.success(t('common.copiedToClipboard'))
   setTimeout(() => (copied.value = false), 1500)
@@ -302,7 +359,7 @@ async function handleUnlock(password) {
 }
 
 async function loadData() {
-  await Promise.all([loadAccounts(), loadWallet(), loadPermissions()])
+  await Promise.all([loadAccounts(), loadWallet(), loadPermissions(), loadRelays()])
   dataLoaded.value = true
   if (accounts.value.length === 0) {
     showWizard.value = true
@@ -313,6 +370,24 @@ async function loadData() {
       .catch(() => { profileData.value = null })
       .finally(() => { profileLoading.value = false })
   }
+  // Poll NIP-46 reconnection status for remote signer accounts
+  if (activeAccount.value?.mode === 'nip46') {
+    pollNip46Status()
+  }
+}
+
+let nip46PollTimer = null
+function pollNip46Status() {
+  clearInterval(nip46PollTimer)
+  loadNip46Status()
+  nip46PollTimer = setInterval(async () => {
+    await loadNip46Status()
+    // Stop polling once connected
+    if (nip46Status.value.connected && !nip46Status.value.reconnecting) {
+      clearInterval(nip46PollTimer)
+      nip46PollTimer = null
+    }
+  }, 1500)
 }
 
 function showTxDetail(tx) {
@@ -329,6 +404,12 @@ function closeTxDetail() {
 function handleLock() {
   showSettings.value = false
   lock()
+}
+
+function openFullPage() {
+  const url = chrome.runtime.getURL('popup.html')
+  chrome.tabs.create({ url })
+  window.close()
 }
 
 // Handle ?tab= query param from notification clicks
@@ -376,17 +457,17 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         <!-- Minimal settings on lock screen -->
         <div class="relative" ref="settingsRef">
           <button @click.stop="showSettings = !showSettings"
-            class="p-1.5 rounded-lg hover:bg-surface-elevated transition-colors"
+            class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200"
             title="Settings">
             <Settings class="w-4 h-4 text-text-muted" />
           </button>
 
           <!-- Lock screen settings dropdown (theme only) -->
           <div v-if="showSettings"
-            class="absolute right-0 top-full mt-1.5 w-56 bg-surface-card rounded-xl border border-border shadow-lg z-50 overflow-hidden animate-scale-in origin-top-right">
+            class="absolute right-0 top-full mt-1.5 w-56 bg-surface-card rounded-2xl border border-border shadow-lg z-50 overflow-hidden animate-scale-in origin-top-right">
             <!-- Mode toggle -->
             <button @click="toggleMode"
-              class="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-elevated transition-colors text-left">
+              class="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-elevated transition-all duration-200 text-left">
               <Sun v-if="currentMode === 'dark'" class="w-4 h-4 text-text-muted" />
               <Moon v-else class="w-4 h-4 text-text-muted" />
               <span class="text-xs font-medium">{{ currentMode === 'dark' ? t('settings.switchToLight') : t('settings.switchToDark') }}</span>
@@ -398,7 +479,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             </div>
             <button v-for="id in themeIds" :key="id"
               @click="setTheme(id)"
-              class="w-full flex items-center justify-between px-4 py-2 hover:bg-surface-elevated transition-colors text-left">
+              class="w-full flex items-center justify-between px-4 py-2 hover:bg-surface-elevated transition-all duration-200 text-left">
               <span class="text-xs" :class="currentTheme === id ? 'font-semibold text-brand' : 'text-text-secondary'">
                 {{ themes[id]?.label }}
               </span>
@@ -426,7 +507,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         <button
           v-if="activeAccount"
           @click="toggleIdentity"
-          class="flex items-center gap-2.5 flex-1 min-w-0 text-left transition-colors rounded-lg -ml-1 pl-1 py-0.5"
+          class="flex items-center gap-2.5 flex-1 min-w-0 text-left transition-all duration-200 rounded-lg -ml-1 pl-1 py-0.5"
           :class="activeTab === 'identity' ? 'bg-surface-elevated/50' : 'hover:bg-surface-elevated/30'"
         >
           <!-- Avatar -->
@@ -438,14 +519,22 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
           </div>
           <!-- Name + npub -->
           <div class="flex-1 min-w-0">
-            <div class="text-[13px] font-bold truncate leading-tight">{{ displayName }}</div>
+            <div class="text-[13px] font-extrabold truncate leading-tight">{{ displayName }}</div>
             <div class="flex items-center gap-1.5">
               <span class="text-[9px] text-text-muted truncate font-mono">{{ activeAccount.npub ? truncateKey(activeAccount.npub, 8, 4) : '' }}</span>
-              <span class="flex items-center gap-0.5 text-[8px] font-semibold px-1 py-px rounded-full shrink-0"
+              <span v-if="activeAccount.mode === 'nip46' && nip46Status.reconnecting"
+                class="flex items-center gap-0.5 text-[8px] font-semibold px-1 py-px rounded-full shrink-0 bg-info/10 text-info">
+                <Loader2 class="w-2 h-2 animate-spin" />
+                {{ t('account.reconnecting') }}
+              </span>
+              <span v-else class="flex items-center gap-0.5 text-[8px] font-semibold px-1 py-px rounded-full shrink-0"
                 :class="activeAccount.mode === 'local'
                   ? 'bg-success/10 text-success'
-                  : 'bg-warning/10 text-warning'">
-                <span class="w-1 h-1 rounded-full" :class="activeAccount.mode === 'local' ? 'bg-success' : 'bg-warning'" />
+                  : nip46Status.connected ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'">
+                <span class="w-1 h-1 rounded-full"
+                  :class="activeAccount.mode === 'local'
+                    ? 'bg-success'
+                    : nip46Status.connected ? 'bg-success' : 'bg-warning'" />
                 {{ activeAccount.mode === 'local' ? t('account.local') : t('account.external') }}
               </span>
             </div>
@@ -458,10 +547,16 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
           <span class="font-semibold text-sm tracking-tight">Buho Jump</span>
         </div>
 
+        <!-- Open full page -->
+        <button @click="openFullPage" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0"
+          :title="t('settings.openFullPage')">
+          <Maximize2 class="w-4 h-4 text-text-muted" />
+        </button>
+
         <!-- Settings button + dropdown -->
         <div class="relative shrink-0" ref="settingsRef">
           <button @click.stop="showSettings = !showSettings"
-            class="p-1.5 rounded-lg transition-colors"
+            class="p-1.5 rounded-lg transition-all duration-200"
             :class="showSettings ? 'bg-surface-elevated' : 'hover:bg-surface-elevated'"
             title="Settings">
             <Settings class="w-4 h-4 transition-transform duration-200" :class="showSettings ? 'text-brand rotate-90' : 'text-text-muted'" />
@@ -469,7 +564,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 
           <!-- Settings dropdown -->
           <div v-if="showSettings"
-            class="absolute right-0 top-full mt-1.5 w-60 max-h-[75vh] overflow-y-auto bg-surface-card rounded-xl border border-border shadow-lg z-50 animate-scale-in origin-top-right">
+            class="absolute right-0 top-full mt-1.5 w-60 max-h-[75vh] overflow-y-auto bg-surface-card rounded-2xl border border-border shadow-lg z-50 animate-scale-in origin-top-right">
 
             <!-- Appearance section -->
             <div class="px-4 pt-3 pb-1.5">
@@ -478,8 +573,8 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 
             <!-- Mode toggle -->
             <button @click="toggleMode"
-              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-colors text-left">
-              <div class="w-7 h-7 rounded-lg bg-surface-elevated flex items-center justify-center">
+              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
+              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
                 <Sun v-if="currentMode === 'dark'" class="w-3.5 h-3.5 text-warning" />
                 <Moon v-else class="w-3.5 h-3.5 text-info" />
               </div>
@@ -512,8 +607,8 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.language') }}</span>
             </div>
             <button @click="showLanguagePicker = !showLanguagePicker"
-              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-colors text-left">
-              <div class="w-7 h-7 rounded-lg bg-surface-elevated flex items-center justify-center">
+              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
+              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
                 <Languages class="w-3.5 h-3.5 text-text-muted" />
               </div>
               <div>
@@ -532,8 +627,8 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.currency') }}</span>
             </div>
             <button @click="showCurrencyPicker = !showCurrencyPicker"
-              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-colors text-left">
-              <div class="w-7 h-7 rounded-lg bg-surface-elevated flex items-center justify-center">
+              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
+              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
                 <Coins class="w-3.5 h-3.5 text-text-muted" />
               </div>
               <div>
@@ -545,7 +640,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               <div class="space-y-0.5">
                 <button v-for="cur in CURRENCIES" :key="cur.code"
                   @click="setFiatCurrency(cur.code); showCurrencyPicker = false"
-                  class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors text-left"
+                  class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all duration-200 text-left"
                   :class="fiatCurrency === cur.code ? 'bg-brand/8' : 'hover:bg-surface-elevated'">
                   <div class="flex items-center gap-2">
                     <span class="text-xs font-mono w-5 text-center">{{ cur.symbol }}</span>
@@ -562,28 +657,34 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             <div class="h-px bg-border" />
 
             <!-- Relay settings -->
-            <button @click="showRelaySettings = true; showNotificationSettings = false; showWizard = false; showSettings = false"
-              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-colors text-left">
-              <div class="w-7 h-7 rounded-lg bg-surface-elevated flex items-center justify-center">
-                <Radio class="w-3.5 h-3.5 text-text-muted" />
-              </div>
-              <div>
-                <span class="text-xs font-medium block">{{ t('settings.relaySettings') }}</span>
-                <span class="text-[9px] text-text-muted">{{ t('settings.relaySettingsDesc') }}</span>
-              </div>
-            </button>
+            <div class="flex items-center">
+              <button @click="showRelaySettings = true; showNotificationSettings = false; showWizard = false; showSettings = false"
+                class="flex-1 flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
+                <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
+                  <Radio class="w-3.5 h-3.5 text-text-muted" />
+                </div>
+                <div>
+                  <span class="text-xs font-medium block">{{ t('settings.relaySettings') }}</span>
+                  <span class="text-[9px] text-text-muted">{{ t('settings.relaySettingsDesc') }}</span>
+                </div>
+              </button>
+              <OpenInBrowserButton page="relays" class="mr-3" />
+            </div>
 
             <!-- Notification settings -->
-            <button @click="showNotificationSettings = true; showRelaySettings = false; showWizard = false; showSettings = false"
-              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-colors text-left">
-              <div class="w-7 h-7 rounded-lg bg-surface-elevated flex items-center justify-center">
-                <Bell class="w-3.5 h-3.5 text-text-muted" />
-              </div>
-              <div>
-                <span class="text-xs font-medium block">{{ t('notifications.settingsLabel') }}</span>
-                <span class="text-[9px] text-text-muted">{{ t('notifications.settingsDesc') }}</span>
-              </div>
-            </button>
+            <div class="flex items-center">
+              <button @click="showNotificationSettings = true; showRelaySettings = false; showWizard = false; showSettings = false"
+                class="flex-1 flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
+                <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
+                  <Bell class="w-3.5 h-3.5 text-text-muted" />
+                </div>
+                <div>
+                  <span class="text-xs font-medium block">{{ t('notifications.settingsLabel') }}</span>
+                  <span class="text-[9px] text-text-muted">{{ t('notifications.settingsDesc') }}</span>
+                </div>
+              </button>
+              <OpenInBrowserButton page="preferences" class="mr-3" />
+            </div>
 
             <div class="h-px bg-border" />
 
@@ -592,8 +693,8 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.security') }}</span>
             </div>
             <button @click="handleLock"
-              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-colors text-left">
-              <div class="w-7 h-7 rounded-lg bg-surface-elevated flex items-center justify-center">
+              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
+              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
                 <Lock class="w-3.5 h-3.5 text-text-muted" />
               </div>
               <div>
@@ -602,8 +703,11 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               </div>
             </button>
 
-            <!-- Version footer -->
-            <div class="px-4 py-2.5 border-t border-border mt-1">
+            <div class="h-px bg-border" />
+
+            <!-- Open full settings -->
+            <div class="px-4 py-2 flex items-center justify-between">
+              <OpenInBrowserButton page="preferences" />
               <span class="text-[9px] text-text-muted">{{ t('settings.version', { version: '0.1.0' }) }}</span>
             </div>
           </div>
@@ -630,7 +734,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 
         <!-- Loading skeleton -->
         <div v-if="!dataLoaded" class="flex-1 overflow-y-auto p-4 space-y-4">
-          <div class="bg-surface-card rounded-xl p-4 border border-border space-y-3">
+          <div class="bg-surface-card rounded-3xl p-4 border border-border shadow-sm space-y-3">
             <div class="flex items-center gap-3">
               <SkeletonLoader width="36px" height="36px" rounded="rounded-full" />
               <div class="flex-1 space-y-2">
@@ -662,18 +766,19 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             <!-- Connected sites popup -->
             <div v-else-if="showPermissionsPopup" class="space-y-3 animate-fade-in-up">
               <div class="flex items-center gap-2">
-                <button @click="showPermissionsPopup = false" class="p-1 rounded-md hover:bg-surface-elevated transition-colors">
+                <button @click="showPermissionsPopup = false" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
                   <ArrowLeft class="w-4 h-4 text-text-muted" />
                 </button>
                 <span class="text-sm font-semibold">{{ t('account.connectedSites') }}</span>
+                <OpenInBrowserButton page="sites" />
               </div>
 
               <div v-if="permissionCount > 0" class="space-y-1">
                 <button v-for="(methods, host) in permissions" :key="host"
                   @click="selectedSite = host"
-                  class="w-full flex items-center justify-between px-3 py-2.5 bg-surface-card rounded-xl border border-border hover:border-brand/30 transition-all group">
+                  class="w-full flex items-center justify-between px-3 py-2.5 bg-surface-card rounded-3xl border border-border shadow-sm hover:border-brand/30 transition-all duration-200 group">
                   <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                    <div class="w-7 h-7 rounded-lg bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
+                    <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
                       <Globe class="w-3.5 h-3.5 text-text-muted" />
                     </div>
                     <div class="min-w-0">
@@ -681,11 +786,11 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                       <span class="text-[9px] text-text-muted">{{ Object.keys(methods).length }} {{ t('sites.permissionsGranted') }}</span>
                     </div>
                   </div>
-                  <ChevronDown class="w-3 h-3 text-text-muted -rotate-90 group-hover:text-brand transition-colors shrink-0" />
+                  <ChevronDown class="w-3 h-3 text-text-muted -rotate-90 group-hover:text-brand transition-all duration-200 shrink-0" />
                 </button>
               </div>
 
-              <div v-else class="bg-surface-card rounded-xl border border-border p-6 text-center">
+              <div v-else class="bg-surface-card rounded-3xl border border-border shadow-sm p-6 text-center">
                 <Globe class="w-5 h-5 text-text-muted mx-auto mb-2" />
                 <p class="text-xs text-text-muted">{{ t('account.noSites') }}</p>
                 <p class="text-[10px] text-text-muted mt-0.5">{{ t('account.noSitesHint') }}</p>
@@ -694,7 +799,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 
             <!-- Active identity card -->
             <template v-else>
-            <div v-if="activeAccount" class="bg-surface-card rounded-xl border border-border animate-fade-in-up overflow-hidden">
+            <div v-if="activeAccount" class="bg-surface-card rounded-3xl border border-border shadow-sm animate-fade-in-up overflow-hidden">
 
               <!-- Profile header — banner or gradient fallback -->
               <div class="relative">
@@ -740,7 +845,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                   </div>
                   <template v-else>
                     <div class="flex items-center gap-1.5">
-                      <span class="font-bold text-sm truncate">{{ displayName }}</span>
+                      <span class="font-extrabold text-sm truncate">{{ displayName }}</span>
                       <span v-if="profileData?.nip05" class="text-[9px] text-brand font-medium truncate">
                         {{ profileData.nip05 }}
                       </span>
@@ -753,14 +858,29 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                 </div>
 
                 <!-- Pubkey row -->
-                <div v-if="activeAccount.npub" class="flex items-center gap-2">
-                  <code class="flex-1 text-[10px] bg-surface-base px-2.5 py-1.5 rounded-lg font-mono text-text-muted truncate">
-                    {{ truncateKey(activeAccount.npub, 14, 8) }}
-                  </code>
-                  <button @click="copyPubkey" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-colors shrink-0">
-                    <Check v-if="copied" class="w-3.5 h-3.5 text-success" />
-                    <Copy v-else class="w-3.5 h-3.5 text-text-muted" />
-                  </button>
+                <div v-if="activeAccount.npub" class="space-y-2">
+                  <div class="flex items-center gap-1.5">
+                    <button @click="cyclePubkeyFormat"
+                      class="flex-1 flex items-center gap-1.5 bg-surface-base px-2.5 py-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 group min-w-0"
+                      :title="t('account.tapToCycle')">
+                      <span class="text-[8px] uppercase tracking-wider text-brand font-bold shrink-0">{{ pubkeyFormatLabel }}</span>
+                      <code class="text-[10px] font-mono text-text-muted truncate">{{ truncateKey(formattedPubkey, 14, 8) }}</code>
+                    </button>
+                    <button @click="togglePubkeyQr" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0"
+                      :title="t('account.showQr')">
+                      <QrCode class="w-3.5 h-3.5" :class="showPubkeyQr ? 'text-brand' : 'text-text-muted'" />
+                    </button>
+                    <button @click="copyPubkey" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0">
+                      <Check v-if="copied" class="w-3.5 h-3.5 text-success" />
+                      <Copy v-else class="w-3.5 h-3.5 text-text-muted" />
+                    </button>
+                  </div>
+                  <!-- QR code for pubkey -->
+                  <div v-if="showPubkeyQr && pubkeyQrDataUrl" class="flex justify-center animate-fade-in-up">
+                    <div class="bg-white p-2 rounded-3xl shadow-sm">
+                      <img :src="pubkeyQrDataUrl" alt="QR" class="w-[160px] h-[160px]" />
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Profile metadata pills -->
@@ -779,17 +899,45 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 
               <!-- Connected sites button -->
               <div v-if="permissionCount > 0" class="border-t border-border px-4 py-3">
-                <button @click="showPermissionsPopup = true"
-                  class="w-full flex items-center justify-between py-1.5 group">
-                  <div class="flex items-center gap-1.5">
-                    <ShieldCheck class="w-3 h-3 text-text-muted" />
-                    <span class="text-[10px] font-semibold uppercase tracking-wider text-text-muted">{{ t('account.connectedSites') }}</span>
-                  </div>
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-elevated text-text-muted font-semibold">{{ permissionCount }}</span>
-                    <ChevronDown class="w-3 h-3 text-text-muted -rotate-90 group-hover:text-brand transition-colors" />
-                  </div>
-                </button>
+                <div class="flex items-center gap-1">
+                  <button @click="showPermissionsPopup = true"
+                    class="flex-1 flex items-center justify-between py-1.5 group">
+                    <div class="flex items-center gap-1.5">
+                      <ShieldCheck class="w-3 h-3 text-text-muted" />
+                      <span class="text-[10px] font-semibold uppercase tracking-wider text-text-muted">{{ t('account.connectedSites') }}</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-elevated text-text-muted font-semibold">{{ permissionCount }}</span>
+                      <ChevronDown class="w-3 h-3 text-text-muted -rotate-90 group-hover:text-brand transition-all duration-200" />
+                    </div>
+                  </button>
+                  <OpenInBrowserButton page="sites" />
+                </div>
+              </div>
+
+              <!-- Connected relays -->
+              <div class="border-t border-border px-4 py-3">
+                <div class="flex items-center gap-1">
+                  <button @click="showRelaySettings = true; showSettings = false"
+                    class="flex-1 flex items-center justify-between py-1.5 group">
+                    <div class="flex items-center gap-1.5">
+                      <Radio class="w-3 h-3 text-text-muted" />
+                      <span class="text-[10px] font-semibold uppercase tracking-wider text-text-muted">{{ t('account.connectedRelays') }}</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span v-if="totalRelayCount > 0" class="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-elevated text-text-muted font-semibold">{{ totalRelayCount }}</span>
+                      <ChevronDown class="w-3 h-3 text-text-muted -rotate-90 group-hover:text-brand transition-all duration-200" />
+                    </div>
+                  </button>
+                  <OpenInBrowserButton page="relays" />
+                </div>
+                <div v-if="totalRelayCount > 0" class="flex items-center gap-2 mt-1.5 pl-[18px]">
+                  <span class="text-[9px] text-text-muted">{{ accountRelayCount }} {{ t('relay.tabAccount') }}</span>
+                  <span class="text-[9px] text-text-muted opacity-40">·</span>
+                  <span class="text-[9px] text-text-muted">{{ walletRelayCount }} {{ t('relay.tabWallet') }}</span>
+                  <span class="text-[9px] text-text-muted opacity-40">·</span>
+                  <span class="text-[9px] text-text-muted">{{ chatRelayCount }} {{ t('relay.tabChat') }}</span>
+                </div>
               </div>
             </div>
 
@@ -811,7 +959,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                 :key="acc.id"
                 @click="requestSwitchAccount(acc.id)"
                 :disabled="!!switchingAccount"
-                class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-surface-card border border-transparent hover:border-border transition-all text-sm group disabled:opacity-60"
+                class="w-full flex items-center justify-between px-3 py-2.5 rounded-3xl hover:bg-surface-card border border-transparent hover:border-border transition-all duration-200 text-sm group disabled:opacity-60"
               >
                 <div class="flex items-center gap-2.5">
                   <!-- Loading spinner replaces avatar when switching -->
@@ -839,7 +987,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                   v-if="!switchingAccount"
                   role="button"
                   @click.stop="requestDelete(acc.id)"
-                  class="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-error/10 transition-all cursor-pointer"
+                  class="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-error/10 transition-all duration-200 cursor-pointer"
                   title="Remove account"
                 >
                   <Trash2 class="w-3.5 h-3.5 text-text-muted hover:text-error" />
@@ -855,12 +1003,12 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               <template #actions>
                 <button @click="cancelSwitch"
                   :disabled="!!switchingAccount"
-                  class="py-2 text-xs rounded-lg bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-colors font-semibold disabled:opacity-60">
+                  class="py-2 text-xs rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold disabled:opacity-60">
                   {{ t('common.cancel') }}
                 </button>
                 <button @click="confirmSwitch"
                   :disabled="!!switchingAccount"
-                  class="py-2 text-xs rounded-lg bg-brand text-surface-base hover:bg-brand-hover transition-colors font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60 btn-primary">
+                  class="py-2 text-xs rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all duration-200 font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60 btn-primary">
                   <Loader2 v-if="switchingAccount" class="w-3 h-3 animate-spin" />
                   {{ switchingAccount ? t('account.switching') : t('account.switchConfirmBtn') }}
                 </button>
@@ -875,12 +1023,12 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               <template #actions>
                 <button @click="cancelDelete"
                   :disabled="deletingAccount"
-                  class="py-2 text-xs rounded-lg bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-colors font-semibold disabled:opacity-60">
+                  class="py-2 text-xs rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold disabled:opacity-60">
                   {{ t('common.cancel') }}
                 </button>
                 <button @click="confirmDelete"
                   :disabled="deletingAccount"
-                  class="py-2 text-xs rounded-lg bg-error text-white hover:bg-error/90 transition-colors font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
+                  class="py-2 text-xs rounded-2xl bg-error text-white hover:bg-error/90 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
                   <Loader2 v-if="deletingAccount" class="w-3 h-3 animate-spin" />
                   {{ deletingAccount ? t('account.removing') : t('account.deleteForever') }}
                 </button>
@@ -888,7 +1036,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             </BottomSheet>
 
             <button @click="showWizard = true"
-              class="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm rounded-xl border border-dashed border-border text-text-muted hover:text-brand hover:border-brand transition-colors">
+              class="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm rounded-3xl border border-dashed border-border text-text-muted hover:text-brand hover:border-brand transition-all duration-200">
               <Plus class="w-4 h-4" />
               {{ t('account.addAccount') }}
             </button>
@@ -932,12 +1080,13 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
           <!-- ══ Chat Tab                               ══ -->
           <!-- ══════════════════════════════════════════════ -->
           <section v-else-if="activeTab === 'chat'"
-            class="flex flex-col"
-            :class="chatView === 'thread' ? 'flex-1 min-h-0' : 'p-4'">
+            class="flex flex-col flex-1 min-h-0"
+            :class="chatView === 'thread' ? '' : ''">
             <ChatHome
               v-if="chatView === 'home'"
               @open="(pk) => { chatPubkey = pk; chatView = 'thread' }"
               @new-chat="chatView = 'new'"
+              class="flex-1 min-h-0 pt-2"
             />
 
             <ChatThread

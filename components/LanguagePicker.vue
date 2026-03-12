@@ -36,7 +36,7 @@ async function pick(code) {
         v-for="lang in locales"
         :key="lang.code"
         @click="pick(lang.code)"
-        class="flex items-center gap-2 text-left transition-colors rounded-lg"
+        class="flex items-center gap-2 text-left transition-all duration-200 rounded-2xl"
         :class="[
           compact
             ? 'px-3 py-2 text-xs hover:bg-surface-elevated w-full'

@@ -15,10 +15,14 @@ const lockoutUntil = ref(0)
 const { send } = useMessaging()
 
 let autoLockTimer = null
+let _initialized = false
 
 export function useLock() {
   async function checkState() {
-    loading.value = true
+    // Only show loading spinner on the very first check.
+    // Subsequent checks (from child components re-mounting) update
+    // locked/passwordSet silently to avoid unmount/remount loops.
+    if (!_initialized) loading.value = true
     try {
       const state = await send('GET_LOCK_STATE')
       locked.value = state.locked
@@ -28,6 +32,7 @@ export function useLock() {
       passwordSet.value = false
     } finally {
       loading.value = false
+      _initialized = true
     }
   }
 
@@ -102,7 +107,10 @@ export function useLock() {
   }
 
   onMounted(() => {
-    checkState()
+    // Only auto-check once (from the first component that uses useLock).
+    // Without this guard, child components like PreferencesPage would
+    // re-trigger checkState → loading=true → parent unmounts children → loop.
+    if (!_initialized) checkState()
   })
 
   onBeforeUnmount(() => {

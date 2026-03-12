@@ -327,11 +327,11 @@ function reset() {
     <div class="flex items-center gap-2 mb-4">
       <button
         @click="step === 'input' ? emit('back') : (step === 'merchant-confirm' ? reset() : (step = 'input'))"
-        class="p-1 rounded-md hover:bg-surface-elevated transition-colors"
+        class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200"
       >
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
-      <span class="text-sm font-semibold">
+      <span class="text-sm font-extrabold">
         {{ step === 'result' ? t('wallet.sendResult') : (step === 'merchant-confirm' ? t('wallet.merchantPayment') : t('wallet.sendTitle')) }}
       </span>
     </div>
@@ -347,7 +347,7 @@ function reset() {
           </label>
           <button
             @click="showScanner = !showScanner"
-            class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-colors font-medium"
+            class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium"
           >
             <ScanLine class="w-3 h-3" />
             {{ showScanner ? t('common.typeInstead') : t('common.scanQr') }}
@@ -400,7 +400,7 @@ function reset() {
           </label>
           <button
             @click="toggleInputMode"
-            class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-colors font-medium"
+            class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium"
           >
             <ArrowLeftRight class="w-3 h-3" />
             {{ inputMode === 'sats' ? t('wallet.enterInFiat', { currency: currency.toUpperCase() }) : t('wallet.enterInSats') }}
@@ -437,7 +437,7 @@ function reset() {
       <button
         @click="proceed"
         :disabled="!canProceed || resolving"
-        class="w-full py-2.5 text-sm rounded-xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold btn-primary flex items-center justify-center gap-1.5"
+        class="w-full py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 font-semibold btn-primary flex items-center justify-center gap-1.5"
       >
         <Loader2 v-if="resolving" class="w-4 h-4 animate-spin" />
         {{ resolving ? (isMerchant ? t('wallet.merchantResolvingAddress') : t('wallet.resolving')) : t('wallet.reviewPayment') }}
@@ -449,16 +449,16 @@ function reset() {
 
       <!-- Expired overlay -->
       <div v-if="countdownExpired" class="space-y-4">
-        <div class="bg-surface-card rounded-2xl border border-border p-6 text-center">
+        <div class="bg-surface-card rounded-3xl border border-border p-6 text-center shadow-sm">
           <div class="w-12 h-12 rounded-full bg-error/15 flex items-center justify-center mx-auto mb-3">
             <Timer class="w-6 h-6 text-error" />
           </div>
-          <h3 class="text-base font-bold mb-1">{{ t('wallet.merchantExpired') }}</h3>
+          <h3 class="text-base font-extrabold mb-1">{{ t('wallet.merchantExpired') }}</h3>
           <p class="text-xs text-text-muted">{{ t('wallet.merchantExpiredDesc') }}</p>
         </div>
         <button
           @click="reset"
-          class="w-full py-2.5 text-sm rounded-xl bg-brand text-surface-base hover:bg-brand-hover transition-colors font-semibold btn-primary"
+          class="w-full py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all duration-200 font-semibold btn-primary"
         >
           {{ t('wallet.merchantScanAgain') }}
         </button>
@@ -467,11 +467,11 @@ function reset() {
       <!-- Active merchant payment -->
       <template v-else>
         <!-- Merchant card -->
-        <div class="bg-surface-card rounded-2xl border border-border p-5">
+        <div class="bg-surface-card rounded-3xl border border-border p-5 shadow-sm">
           <!-- Merchant header -->
           <div class="flex items-center gap-3 mb-4">
             <div
-              class="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
+              class="w-11 h-11 rounded-[10px] flex items-center justify-center shrink-0 overflow-hidden"
               :style="{ backgroundColor: merchantInfo?.color || '#607D8B' }"
             >
               <img
@@ -487,7 +487,7 @@ function reset() {
               >{{ getMerchantInitials(merchantInfo?.name) }}</span>
             </div>
             <div class="min-w-0">
-              <p class="text-sm font-bold truncate">{{ merchantStoreName || merchantInfo?.name || 'Retailer' }}</p>
+              <p class="text-sm font-extrabold truncate">{{ merchantStoreName || merchantInfo?.name || 'Retailer' }}</p>
               <p class="text-[10px] text-text-muted">{{ t('wallet.merchantPaying') }} {{ merchantInfo?.name }}</p>
             </div>
           </div>
@@ -546,14 +546,14 @@ function reset() {
           <button
             @click="reset"
             :disabled="paying"
-            class="py-2.5 text-sm rounded-xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-colors font-semibold"
+            class="py-2.5 text-sm rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold"
           >
             {{ t('common.cancel') }}
           </button>
           <button
             @click="confirmPay"
             :disabled="paying"
-            class="py-2.5 text-sm rounded-xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-60 transition-colors font-semibold btn-primary flex items-center justify-center gap-1.5"
+            class="py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-60 transition-all duration-200 font-semibold btn-primary flex items-center justify-center gap-1.5"
           >
             <Loader2 v-if="paying" class="w-4 h-4 animate-spin" />
             {{ paying ? t('wallet.paying') : t('wallet.merchantConfirm') }}
@@ -565,8 +565,8 @@ function reset() {
     <!-- ═══ Step: Confirm (normal) ═══ -->
     <div v-if="step === 'confirm'" class="space-y-4 animate-fade-in-up">
 
-      <div class="bg-surface-card rounded-2xl border border-border p-5 text-center">
-        <div class="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center mx-auto mb-3">
+      <div class="bg-surface-card rounded-3xl border border-border p-5 text-center shadow-sm">
+        <div class="w-10 h-10 rounded-[10px] bg-brand/10 flex items-center justify-center mx-auto mb-3">
           <ArrowUpRight class="w-5 h-5 text-brand" />
         </div>
         <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-1">{{ t('wallet.sending') }}</p>
@@ -601,14 +601,14 @@ function reset() {
         <button
           @click="step = 'input'"
           :disabled="paying"
-          class="py-2.5 text-sm rounded-xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-colors font-semibold"
+          class="py-2.5 text-sm rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold"
         >
           {{ t('common.cancel') }}
         </button>
         <button
           @click="confirmPay"
           :disabled="paying"
-          class="py-2.5 text-sm rounded-xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-60 transition-colors font-semibold btn-primary flex items-center justify-center gap-1.5"
+          class="py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-60 transition-all duration-200 font-semibold btn-primary flex items-center justify-center gap-1.5"
         >
           <Loader2 v-if="paying" class="w-4 h-4 animate-spin" />
           {{ paying ? t('wallet.paying') : t('common.confirm') }}
@@ -619,11 +619,11 @@ function reset() {
     <!-- ═══ Step: Result ═══ -->
     <div v-if="step === 'result'" class="space-y-4 animate-fade-in-up">
 
-      <div class="bg-surface-card rounded-2xl border border-border p-6 text-center">
+      <div class="bg-surface-card rounded-3xl border border-border p-6 text-center shadow-sm">
         <div class="w-12 h-12 rounded-full bg-success/15 flex items-center justify-center mx-auto mb-3">
           <Check class="w-6 h-6 text-success" />
         </div>
-        <h3 class="text-base font-bold mb-1">{{ t('wallet.paymentSent') }}</h3>
+        <h3 class="text-base font-extrabold mb-1">{{ t('wallet.paymentSent') }}</h3>
         <p class="text-xs text-text-muted">
           {{ merchantInfo ? `${t('wallet.merchantPaying')} ${merchantInfo.name}` : t('wallet.paymentSuccess') }}
         </p>
@@ -643,14 +643,14 @@ function reset() {
 
       <button
         @click="emit('done')"
-        class="w-full py-2.5 text-sm rounded-xl bg-brand text-surface-base hover:bg-brand-hover transition-colors font-semibold btn-primary"
+        class="w-full py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all duration-200 font-semibold btn-primary"
       >
         {{ t('common.done') }}
       </button>
 
       <button
         @click="reset"
-        class="w-full py-2 text-xs text-text-muted hover:text-text-secondary transition-colors"
+        class="w-full py-2 text-xs text-text-muted hover:text-text-secondary transition-all duration-200"
       >
         {{ t('wallet.sendAnother') }}
       </button>

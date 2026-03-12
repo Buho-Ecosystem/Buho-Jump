@@ -13,31 +13,46 @@
  *     </template>
  *   </BottomSheet>
  */
-defineProps({
+import { computed, onMounted, ref } from 'vue'
+
+const props = defineProps({
   open: { type: Boolean, default: false },
   variant: { type: String, default: 'default' }, // 'default' | 'danger' | 'brand'
 })
 
-defineEmits(['close'])
+const emit = defineEmits(['close'])
+
+// Detect if we're inside the popup or the options page
+const isPopup = ref(false)
+onMounted(() => {
+  isPopup.value = !!document.querySelector('.popup-container')
+})
+const teleportTarget = computed(() => isPopup.value ? '.popup-container' : 'body')
 </script>
 
 <template>
-  <Teleport to=".popup-container">
+  <Teleport :to="teleportTarget">
     <Transition name="bottom-sheet">
-      <div v-if="open" class="sticky bottom-0 left-0 right-0 z-50">
-        <!-- Fade overlay above the sheet -->
-        <div
+      <div v-if="open" :class="isPopup ? 'sticky bottom-0 left-0 right-0 z-50' : 'fixed inset-0 z-50 flex items-end justify-center'">
+        <!-- Full-page backdrop (options page only) -->
+        <div v-if="!isPopup" class="absolute inset-0 bg-black/40" @click="emit('close')" />
+
+        <!-- Fade overlay above the sheet (popup only) -->
+        <div v-if="isPopup"
           class="absolute inset-x-0 -top-8 h-8 pointer-events-none"
           style="background: linear-gradient(to bottom, transparent, var(--color-surface-base))"
         />
 
         <div
-          class="border-t px-4 pt-4 pb-5 space-y-3"
-          :class="{
-            'bg-surface-base border-border': variant === 'default',
-            'bg-error/3 border-error/20': variant === 'danger',
-            'bg-brand/3 border-brand/20': variant === 'brand',
-          }"
+          :class="[
+            'border-t px-4 pt-4 pb-5 space-y-3 relative',
+            isPopup ? '' : 'w-full max-w-md rounded-t-3xl shadow-lg',
+            {
+              'bg-surface-base border-border': variant === 'default',
+              'bg-error/3 border-error/20': variant === 'danger',
+              'bg-brand/3 border-brand/20': variant === 'brand',
+            }
+          ]"
         >
           <!-- Content row: icon + text -->
           <div class="flex items-start gap-3">

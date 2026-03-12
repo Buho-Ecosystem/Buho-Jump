@@ -97,13 +97,13 @@ onBeforeUnmount(() => {
         <Camera class="w-3.5 h-3.5" />
         {{ t('qr.scanTitle') }}
       </div>
-      <button @click="close" class="p-1 rounded-md hover:bg-surface-elevated transition-colors">
+      <button @click="close" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
         <X class="w-3.5 h-3.5 text-text-muted" />
       </button>
     </div>
 
     <!-- Camera scanner viewport -->
-    <div v-if="!cameraUnavailable" class="relative rounded-xl overflow-hidden bg-black" style="min-height: 240px">
+    <div v-if="!cameraUnavailable" class="relative rounded-3xl overflow-hidden bg-black" style="min-height: 240px">
       <div :id="readerId" class="w-full" />
       <div v-if="!scanning && !error"
         class="absolute inset-0 flex items-center justify-center text-text-muted text-xs">
@@ -113,7 +113,7 @@ onBeforeUnmount(() => {
 
     <!-- Fallback: file upload (shown when camera unavailable, or always as alternative) -->
     <label
-      class="flex flex-col items-center gap-2 p-4 rounded-xl border border-dashed border-border hover:border-brand cursor-pointer transition-colors"
+      class="flex flex-col items-center gap-2 p-4 rounded-3xl border border-dashed border-border hover:border-brand cursor-pointer transition-all duration-200"
       :class="cameraUnavailable ? 'bg-surface-card' : ''">
       <Upload class="w-5 h-5 text-text-muted" />
       <span class="text-xs text-text-muted">
@@ -126,7 +126,7 @@ onBeforeUnmount(() => {
     <div :id="readerId + '-file'" class="hidden" />
 
     <!-- Error -->
-    <div v-if="error" class="flex items-start gap-2 p-2.5 rounded-lg bg-error/10 text-error text-xs">
+    <div v-if="error" class="flex items-start gap-2 p-2.5 rounded-2xl bg-error/10 text-error text-xs">
       <AlertTriangle class="w-3.5 h-3.5 mt-0.5 shrink-0" />
       <span>{{ error }}</span>
     </div>

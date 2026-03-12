@@ -16,6 +16,7 @@ import {
   AlertTriangle, Upload, Download, Globe,
 } from 'lucide-vue-next'
 
+defineProps({ hideBack: { type: Boolean, default: false } })
 const emit = defineEmits(['back'])
 
 const { t } = useI18n()
@@ -147,25 +148,25 @@ function relayHostname(url) {
 
     <!-- Header -->
     <div class="flex items-center gap-2">
-      <button @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-colors">
+      <button v-if="!hideBack" @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
       <span class="text-sm font-semibold">{{ t('relay.title') }}</span>
     </div>
 
     <!-- Warning banner -->
-    <div class="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-warning/8 border border-warning/15">
+    <div class="flex items-start gap-2.5 px-3 py-2.5 rounded-3xl bg-warning/8 border border-warning/15">
       <AlertTriangle class="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
       <p class="text-[10px] text-warning leading-relaxed font-medium">{{ t('relay.warning') }}</p>
     </div>
 
     <!-- Pool tabs -->
-    <div class="flex bg-surface-elevated rounded-lg p-0.5 gap-0.5">
+    <div class="flex bg-surface-elevated rounded-2xl p-0.5 gap-0.5">
       <button
         v-for="pool in pools"
         :key="pool.id"
         @click="activePool = pool.id; addError = ''; newRelayUrl = ''"
-        class="flex-1 text-xs font-medium py-1.5 rounded-md transition-all"
+        class="flex-1 text-xs font-medium py-1.5 rounded-xl transition-all duration-200"
         :class="activePool === pool.id
           ? 'bg-surface-card text-brand shadow-sm'
           : 'text-text-muted hover:text-text-secondary'"
@@ -176,9 +177,9 @@ function relayHostname(url) {
 
     <!-- Relay list -->
     <div v-if="loading" class="space-y-2">
-      <div class="skeleton-shimmer h-12 rounded-xl" />
-      <div class="skeleton-shimmer h-12 rounded-xl" />
-      <div class="skeleton-shimmer h-12 rounded-xl" />
+      <div class="skeleton-shimmer h-12 rounded-3xl" />
+      <div class="skeleton-shimmer h-12 rounded-3xl" />
+      <div class="skeleton-shimmer h-12 rounded-3xl" />
     </div>
 
     <div v-else class="space-y-1 max-h-52 overflow-y-auto">
@@ -186,10 +187,10 @@ function relayHostname(url) {
         v-for="url in activeRelays"
         :key="url"
         @click="infoRelayUrl = url"
-        class="w-full flex items-center justify-between px-3 py-2.5 bg-surface-card rounded-xl border border-border hover:border-brand/30 transition-all group text-left"
+        class="w-full flex items-center justify-between px-3 py-2.5 bg-surface-card rounded-3xl shadow-sm border border-border hover:border-brand/30 transition-all group text-left"
       >
         <div class="flex items-center gap-2.5 min-w-0 flex-1">
-          <div class="w-7 h-7 rounded-lg bg-surface-elevated border border-border flex items-center justify-center shrink-0">
+          <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0">
             <Globe class="w-3.5 h-3.5 text-text-muted" />
           </div>
           <div class="min-w-0">
@@ -209,7 +210,7 @@ function relayHostname(url) {
       </button>
 
       <!-- Empty state -->
-      <div v-if="activeRelays.length === 0" class="bg-surface-card rounded-xl border border-border p-6 text-center">
+      <div v-if="activeRelays.length === 0" class="bg-surface-card rounded-3xl border border-border shadow-sm p-6 text-center">
         <Globe class="w-5 h-5 text-text-muted mx-auto mb-2" />
         <p class="text-xs text-text-muted">{{ t('relay.empty') }}</p>
       </div>
@@ -221,13 +222,13 @@ function relayHostname(url) {
         <input
           v-model="newRelayUrl"
           :placeholder="t('relay.addPlaceholder')"
-          class="flex-1 bg-surface-base border border-border rounded-lg px-2.5 py-2 text-xs outline-none focus:border-brand transition-colors placeholder:text-text-muted font-mono"
+          class="flex-1 bg-surface-base border border-border rounded-lg px-2.5 py-2 text-xs outline-none focus:border-brand transition-all duration-200 placeholder:text-text-muted font-mono"
           @keydown.enter="handleAdd"
         />
         <button
           @click="handleAdd"
           :disabled="adding || !newRelayUrl.trim()"
-          class="px-3 py-2 text-xs rounded-lg bg-brand text-surface-base font-semibold hover:bg-brand-hover disabled:opacity-40 transition-colors flex items-center gap-1 btn-primary"
+          class="px-3 py-2 text-xs rounded-2xl bg-brand text-surface-base font-semibold hover:bg-brand-hover disabled:opacity-40 transition-all duration-200 flex items-center gap-1 btn-primary"
         >
           <Loader2 v-if="adding" class="w-3 h-3 animate-spin" />
           <Plus v-else class="w-3.5 h-3.5" />
@@ -239,7 +240,7 @@ function relayHostname(url) {
     <!-- Reset to defaults -->
     <button
       @click="confirmReset = true"
-      class="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-text-muted hover:text-brand transition-colors"
+      class="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-text-muted hover:text-brand transition-all duration-200"
     >
       <RotateCcw class="w-3 h-3" />
       {{ t('relay.resetDefaults') }}
@@ -256,7 +257,7 @@ function relayHostname(url) {
         <button
           @click="handlePublish"
           :disabled="publishing"
-          class="flex items-center justify-center gap-1.5 py-2 text-xs rounded-lg bg-surface-card border border-border hover:border-brand/30 transition-colors font-medium disabled:opacity-50"
+          class="flex items-center justify-center gap-1.5 py-2 text-xs rounded-2xl bg-surface-card border border-border hover:border-brand/30 transition-all duration-200 font-medium disabled:opacity-50"
         >
           <Loader2 v-if="publishing" class="w-3 h-3 animate-spin text-brand" />
           <Upload v-else class="w-3 h-3 text-text-muted" />
@@ -265,7 +266,7 @@ function relayHostname(url) {
         <button
           @click="handleFetch"
           :disabled="fetching"
-          class="flex items-center justify-center gap-1.5 py-2 text-xs rounded-lg bg-surface-card border border-border hover:border-brand/30 transition-colors font-medium disabled:opacity-50"
+          class="flex items-center justify-center gap-1.5 py-2 text-xs rounded-2xl bg-surface-card border border-border hover:border-brand/30 transition-all duration-200 font-medium disabled:opacity-50"
         >
           <Loader2 v-if="fetching" class="w-3 h-3 animate-spin text-brand" />
           <Download v-else class="w-3 h-3 text-text-muted" />
@@ -282,12 +283,12 @@ function relayHostname(url) {
       <template #description>{{ t('relay.removeConfirm', { url: confirmRemoveUrl, pool: activePool }) }}</template>
       <template #actions>
         <button @click="confirmRemoveUrl = null"
-          class="py-2 text-xs rounded-lg bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-colors font-semibold">
+          class="py-2 text-xs rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold">
           {{ t('common.cancel') }}
         </button>
         <button @click="handleRemove"
           :disabled="!!removing"
-          class="py-2 text-xs rounded-lg bg-error text-white hover:bg-error/90 transition-colors font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
+          class="py-2 text-xs rounded-2xl bg-error text-white hover:bg-error/90 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
           <Loader2 v-if="removing" class="w-3 h-3 animate-spin" />
           {{ t('relay.remove') }}
         </button>
@@ -300,11 +301,11 @@ function relayHostname(url) {
       <template #description>{{ t('relay.resetConfirm', { pool: activePool }) }}</template>
       <template #actions>
         <button @click="confirmReset = false"
-          class="py-2 text-xs rounded-lg bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-colors font-semibold">
+          class="py-2 text-xs rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold">
           {{ t('common.cancel') }}
         </button>
         <button @click="handleReset"
-          class="py-2 text-xs rounded-lg bg-brand text-surface-base hover:bg-brand-hover transition-colors font-semibold btn-primary">
+          class="py-2 text-xs rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all duration-200 font-semibold btn-primary">
           {{ t('relay.resetDefaults') }}
         </button>
       </template>

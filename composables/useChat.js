@@ -13,8 +13,10 @@
  */
 
 import { ref, computed } from 'vue'
-import { nip04, finalizeEvent, hexToBytes } from 'nostr-core'
-import { wrapDirectMessage, unwrapDirectMessage } from '../lib/nip17.js'
+import {
+  nip04, nip44, finalizeEvent, hexToBytes,
+  wrapDirectMessage, unwrapDirectMessage,
+} from 'nostr-core'
 import { getActiveAccount } from '../lib/accounts.js'
 import { getPool } from '../lib/relayPool.js'
 import { getPoolRelays, getOutboxRelays, getInboxRelays, DEFAULT_CHAT_RELAYS } from '../lib/relays.js'
@@ -96,6 +98,13 @@ export function useChat() {
     }
     // Deduplicate by id
     if (messages.value[pubkey].some(m => m.id === msg.id)) return
+    // Content-based dedup: NIP-17 and NIP-04 copies of the same message have different IDs
+    const isDuplicate = messages.value[pubkey].some(m =>
+      m.sender === msg.sender &&
+      m.content === msg.content &&
+      Math.abs(m.created_at - msg.created_at) < 60
+    )
+    if (isDuplicate) return
     messages.value[pubkey] = [...messages.value[pubkey], msg]
     persistMessages()
 
@@ -126,17 +135,29 @@ export function useChat() {
     const publishRelays = [...new Set([...ownChatRelays, ...recipientWriteRelays])]
 
     if (account.mode === 'local' && account.secretHex) {
-      // NIP-17: Gift-wrapped DM
       const secretKey = hexToBytes(account.secretHex)
-      const wrap = wrapDirectMessage(content, secretKey, recipientPubkey)
+      const now = Math.floor(Date.now() / 1000)
 
+      // NIP-17: Gift-wrapped DM (modern clients)
+      const wrap = wrapDirectMessage(content, secretKey, recipientPubkey)
       await pool.publish(publishRelays, wrap)
 
+      // NIP-04: Legacy DM (older clients)
+      const encrypted = nip04.encrypt(secretKey, recipientPubkey, content)
+      const legacyEvent = finalizeEvent({
+        kind: 4,
+        tags: [['p', recipientPubkey]],
+        content: encrypted,
+        created_at: now,
+      }, secretKey)
+      await pool.publish(publishRelays, legacyEvent)
+
+      // Add to local state once (use NIP-17 wrap id)
       addMessage(recipientPubkey, {
         id: wrap.id,
         sender: 'me',
         content,
-        created_at: Math.floor(Date.now() / 1000),
+        created_at: now,
         protocol: 'nip17',
       })
     } else {
@@ -212,6 +233,7 @@ export function useChat() {
     let inboxRelays = []
     try { inboxRelays = await getInboxRelays(myPubkey) } catch { /* ignore */ }
     const subscribeRelays = [...new Set([...ownChatRelays, ...inboxRelays])]
+    console.log('[chat] subscribing to', subscribeRelays.length, 'relays:', subscribeRelays)
 
     const subs = []
 
@@ -225,6 +247,7 @@ export function useChat() {
         try {
           const dm = unwrapDirectMessage(event, secretKey)
           if (dm.sender === myPubkey) return // Skip our own wrapped messages
+          console.log('[chat] NIP-17 received from', dm.sender.slice(0, 8))
           addMessage(dm.sender, {
             id: dm.id,
             sender: dm.sender,
@@ -232,7 +255,9 @@ export function useChat() {
             created_at: dm.created_at,
             protocol: 'nip17',
           })
-        } catch { /* decryption failed — not for us or corrupt */ }
+        } catch (err) {
+          console.warn('[chat] NIP-17 decrypt failed:', err.message)
+        }
       },
     }))
 
@@ -244,7 +269,16 @@ export function useChat() {
     }, {
       onevent(event) {
         try {
-          const content = nip04.decrypt(secretKey, event.pubkey, event.content)
+          let content
+          try {
+            // Try NIP-44 first (modern clients encrypt kind 4 with NIP-44)
+            const convKey = nip44.getConversationKey(secretKey, event.pubkey)
+            content = nip44.decrypt(event.content, convKey)
+          } catch {
+            // Fall back to NIP-04
+            content = nip04.decrypt(secretKey, event.pubkey, event.content)
+          }
+          console.log('[chat] NIP-04/44 received from', event.pubkey.slice(0, 8))
           addMessage(event.pubkey, {
             id: event.id,
             sender: event.pubkey,
@@ -252,7 +286,9 @@ export function useChat() {
             created_at: event.created_at,
             protocol: 'nip04',
           })
-        } catch { /* decryption failed */ }
+        } catch (err) {
+          console.warn('[chat] NIP-04/44 decrypt failed:', err.message)
+        }
       },
     }))
 
@@ -267,7 +303,13 @@ export function useChat() {
         if (!pTag) return
         const recipientPubkey = pTag[1]
         try {
-          const content = nip04.decrypt(secretKey, recipientPubkey, event.content)
+          let content
+          try {
+            const convKey = nip44.getConversationKey(secretKey, recipientPubkey)
+            content = nip44.decrypt(event.content, convKey)
+          } catch {
+            content = nip04.decrypt(secretKey, recipientPubkey, event.content)
+          }
           addMessage(recipientPubkey, {
             id: event.id,
             sender: 'me',
@@ -275,7 +317,9 @@ export function useChat() {
             created_at: event.created_at,
             protocol: 'nip04',
           })
-        } catch { /* decryption failed */ }
+        } catch (err) {
+          console.warn('[chat] NIP-04/44 sent-by-us decrypt failed:', err.message)
+        }
       },
     }))
 

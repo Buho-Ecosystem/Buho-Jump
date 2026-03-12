@@ -67,7 +67,8 @@
     "currencyDesc": "Default fiat currency for conversions",
     "relaySettings": "Relay settings",
     "relaySettingsDesc": "Configure relay connections",
-    "version": "Buho Jump v{version}"
+    "version": "Buho Jump v{version}",
+    "openFullPage": "Open in full page"
   },
 
   "relay": {
@@ -138,7 +139,13 @@
     "onThisDevice": "Extension",
     "externalSigner": "Remote Signer",
     "external": "Remote Signer",
-    "local": "Extension"
+    "local": "Extension",
+    "reconnecting": "Reconnecting…",
+    "tapToCycle": "Tap to cycle format",
+    "showQr": "Show QR code",
+    "connectedRelays": "Connected relays",
+    "relayCount": "{count} relay | {count} relays",
+    "noRelays": "No relays configured"
   },
 
   "wizard": {
@@ -177,6 +184,12 @@
     "connectionLink": "Connection link",
     "connectionPlaceholder": "bunker://... or nostrconnect://...",
     "signerHint": "Get this from your signer app (nsec.app, Amber, Primal). Your keys stay there — we never see them.",
+    "pasteUri": "Paste URI",
+    "showQr": "Show QR Code",
+    "nostrConnectHint": "A QR code will be generated for your signer app to scan. Your keys never leave the signer.",
+    "scanWithSigner": "Scan with your signer app",
+    "copyUri": "Copy URI",
+    "waitingForSigner": "Waiting for signer to connect…",
 
     "createAccount": "Create Account",
     "importAccountBtn": "Import Account",
@@ -258,6 +271,8 @@
     "permSignWhat": "The app wants to publish something using your account — like a post, reaction, or action.",
     "permSignDetail": "This is like pressing \"send\". The content will be visible to others.",
     "permSignRisk": "Write access",
+    "viewEvent": "View event data",
+    "hideEvent": "Hide event data",
 
     "permEncryptLabel": "Encrypt a message",
     "permEncryptWhat": "The app wants to send a private message that only the recipient can read.",
@@ -435,7 +450,7 @@
     "emptyDesc": "Start a conversation with someone on Nostr",
     "startChat": "Start a Chat",
     "inputPlaceholder": "Type a message...",
-    "inputHint": "npub, hex, or user@domain.com",
+    "inputHint": "npub, hex, or user{'@'}domain.com",
     "findUser": "Find User",
     "resolving": "Resolving...",
     "resolveNotFound": "User not found — check the address and try again",
@@ -470,6 +485,39 @@
     "hint": "Notifications appear as browser alerts even when the popup is closed.",
     "settingsLabel": "Notifications",
     "settingsDesc": "Manage browser alerts"
+  },
+
+  "options": {
+    "openInTab": "Open in full tab",
+    "sites": "Connected Sites",
+    "sitesDesc": "Manage site permissions and spending budgets",
+    "searchSites": "Search sites...",
+    "noSitesHint": "Sites will appear here when they request access to your account",
+    "allowed": "allowed",
+    "denied": "denied",
+    "account": "Account & Identity",
+    "accountDesc": "Switch accounts, backup keys, and manage profiles",
+    "exportKey": "Export backup key",
+    "exportKeyDesc": "Reveal and copy your secret key for backup",
+    "relays": "Relay Settings",
+    "relaysDesc": "Configure relay connections for account, wallet, and chat",
+    "preferences": "Preferences",
+    "preferencesDesc": "Appearance, language, currency, notifications, and security",
+    "about": "About",
+    "version": "Version {version}",
+    "tagline": "Nostr key manager, Lightning wallet & WebLN provider",
+    "creators": "Created by",
+    "builtWith": "Built with",
+    "protocols": "Protocols",
+    "autoLockTimer": "Auto-lock timer",
+    "autoLockDesc": "Lock the extension after inactivity",
+    "autoLockNever": "Never",
+    "autoLockMins": "{n}m",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmNewPassword": "Confirm new password",
+    "passwordChanged": "Password changed"
   },
 
   "qr": {

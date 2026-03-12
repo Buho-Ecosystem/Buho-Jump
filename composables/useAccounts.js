@@ -7,6 +7,7 @@ import { ref, computed } from 'vue'
 import { useMessaging } from './useMessaging.js'
 
 const accounts = ref([])
+const nip46Status = ref({ connected: false, reconnecting: false })
 const { send } = useMessaging()
 
 export function useAccounts() {
@@ -62,9 +63,26 @@ export function useAccounts() {
     return send('FETCH_PROFILE', pubkey)
   }
 
+  async function startNostrConnect(accountId, relayUrl) {
+    return send('START_NOSTR_CONNECT', accountId, relayUrl)
+  }
+
+  async function cancelNostrConnect() {
+    return send('CANCEL_NOSTR_CONNECT')
+  }
+
+  async function loadNip46Status() {
+    try {
+      nip46Status.value = await send('GET_NIP46_STATUS') || { connected: false, reconnecting: false }
+    } catch {
+      nip46Status.value = { connected: false, reconnecting: false }
+    }
+  }
+
   return {
     accounts,
     activeAccount,
+    nip46Status,
     load,
     create,
     importKey,
@@ -74,5 +92,8 @@ export function useAccounts() {
     remove,
     publishProfile,
     fetchProfile,
+    loadNip46Status,
+    startNostrConnect,
+    cancelNostrConnect,
   }
 }

@@ -19,9 +19,21 @@ export function useRelays() {
     loading.value = true
     try {
       const config = await send('GET_RELAY_CONFIG')
-      relayConfig.value = config || { account: [], wallet: [], chat: [] }
-    } catch {
-      // Keep current state on error
+      if (config && (config.account || config.wallet || config.chat)) {
+        relayConfig.value = config
+      }
+    } catch (err) {
+      console.warn('[useRelays] loadRelays failed, retrying…', err.message)
+      // Retry once after a short delay (service worker may still be waking)
+      try {
+        await new Promise(r => setTimeout(r, 500))
+        const config = await send('GET_RELAY_CONFIG')
+        if (config && (config.account || config.wallet || config.chat)) {
+          relayConfig.value = config
+        }
+      } catch (retryErr) {
+        console.warn('[useRelays] loadRelays retry failed:', retryErr.message)
+      }
     } finally {
       loading.value = false
     }

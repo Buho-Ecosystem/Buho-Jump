@@ -76,43 +76,43 @@ onMounted(async () => {
 
 <template>
   <div class="fixed inset-0 z-50 flex items-end justify-center bg-black/40 animate-fade-in" @click.self="emit('close')">
-    <div class="w-full max-w-[400px] max-h-[85vh] bg-surface-base rounded-t-2xl border-t border-x border-border overflow-y-auto animate-slide-up">
+    <div class="w-full max-w-[400px] max-h-[85vh] bg-surface-base rounded-t-3xl shadow-lg border-t border-x border-border overflow-y-auto animate-slide-up">
 
       <!-- Header -->
       <div class="sticky top-0 bg-surface-base z-10 flex items-center justify-between px-4 py-3 border-b border-border">
         <span class="text-sm font-semibold">{{ t('relay.infoTitle') }}</span>
-        <button @click="emit('close')" class="p-1 rounded-md hover:bg-surface-elevated transition-colors">
+        <button @click="emit('close')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
           <X class="w-4 h-4 text-text-muted" />
         </button>
       </div>
 
       <!-- Loading skeleton -->
       <div v-if="loading" class="p-4 space-y-4">
-        <div class="bg-surface-card rounded-xl border border-border p-4 space-y-3">
+        <div class="bg-surface-card rounded-3xl border border-border shadow-sm p-4 space-y-3">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl skeleton-shimmer" />
+            <div class="w-10 h-10 rounded-[10px] skeleton-shimmer" />
             <div class="flex-1 space-y-2">
               <div class="skeleton-shimmer h-4 w-32 rounded" />
               <div class="skeleton-shimmer h-3 w-48 rounded" />
             </div>
           </div>
         </div>
-        <div class="skeleton-shimmer h-20 rounded-xl" />
-        <div class="skeleton-shimmer h-16 rounded-xl" />
+        <div class="skeleton-shimmer h-20 rounded-3xl" />
+        <div class="skeleton-shimmer h-16 rounded-3xl" />
       </div>
 
       <!-- Content -->
       <div v-else class="p-4 space-y-3">
 
         <!-- Relay identity card -->
-        <div class="bg-surface-card rounded-xl border border-border p-4">
+        <div class="bg-surface-card rounded-3xl border border-border shadow-sm p-4">
           <div class="flex items-center gap-3 mb-2">
-            <div class="w-10 h-10 rounded-xl bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
+            <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
               <img v-if="info?.icon" :src="info.icon" alt="" class="w-full h-full object-cover" @error="info.icon = null" />
               <Globe v-else class="w-5 h-5 text-text-muted" />
             </div>
             <div class="flex-1 min-w-0">
-              <div class="text-sm font-bold truncate">{{ info?.name || hostname }}</div>
+              <div class="text-sm font-extrabold truncate">{{ info?.name || hostname }}</div>
               <p v-if="info?.description" class="text-[10px] text-text-muted mt-0.5 line-clamp-2">{{ info.description }}</p>
             </div>
           </div>
@@ -126,14 +126,14 @@ onMounted(async () => {
         </div>
 
         <!-- No metadata fallback -->
-        <div v-if="!info" class="bg-surface-card rounded-xl border border-border p-4 text-center">
+        <div v-if="!info" class="bg-surface-card rounded-3xl border border-border shadow-sm p-4 text-center">
           <p class="text-xs text-text-muted">{{ t('relay.infoNoMetadata') }}</p>
         </div>
 
         <template v-if="info">
 
           <!-- Supported NIPs -->
-          <div v-if="info.supported_nips?.length" class="bg-surface-card rounded-xl border border-border p-3">
+          <div v-if="info.supported_nips?.length" class="bg-surface-card rounded-3xl border border-border shadow-sm p-3">
             <p class="text-[9px] uppercase tracking-widest text-text-muted font-semibold mb-2">{{ t('relay.infoSupportedNips') }}</p>
             <div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
               <span
@@ -151,7 +151,7 @@ onMounted(async () => {
           </div>
 
           <!-- Capabilities -->
-          <div v-if="capabilities.length" class="bg-surface-card rounded-xl border border-border divide-y divide-border overflow-hidden">
+          <div v-if="capabilities.length" class="bg-surface-card rounded-3xl border border-border shadow-sm divide-y divide-border overflow-hidden">
             <div class="px-3 py-2 bg-surface-elevated/50">
               <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('relay.infoCapabilities') }}</span>
             </div>
@@ -165,14 +165,14 @@ onMounted(async () => {
           <div v-if="info.software || info.pubkey || info.contact">
             <button
               @click="showTechnical = !showTechnical"
-              class="flex items-center gap-1.5 text-[10px] font-medium px-1 mb-1.5 transition-colors"
+              class="flex items-center gap-1.5 text-[10px] font-medium px-1 mb-1.5 transition-all duration-200"
               :class="showTechnical ? 'text-brand' : 'text-text-muted hover:text-text-secondary'"
             >
               <Code class="w-3 h-3" />
               <span>{{ showTechnical ? t('wallet.technicalDetails') : t('wallet.technicalDetails') }}</span>
             </button>
 
-            <div v-if="showTechnical" class="bg-surface-card rounded-xl border border-border divide-y divide-border overflow-hidden animate-fade-in-up">
+            <div v-if="showTechnical" class="bg-surface-card rounded-3xl border border-border shadow-sm divide-y divide-border overflow-hidden animate-fade-in-up">
               <!-- Software -->
               <div v-if="info.software" class="px-4 py-2.5">
                 <div class="text-[9px] text-text-muted font-semibold uppercase tracking-wider mb-0.5">{{ t('relay.infoSoftware') }}</div>
@@ -185,7 +185,7 @@ onMounted(async () => {
               <div v-if="info.pubkey" class="px-4 py-2.5">
                 <div class="flex items-center justify-between mb-0.5">
                   <span class="text-[9px] text-text-muted font-semibold uppercase tracking-wider">{{ t('relay.infoOperator') }}</span>
-                  <button @click="copy(info.pubkey, 'operator')" class="p-0.5 rounded hover:bg-surface-elevated transition-colors">
+                  <button @click="copy(info.pubkey, 'operator')" class="p-0.5 rounded hover:bg-surface-elevated transition-all duration-200">
                     <Check v-if="copiedField === 'operator'" class="w-3 h-3 text-success" />
                     <Copy v-else class="w-3 h-3 text-text-muted" />
                   </button>
@@ -197,7 +197,7 @@ onMounted(async () => {
               <div v-if="info.contact" class="px-4 py-2.5">
                 <div class="flex items-center justify-between mb-0.5">
                   <span class="text-[9px] text-text-muted font-semibold uppercase tracking-wider">{{ t('relay.infoContact') }}</span>
-                  <button @click="copy(info.contact, 'contact')" class="p-0.5 rounded hover:bg-surface-elevated transition-colors">
+                  <button @click="copy(info.contact, 'contact')" class="p-0.5 rounded hover:bg-surface-elevated transition-all duration-200">
                     <Check v-if="copiedField === 'contact'" class="w-3 h-3 text-success" />
                     <Copy v-else class="w-3 h-3 text-text-muted" />
                   </button>

@@ -34,7 +34,7 @@ const colorMap = {
       <div
         v-for="t in toasts"
         :key="t.id"
-        class="pointer-events-auto flex items-start gap-2 px-3 py-2 rounded-lg border text-xs font-medium shadow-md backdrop-blur-sm"
+        class="pointer-events-auto flex items-start gap-2 px-3 py-2 rounded-2xl border text-xs font-medium shadow-md backdrop-blur-sm"
         :class="[colorMap[t.type], t.visible ? '' : 'opacity-0']"
       >
         <component :is="iconMap[t.type]" class="w-3.5 h-3.5 mt-0.5 shrink-0" />

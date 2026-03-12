@@ -139,5 +139,19 @@ export default defineContentScript({
     // Set up WebLN bridge (public route)
     createBridge('webln-request', 'webln-response', WEBLN_METHOD_MAP, WEBLN_METHODS)
     injectScript('webln-provider.js')
+
+    // Intercept nostrconnect: link clicks
+    document.addEventListener('click', (e) => {
+      const anchor = e.target.closest?.('a[href^="nostrconnect:"]')
+      if (!anchor) return
+      e.preventDefault()
+      const href = anchor.getAttribute('href')
+      if (href) {
+        chrome.runtime.sendMessage({
+          type: 'PUBLIC',
+          params: [{ action: 'NOSTR_CONNECT_LINK', params: [href] }],
+        })
+      }
+    }, true)
   },
 })

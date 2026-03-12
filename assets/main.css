@@ -1,4 +1,21 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
+/* Self-hosted Manrope — no external CDN dependency */
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/fonts/Manrope-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1D7F, U+1D80-1DBF, U+1E00-1EFF, U+2000-206F, U+2074, U+20A0-20CF, U+2100-214F, U+2150-218F, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/fonts/Manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @import "tailwindcss";
 
 /*
@@ -37,6 +54,29 @@
   --color-action-receive: var(--action-receive);
 
   --font-family-sans: 'Manrope', system-ui, -apple-system, sans-serif;
+}
+
+/*
+ * ── BuhoGO Design Tokens ──
+ * Shared radius, shadow, and transition values matching BuhoGO's design system.
+ * These are used via Tailwind utilities and custom classes.
+ */
+:root {
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+  }
 }
 
 /* Buho gradient — available when buho-green theme is active */
@@ -188,26 +228,28 @@ body {
   animation: shimmer 1.8s ease-in-out infinite;
 }
 
-/* Smooth button press feedback */
+/* Smooth button press feedback — BuhoGO active: scale(0.98) */
 button:not(:disabled):active {
-  transform: scale(0.97);
+  transform: translateY(0) scale(0.98);
 }
 
-/* Primary action button base style */
+/* Primary action button — BuhoGO style: rounded-xl, shadow, hover lift */
 .btn-primary {
-  transition: background-color 0.15s, transform 0.1s, box-shadow 0.15s;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-xl);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 /* Card hover lift */
 .card-interactive {
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+  transition: all 0.2s ease;
 }
 .card-interactive:hover {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
 
@@ -229,21 +271,159 @@ button:not(:disabled):active {
   filter: brightness(1.08);
 }
 
-/* ── Chat bubbles ── */
+/* ── Chat bubbles (Telegram-style) ── */
 
 .chat-bubble-sent {
-  background: linear-gradient(135deg, var(--semantic-success), color-mix(in srgb, var(--semantic-success) 70%, #78D53C));
-  color: #fff;
+  background: var(--brand-surface);
+  color: var(--text-primary);
+  position: relative;
 }
 
 .chat-bubble-received {
   background: var(--surface-card);
-  border: 1px solid var(--border);
   color: var(--text-primary);
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .chat-bubble-zap {
   background: linear-gradient(135deg, #F59E0B, #D97706);
   color: #fff;
+}
+
+/* Bubble tails (Telegram-style curved using border-radius) */
+.chat-tail-sent::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: -8px;
+  width: 10px;
+  height: 16px;
+  background: var(--brand-surface);
+  border-bottom-left-radius: 12px 10px;
+}
+
+.chat-tail-received::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: -8px;
+  width: 10px;
+  height: 16px;
+  background: var(--surface-card);
+  border-bottom-right-radius: 12px 10px;
+}
+
+/* Telegram-style date pill */
+.chat-date-pill {
+  display: inline-flex;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-base) 85%, var(--text-muted));
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Chat input pill */
+.chat-input-pill {
+  background: var(--surface-elevated);
+  border: none;
+  border-radius: 20px;
+  padding: 8px 14px;
+  font-size: 13px;
+  outline: none;
+  transition: box-shadow 0.15s ease;
+  color: var(--text-primary);
+}
+.chat-input-pill::placeholder {
+  color: var(--text-muted);
+}
+.chat-input-pill:focus {
+  box-shadow: 0 0 0 1.5px var(--brand-primary);
+}
+
+/* Scroll-to-bottom FAB */
+.chat-scroll-fab {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface-card);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s, transform 0.2s;
+  color: var(--text-muted);
+}
+.chat-scroll-fab:hover {
+  background: var(--surface-elevated);
+}
+
+/* New chat FAB */
+.chat-fab {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--brand-primary);
+  color: var(--surface-base);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.chat-fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+.chat-fab:active {
+  transform: scale(0.95) !important;
+}
+
+/* Chat message send animation */
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-msg-in {
+  animation: msg-in 0.25s ease-out both;
+}
+
+/* Chat slide transition */
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out both;
+}
+
+/* Vue transition: fade */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Unread badge (Telegram-style) */
+.chat-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--brand-primary);
+  color: var(--surface-base);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
 }
 

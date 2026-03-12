@@ -129,20 +129,20 @@ async function handleRevokeAll() {
 
     <!-- Header -->
     <div class="flex items-center gap-2">
-      <button @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-colors">
+      <button @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
       <span class="text-sm font-semibold">{{ t('sites.title') }}</span>
     </div>
 
     <!-- Site identity -->
-    <div class="flex items-center gap-3 px-3 py-3 bg-surface-card rounded-xl border border-border">
-      <div class="w-9 h-9 rounded-lg bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
+    <div class="flex items-center gap-3 px-3 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
+      <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
         <img v-if="!faviconFailed" :src="faviconUrl" @error="faviconFailed = true" class="w-5 h-5" alt="" />
         <Globe v-else class="w-4 h-4 text-text-muted" />
       </div>
       <div>
-        <div class="text-sm font-bold">{{ host }}</div>
+        <div class="text-sm font-extrabold">{{ host }}</div>
         <div class="text-[10px] text-text-muted">{{ Object.keys(methods).length }} {{ t('sites.permissionsGranted') }}</div>
       </div>
     </div>
@@ -151,7 +151,7 @@ async function handleRevokeAll() {
     <div class="space-y-1.5">
       <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('sites.permissions') }}</p>
       <div v-for="(entry, method) in methods" :key="method"
-        class="flex items-center justify-between px-3 py-2 bg-surface-card rounded-lg border border-border">
+        class="flex items-center justify-between px-3 py-2 bg-surface-card rounded-2xl border border-border">
         <div class="flex items-center gap-2">
           <span class="text-[9px] px-1.5 py-px rounded-full font-medium"
             :class="entry.decision === 'allow' ? 'bg-success/10 text-success' : 'bg-error/10 text-error'">
@@ -161,7 +161,7 @@ async function handleRevokeAll() {
         </div>
         <button @click="handleRevokeMethod(method)"
           :disabled="revokingMethod === method"
-          class="text-[10px] text-text-muted hover:text-error transition-colors font-medium flex items-center gap-1">
+          class="text-[10px] text-text-muted hover:text-error transition-all duration-200 font-medium flex items-center gap-1">
           <Loader2 v-if="revokingMethod === method" class="w-2.5 h-2.5 animate-spin" />
           <X v-else class="w-3 h-3" />
         </button>
@@ -172,9 +172,9 @@ async function handleRevokeAll() {
     <div class="space-y-2">
       <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('sites.budget') }}</p>
 
-      <div v-if="loadingAllowance" class="skeleton-shimmer h-20 rounded-xl" />
+      <div v-if="loadingAllowance" class="skeleton-shimmer h-20 rounded-3xl" />
 
-      <div v-else class="bg-surface-card rounded-xl border border-border p-3 space-y-3">
+      <div v-else class="bg-surface-card rounded-3xl border border-border shadow-sm p-3 space-y-3">
         <!-- Progress bar (if budget exists) -->
         <div v-if="allowance" class="space-y-1.5">
           <div class="flex items-center justify-between text-[10px]">
@@ -189,7 +189,7 @@ async function handleRevokeAll() {
           <div class="flex items-center justify-between text-[9px] text-text-muted">
             <span>{{ remaining.toLocaleString() }} {{ t('sites.remaining') }}</span>
             <button @click="resetSpend" :disabled="savingBudget || !allowance.spent"
-              class="flex items-center gap-0.5 hover:text-brand transition-colors disabled:opacity-40">
+              class="flex items-center gap-0.5 hover:text-brand transition-all duration-200 disabled:opacity-40">
               <RotateCcw class="w-2.5 h-2.5" /> {{ t('sites.resetSpend') }}
             </button>
           </div>
@@ -201,7 +201,7 @@ async function handleRevokeAll() {
             :placeholder="t('sites.budgetPlaceholder')"
             class="flex-1 bg-surface-base border border-border rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-brand transition-colors tabular-nums placeholder:text-text-muted" />
           <button @click="saveBudget" :disabled="savingBudget || !budgetInput"
-            class="px-3 py-1.5 text-xs rounded-lg bg-brand text-surface-base font-semibold hover:bg-brand-hover disabled:opacity-40 transition-colors flex items-center gap-1">
+            class="px-3 py-1.5 text-xs rounded-2xl bg-brand text-surface-base font-semibold hover:bg-brand-hover disabled:opacity-40 transition-all duration-200 flex items-center gap-1">
             <Loader2 v-if="savingBudget" class="w-3 h-3 animate-spin" />
             {{ t('common.save') }}
           </button>
@@ -209,7 +209,7 @@ async function handleRevokeAll() {
 
         <!-- Remove budget -->
         <button v-if="allowance" @click="removeBudget" :disabled="savingBudget"
-          class="text-[10px] text-text-muted hover:text-error transition-colors font-medium">
+          class="text-[10px] text-text-muted hover:text-error transition-all duration-200 font-medium">
           {{ t('sites.removeBudget') }}
         </button>
       </div>
@@ -217,7 +217,7 @@ async function handleRevokeAll() {
 
     <!-- Revoke all -->
     <button @click="confirmRevokeAll = true"
-      class="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-text-muted hover:text-error transition-colors">
+      class="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-text-muted hover:text-error transition-all duration-200">
       <Trash2 class="w-3 h-3" />
       {{ t('sites.revokeAll') }}
     </button>
@@ -228,11 +228,11 @@ async function handleRevokeAll() {
       <template #description>{{ t('sites.revokeAllConfirm', { host }) }}</template>
       <template #actions>
         <button @click="confirmRevokeAll = false"
-          class="py-2 text-xs rounded-lg bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-colors font-semibold">
+          class="py-2 text-xs rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold">
           {{ t('common.cancel') }}
         </button>
         <button @click="handleRevokeAll" :disabled="revokingAll"
-          class="py-2 text-xs rounded-lg bg-error text-white hover:bg-error/90 transition-colors font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
+          class="py-2 text-xs rounded-2xl bg-error text-white hover:bg-error/90 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
           <Loader2 v-if="revokingAll" class="w-3 h-3 animate-spin" />
           {{ t('sites.revokeAll') }}
         </button>

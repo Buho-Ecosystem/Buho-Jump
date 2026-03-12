@@ -132,11 +132,11 @@ function reset() {
     <div class="flex items-center gap-2 mb-4">
       <button
         @click="step === 'form' ? emit('back') : reset()"
-        class="p-1 rounded-md hover:bg-surface-elevated transition-colors"
+        class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200"
       >
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
-      <span class="text-sm font-semibold">
+      <span class="text-sm font-extrabold">
         {{ step === 'invoice' ? t('wallet.shareInvoice') : t('wallet.receiveTitle') }}
       </span>
     </div>
@@ -152,7 +152,7 @@ function reset() {
           </label>
           <button
             @click="toggleInputMode"
-            class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-colors font-medium"
+            class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium"
           >
             <ArrowLeftRight class="w-3 h-3" />
             {{ inputMode === 'sats' ? t('wallet.enterInFiat', { currency: currency.toUpperCase() }) : t('wallet.enterInSats') }}
@@ -200,7 +200,7 @@ function reset() {
       <button
         @click="createInvoice"
         :disabled="!canCreate"
-        class="w-full py-2.5 text-sm rounded-xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold btn-primary flex items-center justify-center gap-1.5"
+        class="w-full py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 font-semibold btn-primary flex items-center justify-center gap-1.5"
       >
         <Loader2 v-if="creating" class="w-4 h-4 animate-spin" />
         {{ creating ? t('wallet.creating') : t('wallet.createInvoice') }}
@@ -210,7 +210,7 @@ function reset() {
     <!-- ═══ Step: Invoice display ═══ -->
     <div v-if="step === 'invoice'" class="space-y-4 animate-fade-in-up">
 
-      <div class="bg-surface-card rounded-2xl border border-border p-5 text-center">
+      <div class="bg-surface-card rounded-3xl border border-border p-5 text-center shadow-sm">
         <!-- Amount -->
         <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-1">{{ t('wallet.requesting') }}</p>
         <div class="text-2xl font-extrabold tracking-tight">
@@ -220,10 +220,10 @@ function reset() {
         <div v-if="toFiat(effectiveSats)" class="text-xs text-text-muted mt-0.5">≈ {{ toFiat(effectiveSats) }}</div>
 
         <!-- QR Code -->
-        <div v-if="qrDataUrl" class="inline-block bg-white p-2 rounded-xl mt-3 mb-3">
+        <div v-if="qrDataUrl" class="inline-block bg-white p-2 rounded-3xl mt-3 mb-3">
           <img :src="qrDataUrl" alt="Invoice QR" class="w-[180px] h-[180px]" />
         </div>
-        <div v-else class="w-[196px] h-[196px] bg-surface-elevated rounded-xl mx-auto mt-3 mb-3 flex items-center justify-center">
+        <div v-else class="w-[196px] h-[196px] bg-surface-elevated rounded-3xl mx-auto mt-3 mb-3 flex items-center justify-center">
           <QrCode class="w-8 h-8 text-text-muted" />
         </div>
 
@@ -238,7 +238,7 @@ function reset() {
         </div>
         <button
           @click="copyInvoice"
-          class="absolute top-2 right-2 p-1.5 rounded-md bg-surface-card hover:bg-surface-elevated transition-colors"
+          class="absolute top-2 right-2 p-1.5 rounded-md bg-surface-card hover:bg-surface-elevated transition-all duration-200"
         >
           <Check v-if="copied" class="w-3 h-3 text-success" />
           <Copy v-else class="w-3 h-3 text-text-muted" />
@@ -248,14 +248,14 @@ function reset() {
       <div class="grid grid-cols-2 gap-2">
         <button
           @click="reset"
-          class="py-2.5 text-sm rounded-xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-colors font-semibold flex items-center justify-center gap-1.5"
+          class="py-2.5 text-sm rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold flex items-center justify-center gap-1.5"
         >
           <RefreshCw class="w-3.5 h-3.5" />
           {{ t('wallet.newInvoice') }}
         </button>
         <button
           @click="copyInvoice"
-          class="py-2.5 text-sm rounded-xl bg-brand text-surface-base hover:bg-brand-hover transition-colors font-semibold btn-primary flex items-center justify-center gap-1.5"
+          class="py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all duration-200 font-semibold btn-primary flex items-center justify-center gap-1.5"
         >
           <Check v-if="copied" class="w-4 h-4" />
           <Copy v-else class="w-4 h-4" />

@@ -1,12 +1,14 @@
 <script setup>
 /**
- * Single conversation row — avatar, name, last message preview, time, unread dot.
+ * Telegram-style conversation row — 48px avatar with deterministic color,
+ * two-line text (name + timestamp / preview), unread pill badge.
  */
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContacts } from '../../composables/useContacts.js'
 import { nip19 } from 'nostr-core'
 import { formatTimestamp } from '../../lib/utils.js'
+import { getAvatarColor } from '../../lib/avatarColor.js'
 import { Zap } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -32,9 +34,9 @@ const displayName = computed(() =>
   profile.value?.display_name || profile.value?.name || truncateNpub(props.pubkey)
 )
 
-const nip05 = computed(() => profile.value?.nip05 || '')
-
 const avatarLetter = computed(() => (displayName.value || '?')[0].toUpperCase())
+
+const avatarColor = computed(() => getAvatarColor(props.pubkey))
 
 const preview = computed(() => {
   if (!props.lastMessage) return ''
@@ -65,36 +67,42 @@ function truncateNpub(pubkey) {
 <template>
   <button
     @click="$emit('click')"
-    class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-card transition-colors text-left group"
+    class="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left"
   >
-    <!-- Avatar -->
-    <div class="w-9 h-9 rounded-full shrink-0 overflow-hidden"
-      :class="profile?.picture ? '' : 'bg-brand/15 flex items-center justify-center'">
-      <img v-if="profile?.picture" :src="profile.picture" alt="" class="w-full h-full object-cover" @error="profile.picture = null" />
-      <span v-else class="text-xs font-bold text-brand">{{ avatarLetter }}</span>
+    <!-- Avatar (48px, Telegram-style with deterministic color) -->
+    <div
+      class="w-[48px] h-[48px] rounded-full shrink-0 overflow-hidden flex items-center justify-center"
+      :style="!profile?.picture ? { background: avatarColor } : {}"
+    >
+      <img
+        v-if="profile?.picture"
+        :src="profile.picture"
+        alt=""
+        class="w-full h-full object-cover"
+        @error="profile.picture = null"
+      />
+      <span v-else class="text-base font-semibold text-white">{{ avatarLetter }}</span>
     </div>
 
-    <!-- Name + preview -->
+    <!-- Text block -->
     <div class="flex-1 min-w-0">
-      <div class="flex items-center gap-1.5">
-        <span class="text-xs font-semibold truncate">{{ displayName }}</span>
-        <span v-if="nip05" class="text-[8px] text-brand font-medium truncate hidden group-hover:inline">
-          {{ nip05 }}
+      <!-- Top: name + time -->
+      <div class="flex items-baseline justify-between gap-2">
+        <span class="text-[13px] font-semibold truncate">{{ displayName }}</span>
+        <span class="text-[11px] shrink-0" :class="unread > 0 ? 'text-brand font-medium' : 'text-text-muted'">
+          {{ time }}
         </span>
       </div>
-      <div class="flex items-center gap-1 text-[10px] text-text-muted truncate">
-        <Zap v-if="isZap" class="w-2.5 h-2.5 text-warning shrink-0" />
-        <span class="truncate">{{ preview || t('chat.emptyDesc') }}</span>
+      <!-- Bottom: preview + unread badge -->
+      <div class="flex items-center justify-between gap-2 mt-0.5">
+        <div class="flex items-center gap-1 text-[12px] text-text-secondary truncate min-w-0">
+          <Zap v-if="isZap" class="w-3 h-3 text-warning shrink-0" />
+          <span class="truncate">{{ preview || t('chat.emptyDesc') }}</span>
+        </div>
+        <span v-if="unread > 0" class="chat-unread-badge shrink-0">
+          {{ unread > 99 ? '99+' : unread }}
+        </span>
       </div>
-    </div>
-
-    <!-- Time + unread -->
-    <div class="flex flex-col items-end gap-1 shrink-0">
-      <span class="text-[9px] text-text-muted">{{ time }}</span>
-      <span
-        v-if="unread > 0"
-        class="w-2 h-2 rounded-full bg-brand"
-      />
     </div>
   </button>
 </template>

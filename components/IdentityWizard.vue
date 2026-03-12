@@ -14,7 +14,7 @@ import QrScanner from './QrScanner.vue'
 const emit = defineEmits(['complete', 'cancel'])
 const { t } = useI18n()
 
-const { create, importKey, createRemote, connectRemote, publishProfile, fetchProfile } = useAccounts()
+const { create, importKey, createRemote, connectRemote, startNostrConnect, cancelNostrConnect, loadNip46Status, nip46Status: nip46GlobalStatus, publishProfile, fetchProfile, load: loadAccounts } = useAccounts()
 
 // ── Wizard state ──
 const step = ref(1)
@@ -36,6 +36,11 @@ const downloadedKey = ref(false)
 // ── NIP-46 connection state ──
 const nip46Status = ref('')
 const nip46Profile = ref(null)
+const nip46Method = ref('bunker') // 'bunker' | 'nostrconnect'
+const nostrConnectUri = ref('')
+const nostrConnectQr = ref('')
+const nostrConnectAccountId = ref(null)
+let nostrConnectPollTimer = null
 
 // ── Created account data ──
 const createdAccount = ref(null)
@@ -68,7 +73,7 @@ const modes = computed(() => [
 const canProceedStep2 = computed(() => {
   if (mode.value === 'new') return displayName.value.trim().length > 0
   if (mode.value === 'import') return importNsec.value.trim().length > 0
-  if (mode.value === 'nip46') return bunkerUri.value.trim().length > 0
+  if (mode.value === 'nip46') return nip46Method.value === 'nostrconnect' || bunkerUri.value.trim().length > 0
   return false
 })
 
@@ -94,10 +99,14 @@ function selectMode(m) {
 
 function goBack() {
   error.value = ''
+  if (nostrConnectPollTimer) { clearInterval(nostrConnectPollTimer); nostrConnectPollTimer = null }
+  cancelNostrConnect()
   if (step.value === 2) {
     step.value = 1
     mode.value = null
     nip46Status.value = ''
+    nostrConnectUri.value = ''
+    nostrConnectQr.value = ''
   } else if (step.value === 3 && mode.value === 'new') {
     // Backup step — allow going back to name input
     step.value = 2
@@ -138,6 +147,39 @@ async function handleStep2() {
           .catch(() => { /* relay fetch failed — user can fill in manually */ })
       }
     } else if (mode.value === 'nip46') {
+      if (nip46Method.value === 'nostrconnect') {
+        // Nostr Connect flow — generate QR, wait for signer
+        nip46Status.value = 'creating'
+        const account = await createRemote('Remote Signer')
+        nostrConnectAccountId.value = account.id
+
+        nip46Status.value = 'waiting'
+        const result = await startNostrConnect(account.id)
+        if (result?.error) throw new Error(result.error)
+
+        nostrConnectUri.value = result.uri
+        // Generate QR
+        const QRCode = (await import('qrcode')).default
+        nostrConnectQr.value = await QRCode.toDataURL(result.uri, {
+          width: 220, margin: 2, color: { dark: '#000', light: '#fff' },
+        })
+
+        // Poll for connection completion
+        loading.value = false
+        nostrConnectPollTimer = setInterval(async () => {
+          await loadNip46Status()
+          if (nip46GlobalStatus.value.connected) {
+            clearInterval(nostrConnectPollTimer)
+            nostrConnectPollTimer = null
+            await loadAccounts()
+            nip46Status.value = 'done'
+            step.value = 3
+          }
+        }, 1500)
+        return
+      }
+
+      // Bunker URI flow
       nip46Status.value = 'creating'
       const account = await createRemote('Remote Signer')
 
@@ -172,6 +214,13 @@ async function handleStep2() {
   } finally {
     loading.value = false
   }
+}
+
+function copyConnectUri() {
+  if (!nostrConnectUri.value) return
+  navigator.clipboard.writeText(nostrConnectUri.value)
+  copied.value = true
+  setTimeout(() => (copied.value = false), 2500)
 }
 
 async function handlePublishProfile() {
@@ -274,28 +323,28 @@ function downloadNsec() {
         <button
           v-for="m in modes" :key="m.id"
           @click="selectMode(m.id)"
-          class="w-full flex items-center gap-3.5 p-3.5 rounded-xl bg-surface-card border text-left group card-interactive relative"
+          class="w-full flex items-center gap-3.5 p-3.5 rounded-3xl bg-surface-card border text-left group card-interactive relative shadow-sm"
           :class="m.recommended ? 'border-brand/30' : 'border-border hover:border-brand/20'"
         >
           <!-- Recommended ribbon -->
           <span v-if="m.recommended"
-            class="absolute -top-px -right-px text-[8px] font-bold uppercase tracking-wider bg-brand text-surface-base px-2 py-0.5 rounded-bl-lg rounded-tr-xl">
+            class="absolute -top-px -right-px text-[8px] font-bold uppercase tracking-wider bg-brand text-surface-base px-2 py-0.5 rounded-bl-lg rounded-tr-3xl">
             {{ t('wizard.recommended') }}
           </span>
 
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          <div class="w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0"
             :class="m.recommended ? 'bg-brand/10' : 'bg-surface-elevated'">
             <component :is="m.icon" class="w-5 h-5" :class="m.recommended ? 'text-brand' : 'text-text-muted'" />
           </div>
           <div class="flex-1 min-w-0 pr-4">
-            <div class="text-[13px] font-bold group-hover:text-brand transition-colors">{{ m.title }}</div>
+            <div class="text-[13px] font-extrabold group-hover:text-brand transition-all duration-200">{{ m.title }}</div>
             <div class="text-[10px] text-text-muted leading-relaxed mt-0.5">{{ m.desc }}</div>
           </div>
-          <ArrowRight class="w-4 h-4 text-text-muted group-hover:text-brand transition-colors shrink-0 absolute right-3.5 top-1/2 -translate-y-1/2" />
+          <ArrowRight class="w-4 h-4 text-text-muted group-hover:text-brand transition-all duration-200 shrink-0 absolute right-3.5 top-1/2 -translate-y-1/2" />
         </button>
       </div>
 
-      <button @click="emit('cancel')" class="w-full text-[11px] text-text-muted hover:text-text-secondary py-2 transition-colors font-medium">
+      <button @click="emit('cancel')" class="w-full text-[11px] text-text-muted hover:text-text-secondary py-2 transition-all duration-200 font-medium">
         {{ t('common.cancel') }}
       </button>
     </div>
@@ -306,7 +355,7 @@ function downloadNsec() {
     <div v-if="step === 2" class="space-y-4 animate-fade-in-up">
 
       <!-- Back button -->
-      <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-colors font-medium">
+      <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
         <ArrowLeft class="w-3.5 h-3.5" /> {{ t('common.back') }}
       </button>
 
@@ -352,7 +401,7 @@ function downloadNsec() {
           <div class="flex items-center justify-between px-0.5">
             <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">{{ t('wizard.backupKey') }}</label>
             <button @click="showScanner = !showScanner"
-              class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-colors font-medium">
+              class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium">
               <ScanLine class="w-3 h-3" />
               {{ showScanner ? t('common.typeInstead') : t('common.scanQr') }}
             </button>
@@ -366,7 +415,7 @@ function downloadNsec() {
             <input v-model="importNsec" :type="showNsec ? 'text' : 'password'" :placeholder="t('wizard.backupKeyPlaceholder')"
               class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 pr-11 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted/50 placeholder:font-sans" />
             <button @click="showNsec = !showNsec"
-              class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-secondary transition-colors rounded-md">
+              class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-secondary transition-all duration-200 rounded-md">
               <EyeOff v-if="showNsec" class="w-4 h-4" />
               <Eye v-else class="w-4 h-4" />
             </button>
@@ -380,41 +429,84 @@ function downloadNsec() {
         </div>
       </template>
 
-      <!-- ── NIP-46: Connection URI ── -->
-      <div v-if="mode === 'nip46' && !loading" class="space-y-2">
-        <div class="flex items-center justify-between px-0.5">
-          <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">{{ t('wizard.connectionLink') }}</label>
-          <button @click="showScanner = !showScanner"
-            class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-colors font-medium">
-            <ScanLine class="w-3 h-3" />
-            {{ showScanner ? t('common.typeInstead') : t('common.scanQr') }}
+      <!-- ── NIP-46: Connection method toggle ── -->
+      <div v-if="mode === 'nip46' && !loading && nip46Status !== 'waiting'" class="space-y-3">
+        <!-- Method toggle -->
+        <div class="flex rounded-2xl border border-border overflow-hidden">
+          <button @click="nip46Method = 'bunker'"
+            class="flex-1 py-2 text-[11px] font-semibold transition-all duration-200"
+            :class="nip46Method === 'bunker' ? 'bg-brand text-surface-base' : 'bg-surface-card text-text-muted hover:text-text-secondary'">
+            {{ t('wizard.pasteUri') }}
+          </button>
+          <button @click="nip46Method = 'nostrconnect'"
+            class="flex-1 py-2 text-[11px] font-semibold transition-all duration-200"
+            :class="nip46Method === 'nostrconnect' ? 'bg-brand text-surface-base' : 'bg-surface-card text-text-muted hover:text-text-secondary'">
+            {{ t('wizard.showQr') }}
           </button>
         </div>
 
-        <QrScanner v-if="showScanner"
-          @scan="(val) => { bunkerUri = val; showScanner = false }"
-          @close="showScanner = false" />
-
-        <template v-else>
-          <input v-model="bunkerUri" :placeholder="t('wizard.connectionPlaceholder')"
-            class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted/50 placeholder:font-sans" />
-          <div class="flex items-start gap-1.5 px-0.5">
-            <Info class="w-3 h-3 text-text-muted shrink-0 mt-px" />
-            <p class="text-[10px] text-text-muted leading-relaxed">
-              {{ t('wizard.signerHint') }}
-            </p>
+        <!-- Bunker URI input -->
+        <template v-if="nip46Method === 'bunker'">
+          <div class="flex items-center justify-between px-0.5">
+            <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">{{ t('wizard.connectionLink') }}</label>
+            <button @click="showScanner = !showScanner"
+              class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium">
+              <ScanLine class="w-3 h-3" />
+              {{ showScanner ? t('common.typeInstead') : t('common.scanQr') }}
+            </button>
           </div>
+
+          <QrScanner v-if="showScanner"
+            @scan="(val) => { bunkerUri = val; showScanner = false }"
+            @close="showScanner = false" />
+
+          <template v-else>
+            <input v-model="bunkerUri" :placeholder="t('wizard.connectionPlaceholder')"
+              class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted/50 placeholder:font-sans" />
+            <div class="flex items-start gap-1.5 px-0.5">
+              <Info class="w-3 h-3 text-text-muted shrink-0 mt-px" />
+              <p class="text-[10px] text-text-muted leading-relaxed">
+                {{ t('wizard.signerHint') }}
+              </p>
+            </div>
+          </template>
         </template>
+
+        <!-- Nostr Connect info -->
+        <div v-else class="flex items-start gap-1.5 px-0.5">
+          <Info class="w-3 h-3 text-text-muted shrink-0 mt-px" />
+          <p class="text-[10px] text-text-muted leading-relaxed">
+            {{ t('wizard.nostrConnectHint') }}
+          </p>
+        </div>
+      </div>
+
+      <!-- ── NIP-46: Nostr Connect waiting screen ── -->
+      <div v-if="mode === 'nip46' && nip46Status === 'waiting' && nostrConnectQr" class="space-y-4 animate-fade-in-up">
+        <div class="flex flex-col items-center gap-3 bg-surface-card rounded-3xl border border-border shadow-sm p-4">
+          <p class="text-[11px] font-semibold text-text-secondary">{{ t('wizard.scanWithSigner') }}</p>
+          <img :src="nostrConnectQr" alt="QR" class="w-[200px] h-[200px] rounded-lg" />
+          <button @click="copyConnectUri"
+            class="flex items-center gap-1.5 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium">
+            <Check v-if="copied" class="w-3 h-3 text-success" />
+            <Copy v-else class="w-3 h-3" />
+            {{ copied ? t('common.copied') : t('wizard.copyUri') }}
+          </button>
+          <div class="flex items-center gap-2 text-[10px] text-text-muted">
+            <Loader2 class="w-3 h-3 animate-spin text-brand" />
+            {{ t('wizard.waitingForSigner') }}
+          </div>
+        </div>
       </div>
 
       <!-- ── NIP-46 connection progress ── -->
-      <div v-if="mode === 'nip46' && loading" class="bg-surface-card rounded-xl border border-border p-5 space-y-4 animate-fade-in-up">
+      <div v-if="mode === 'nip46' && loading" class="bg-surface-card rounded-3xl border border-border shadow-sm p-5 space-y-4 animate-fade-in-up">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">
+          <div class="w-10 h-10 rounded-[10px] bg-brand/10 flex items-center justify-center shrink-0">
             <Loader2 class="w-5 h-5 text-brand animate-spin" />
           </div>
           <div>
-            <div class="text-[13px] font-bold">
+            <div class="text-[13px] font-extrabold">
               {{ nip46Status === 'creating' ? t('wizard.connectPreparing') :
                  nip46Status === 'connecting' ? t('wizard.connectConnecting') :
                  nip46Status === 'fetching-profile' ? t('wizard.connectFetchingProfile') :
@@ -458,7 +550,7 @@ function downloadNsec() {
       </div>
 
       <!-- Error -->
-      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-xl bg-error/8 border border-error/15 text-[11px] text-error animate-scale-in">
+      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-[11px] text-error animate-scale-in">
         <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
         <div>
           <span class="font-semibold">{{ t('common.error') }}</span>
@@ -468,7 +560,7 @@ function downloadNsec() {
 
       <!-- Action button -->
       <button v-if="!(mode === 'nip46' && loading)" @click="handleStep2" :disabled="!canProceedStep2 || loading"
-        class="w-full py-3 text-[13px] rounded-xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all font-bold btn-primary flex items-center justify-center gap-2">
+        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all font-bold btn-primary flex items-center justify-center gap-2">
         <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
         <template v-else>
           {{ mode === 'new' ? t('wizard.createAccount') : mode === 'import' ? t('wizard.importAccountBtn') : t('wizard.connect') }}
@@ -494,7 +586,7 @@ function downloadNsec() {
       </div>
 
       <!-- Key display card -->
-      <div class="bg-surface-card rounded-xl border border-warning/25 overflow-hidden">
+      <div class="bg-surface-card rounded-3xl border border-warning/25 overflow-hidden shadow-sm">
 
         <!-- Warning banner -->
         <div class="bg-warning/8 px-4 py-2.5 flex items-center gap-2 border-b border-warning/15">
@@ -512,15 +604,15 @@ function downloadNsec() {
             <!-- Reveal overlay when blurred -->
             <button v-if="!showNsec" @click="showNsec = true"
               class="absolute inset-0 flex items-center justify-center gap-2 bg-surface-base/60 rounded-lg cursor-pointer group">
-              <Eye class="w-4 h-4 text-text-muted group-hover:text-brand transition-colors" />
-              <span class="text-[11px] font-semibold text-text-muted group-hover:text-brand transition-colors">{{ t('wizard.clickToReveal') }}</span>
+              <Eye class="w-4 h-4 text-text-muted group-hover:text-brand transition-all duration-200" />
+              <span class="text-[11px] font-semibold text-text-muted group-hover:text-brand transition-all duration-200">{{ t('wizard.clickToReveal') }}</span>
             </button>
           </div>
 
           <!-- Action buttons -->
           <div class="grid grid-cols-2 gap-2">
             <button @click="copyNsec"
-              class="flex items-center justify-center gap-1.5 py-2.5 text-[11px] rounded-lg font-semibold transition-all"
+              class="flex items-center justify-center gap-1.5 py-2.5 text-[11px] rounded-2xl font-semibold transition-all"
               :class="copied
                 ? 'bg-success/10 text-success border border-success/20'
                 : 'bg-surface-elevated text-text-secondary hover:bg-surface-hover border border-border'">
@@ -529,7 +621,7 @@ function downloadNsec() {
               {{ copied ? t('common.copied') : t('wizard.copyKey') }}
             </button>
             <button @click="downloadNsec"
-              class="flex items-center justify-center gap-1.5 py-2.5 text-[11px] rounded-lg font-semibold transition-all"
+              class="flex items-center justify-center gap-1.5 py-2.5 text-[11px] rounded-2xl font-semibold transition-all"
               :class="downloadedKey
                 ? 'bg-success/10 text-success border border-success/20'
                 : 'bg-surface-elevated text-text-secondary hover:bg-surface-hover border border-border'">
@@ -542,7 +634,7 @@ function downloadNsec() {
       </div>
 
       <!-- Confirmation checkbox -->
-      <label class="flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-colors"
+      <label class="flex items-start gap-3 p-3 rounded-3xl cursor-pointer transition-all duration-200"
         :class="backupConfirmed ? 'bg-success/5 border border-success/20' : 'bg-surface-card border border-border hover:border-brand/20'">
         <input type="checkbox" v-model="backupConfirmed"
           class="mt-0.5 w-4 h-4 rounded border-border text-brand focus:ring-brand/20 accent-[var(--brand-primary)]" />
@@ -558,7 +650,7 @@ function downloadNsec() {
 
       <!-- Continue button -->
       <button @click="step = 4" :disabled="!backupConfirmed"
-        class="w-full py-3 text-[13px] rounded-xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold btn-primary flex items-center justify-center gap-2">
+        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold btn-primary flex items-center justify-center gap-2">
         {{ t('common.continue') }}
         <ArrowRight class="w-4 h-4" />
       </button>
@@ -570,7 +662,7 @@ function downloadNsec() {
     <div v-if="step === 3 && mode === 'import'" class="space-y-4 animate-fade-in-up">
 
       <!-- Back button -->
-      <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-colors font-medium">
+      <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
         <ArrowLeft class="w-3.5 h-3.5" /> {{ t('common.back') }}
       </button>
 
@@ -582,13 +674,13 @@ function downloadNsec() {
       </div>
 
       <!-- Profile preview card -->
-      <div class="bg-surface-card rounded-xl p-4 border border-border">
+      <div class="bg-surface-card rounded-3xl p-4 border border-border shadow-sm">
         <div class="flex items-center gap-3">
           <div class="w-12 h-12 rounded-full bg-brand flex items-center justify-center text-surface-base font-bold text-lg shrink-0">
             {{ (displayName || '?')[0].toUpperCase() }}
           </div>
           <div class="min-w-0">
-            <div class="font-bold text-sm truncate">{{ displayName || 'Anonymous' }}</div>
+            <div class="font-extrabold text-sm truncate">{{ displayName || 'Anonymous' }}</div>
             <div class="text-[10px] text-text-muted font-mono mt-0.5 truncate">
               {{ createdAccount?.npub ? truncateKey(createdAccount.npub, 14, 6) : '' }}
             </div>
@@ -608,18 +700,18 @@ function downloadNsec() {
           class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50 resize-none" />
       </div>
 
-      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-xl bg-error/8 border border-error/15 text-[11px] text-error">
+      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-[11px] text-error">
         <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
         <span>{{ error }}</span>
       </div>
 
       <button @click="handlePublishProfile" :disabled="loading"
-        class="w-full py-3 text-[13px] rounded-xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 transition-all font-bold btn-primary flex items-center justify-center gap-2">
+        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 transition-all font-bold btn-primary flex items-center justify-center gap-2">
         <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
         <span>{{ loading ? t('wizard.saving') : t('wizard.saveProfile') }}</span>
       </button>
 
-      <button @click="skipPublish" class="w-full text-[11px] text-text-muted hover:text-text-secondary py-1 transition-colors font-medium">
+      <button @click="skipPublish" class="w-full text-[11px] text-text-muted hover:text-text-secondary py-1 transition-all duration-200 font-medium">
         {{ t('common.skip') }}
       </button>
     </div>
@@ -637,7 +729,7 @@ function downloadNsec() {
       </div>
 
       <!-- Connected identity card -->
-      <div class="bg-surface-card rounded-xl border border-border overflow-hidden">
+      <div class="bg-surface-card rounded-3xl border border-border overflow-hidden shadow-sm">
         <div class="p-4 space-y-3">
           <div class="flex items-center gap-3">
             <div class="w-12 h-12 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
@@ -646,7 +738,7 @@ function downloadNsec() {
               <span v-else class="font-bold text-lg">{{ (displayName || '?')[0].toUpperCase() }}</span>
             </div>
             <div class="min-w-0 flex-1">
-              <div class="font-bold text-sm truncate">{{ displayName || 'Anonymous' }}</div>
+              <div class="font-extrabold text-sm truncate">{{ displayName || 'Anonymous' }}</div>
               <div v-if="createdAccount?.pubkey" class="text-[10px] text-text-muted font-mono mt-0.5 truncate">
                 {{ truncateKey(createdAccount.pubkey, 14, 6) }}
               </div>
@@ -669,7 +761,7 @@ function downloadNsec() {
       </div>
 
       <!-- Explainer -->
-      <div class="flex items-start gap-2.5 p-3 rounded-xl bg-surface-card border border-border">
+      <div class="flex items-start gap-2.5 p-3 rounded-3xl bg-surface-card border border-border shadow-sm">
         <Info class="w-4 h-4 text-brand shrink-0 mt-0.5" />
         <p class="text-[10px] text-text-muted leading-relaxed">
           <strong class="text-text-secondary">{{ t('wizard.howItWorks') }}</strong> {{ t('wizard.signerExplainer') }}
@@ -677,7 +769,7 @@ function downloadNsec() {
       </div>
 
       <button @click="finish"
-        class="w-full py-3 text-[13px] rounded-xl bg-brand text-surface-base hover:bg-brand-hover transition-all font-bold btn-primary">
+        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all font-bold btn-primary">
         {{ t('common.getStarted') }}
       </button>
     </div>
@@ -688,7 +780,7 @@ function downloadNsec() {
     <div v-if="step === 4 && mode === 'new'" class="space-y-4 animate-fade-in-up">
 
       <!-- Back button -->
-      <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-colors font-medium">
+      <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
         <ArrowLeft class="w-3.5 h-3.5" /> {{ t('common.back') }}
       </button>
 
@@ -700,13 +792,13 @@ function downloadNsec() {
       </div>
 
       <!-- Profile preview card -->
-      <div class="bg-surface-card rounded-xl p-4 border border-border">
+      <div class="bg-surface-card rounded-3xl p-4 border border-border shadow-sm">
         <div class="flex items-center gap-3">
           <div class="w-12 h-12 rounded-full bg-brand flex items-center justify-center text-surface-base font-bold text-lg shrink-0">
             {{ (displayName || '?')[0].toUpperCase() }}
           </div>
           <div class="min-w-0">
-            <div class="font-bold text-sm truncate">{{ displayName || 'Anonymous' }}</div>
+            <div class="font-extrabold text-sm truncate">{{ displayName || 'Anonymous' }}</div>
             <div class="text-[10px] text-text-muted font-mono mt-0.5 truncate">
               {{ createdAccount?.npub ? truncateKey(createdAccount.npub, 14, 6) : '' }}
             </div>
@@ -726,18 +818,18 @@ function downloadNsec() {
           class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50 resize-none" />
       </div>
 
-      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-xl bg-error/8 border border-error/15 text-[11px] text-error">
+      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-[11px] text-error">
         <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
         <span>{{ error }}</span>
       </div>
 
       <button @click="handlePublishProfile" :disabled="loading"
-        class="w-full py-3 text-[13px] rounded-xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 transition-all font-bold btn-primary flex items-center justify-center gap-2">
+        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 transition-all font-bold btn-primary flex items-center justify-center gap-2">
         <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
         <span>{{ loading ? t('wizard.saving') : t('wizard.saveProfile') }}</span>
       </button>
 
-      <button @click="skipPublish" class="w-full text-[11px] text-text-muted hover:text-text-secondary py-1 transition-colors font-medium">
+      <button @click="skipPublish" class="w-full text-[11px] text-text-muted hover:text-text-secondary py-1 transition-all duration-200 font-medium">
         {{ t('common.skip') }}
       </button>
     </div>
@@ -756,7 +848,7 @@ function downloadNsec() {
         </p>
       </div>
 
-      <div v-if="publishResult" class="bg-surface-card rounded-xl p-3.5 border border-border space-y-1.5">
+      <div v-if="publishResult" class="bg-surface-card rounded-3xl p-3.5 border border-border shadow-sm space-y-1.5">
         <div v-if="publishResult.published?.length" class="flex items-center gap-2 text-[11px] text-success font-medium">
           <CheckCircle2 class="w-3.5 h-3.5" />
           {{ t('wizard.profileSaved') }}
@@ -768,7 +860,7 @@ function downloadNsec() {
       </div>
 
       <button @click="finish"
-        class="w-full py-3 text-[13px] rounded-xl bg-brand text-surface-base hover:bg-brand-hover transition-all font-bold btn-primary">
+        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all font-bold btn-primary">
         {{ t('common.getStarted') }}
       </button>
     </div>

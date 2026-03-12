@@ -6,7 +6,7 @@
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useNotifications } from '../composables/useNotifications.js'
-import { ArrowLeft, Bell, MessageSquare, Zap } from 'lucide-vue-next'
+import { ArrowLeft, Bell, MessageSquare, Wallet } from 'lucide-vue-next'
 
 const emit = defineEmits(['back'])
 
@@ -21,7 +21,7 @@ onMounted(() => { load() })
 
     <!-- Header -->
     <div class="flex items-center gap-2">
-      <button @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-colors" :aria-label="t('common.back')">
+      <button @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.back')">
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
       <span class="text-sm font-semibold">{{ t('notifications.title') }}</span>
@@ -36,9 +36,9 @@ onMounted(() => { load() })
     <div v-if="loaded" class="space-y-1.5">
 
       <!-- DMs toggle -->
-      <div class="flex items-center justify-between px-3 py-3 bg-surface-card rounded-xl border border-border">
+      <div class="flex items-center justify-between px-3 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
         <div class="flex items-center gap-2.5 min-w-0 flex-1">
-          <div class="w-7 h-7 rounded-lg bg-surface-elevated border border-border flex items-center justify-center shrink-0">
+          <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0">
             <MessageSquare class="w-3.5 h-3.5 text-text-muted" />
           </div>
           <div class="min-w-0">
@@ -51,21 +51,21 @@ onMounted(() => { load() })
           role="switch"
           :aria-checked="settings.dms"
           :aria-label="t('notifications.dms')"
-          class="relative w-9 h-5 rounded-full transition-colors shrink-0"
+          class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0"
           :class="settings.dms ? 'bg-brand' : 'bg-surface-elevated border border-border'"
         >
           <span
-            class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+            class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
             :class="settings.dms ? 'translate-x-4' : 'translate-x-0.5'"
           />
         </button>
       </div>
 
       <!-- Payments toggle -->
-      <div class="flex items-center justify-between px-3 py-3 bg-surface-card rounded-xl border border-border">
+      <div class="flex items-center justify-between px-3 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
         <div class="flex items-center gap-2.5 min-w-0 flex-1">
-          <div class="w-7 h-7 rounded-lg bg-surface-elevated border border-border flex items-center justify-center shrink-0">
-            <Zap class="w-3.5 h-3.5 text-warning" />
+          <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0">
+            <Wallet class="w-3.5 h-3.5 text-text-muted" />
           </div>
           <div class="min-w-0">
             <span class="text-xs font-medium block">{{ t('notifications.payments') }}</span>
@@ -77,11 +77,11 @@ onMounted(() => { load() })
           role="switch"
           :aria-checked="settings.payments"
           :aria-label="t('notifications.payments')"
-          class="relative w-9 h-5 rounded-full transition-colors shrink-0"
+          class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0"
           :class="settings.payments ? 'bg-brand' : 'bg-surface-elevated border border-border'"
         >
           <span
-            class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+            class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
             :class="settings.payments ? 'translate-x-4' : 'translate-x-0.5'"
           />
         </button>
@@ -90,8 +90,8 @@ onMounted(() => { load() })
 
     <!-- Loading state -->
     <div v-else class="space-y-1.5">
-      <div class="skeleton-shimmer h-14 rounded-xl" />
-      <div class="skeleton-shimmer h-14 rounded-xl" />
+      <div class="skeleton-shimmer h-14 rounded-3xl" />
+      <div class="skeleton-shimmer h-14 rounded-3xl" />
     </div>
 
     <!-- Info footer -->
