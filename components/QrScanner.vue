@@ -41,13 +41,13 @@ async function startScanning() {
     scanning.value = false
     const msg = err.toString()
     if (msg.includes('NotAllowed') || msg.includes('Permission')) {
-      // Firefox popups can't request camera — fallback to file upload
       cameraUnavailable.value = true
-      error.value = 'Camera not available in this context. Use the file picker below.'
+      error.value = t('qr.cameraBlocked')
     } else if (msg.includes('NotFound') || msg.includes('Requested device not found')) {
       cameraUnavailable.value = true
+      error.value = t('qr.cameraBlocked')
     } else {
-      error.value = err.message || 'Failed to start camera'
+      error.value = t('qr.cameraFailed')
     }
   }
 }
@@ -63,7 +63,7 @@ async function handleFileUpload(event) {
     fileScanner.clear()
     emit('scan', result)
   } catch {
-    error.value = 'No QR code found in this image'
+    error.value = t('qr.noQrFound')
   }
 }
 

@@ -136,7 +136,7 @@ async function togglePubkeyQr() {
 const profileData = ref(null)
 const profileLoading = ref(false)
 
-const { locked, passwordSet, loading: lockLoading, setup: setupPassword, unlock, lock } = useLock()
+const { locked, passwordSet, loading: lockLoading, autoLockCountdown, setup: setupPassword, unlock, lock, resetAutoLock } = useLock()
 const { accounts, activeAccount, nip46Status, load: loadAccounts, switchTo, remove, fetchProfile, loadNip46Status } = useAccounts()
 const { status: walletStatus, loadStatus: loadWallet, disconnect: disconnectWallet } = useWallet()
 const { policies: permissions, load: loadPermissions, revokeDomain } = usePermissions()
@@ -239,8 +239,13 @@ function copyPubkey() {
   navigator.clipboard.writeText(val)
   copied.value = true
   toast.success(t('common.copiedToClipboard'))
-  setTimeout(() => (copied.value = false), 1500)
+  setTimeout(() => (copied.value = false), 2500)
 }
+
+const switchTargetAccount = computed(() => {
+  if (!confirmSwitchId.value) return null
+  return accounts.value.find(a => a.id === confirmSwitchId.value) || null
+})
 
 function requestSwitchAccount(accId) {
   confirmSwitchId.value = accId
@@ -352,7 +357,13 @@ async function handleUnlock(password) {
     await unlock(password)
     await loadData()
   } catch (err) {
-    lockError.value = err.message || 'Wrong password'
+    const msg = err.message || ''
+    if (msg.startsWith('TOO_MANY_ATTEMPTS:')) {
+      const seconds = msg.split(':')[1]
+      lockError.value = t('lock.tooManyAttempts', { seconds })
+    } else {
+      lockError.value = msg || t('lock.wrongPassword')
+    }
   } finally {
     lockBusy.value = false
   }
@@ -500,6 +511,15 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 
     <!-- Main UI (after unlock) -->
     <template v-else>
+
+      <!-- Auto-lock warning banner -->
+      <div v-if="autoLockCountdown > 0"
+        class="flex items-center justify-between px-4 py-2 bg-warning/10 border-b border-warning/20 text-warning text-xs animate-fade-in">
+        <span class="font-medium">{{ t('lock.autoLockWarning', { seconds: autoLockCountdown }) }}</span>
+        <button @click="resetAutoLock" class="px-2 py-0.5 rounded-lg bg-warning/20 hover:bg-warning/30 font-semibold transition-all duration-200 text-[10px]">
+          {{ t('lock.stayUnlocked') }}
+        </button>
+      </div>
 
       <!-- ═══ Profile Header ═══ -->
       <header class="flex items-center gap-3 px-4 py-2.5 border-b border-border shrink-0">
@@ -999,7 +1019,19 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             <BottomSheet :open="!!confirmSwitchId" variant="brand" @close="cancelSwitch">
               <template #icon><AlertTriangle class="w-4 h-4 text-brand" /></template>
               <template #title>{{ t('account.switchConfirmTitle') }}</template>
-              <template #description>{{ t('account.switchConfirmDesc') }}</template>
+              <template #description>
+                <div v-if="switchTargetAccount" class="flex items-center gap-2 justify-center mb-1">
+                  <div class="w-6 h-6 rounded-full bg-surface-elevated flex items-center justify-center text-[9px] font-bold text-text-secondary">
+                    {{ (switchTargetAccount.name || '?')[0].toUpperCase() }}
+                  </div>
+                  <span class="font-semibold text-text-primary text-xs">{{ switchTargetAccount.name }}</span>
+                  <span class="text-[9px] px-1.5 py-px rounded font-medium"
+                    :class="switchTargetAccount.mode === 'nip46' ? 'bg-warning/10 text-warning' : 'bg-surface-elevated text-text-muted'">
+                    {{ switchTargetAccount.mode === 'nip46' ? t('account.external') : t('account.local') }}
+                  </span>
+                </div>
+                {{ t('account.switchConfirmDesc') }}
+              </template>
               <template #actions>
                 <button @click="cancelSwitch"
                   :disabled="!!switchingAccount"
@@ -1019,7 +1051,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             <BottomSheet :open="!!confirmingDelete" variant="danger" @close="cancelDelete">
               <template #icon><AlertTriangle class="w-4 h-4 text-error" /></template>
               <template #title>{{ t('account.deleteTitle') }}</template>
-              <template #description>{{ t('account.deleteDesc') }}</template>
+              <template #description>{{ accounts.find(a => a.id === confirmingDelete)?.mode === 'nip46' ? t('account.deleteDescRemote') : t('account.deleteDescLocal') }}</template>
               <template #actions>
                 <button @click="cancelDelete"
                   :disabled="deletingAccount"

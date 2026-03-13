@@ -63,7 +63,7 @@ const capabilities = computed(() => {
 function copy(text, field) {
   navigator.clipboard.writeText(text)
   copiedField.value = field
-  setTimeout(() => (copiedField.value = ''), 1500)
+  setTimeout(() => (copiedField.value = ''), 2500)
 }
 
 onMounted(async () => {
@@ -81,7 +81,7 @@ onMounted(async () => {
       <!-- Header -->
       <div class="sticky top-0 bg-surface-base z-10 flex items-center justify-between px-4 py-3 border-b border-border">
         <span class="text-sm font-semibold">{{ t('relay.infoTitle') }}</span>
-        <button @click="emit('close')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
+        <button @click="emit('close')" :aria-label="t('common.close')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
           <X class="w-4 h-4 text-text-muted" />
         </button>
       </div>
@@ -145,7 +145,7 @@ onMounted(async () => {
                   : 'bg-surface-elevated text-text-secondary border-border'"
                 :title="KEY_NIPS[nip] || `NIP-${nip}`"
               >
-                {{ nip }}
+                {{ KEY_NIPS[nip] || `NIP-${nip}` }}
               </span>
             </div>
           </div>
@@ -169,7 +169,7 @@ onMounted(async () => {
               :class="showTechnical ? 'text-brand' : 'text-text-muted hover:text-text-secondary'"
             >
               <Code class="w-3 h-3" />
-              <span>{{ showTechnical ? t('wallet.technicalDetails') : t('wallet.technicalDetails') }}</span>
+              <span>{{ t('wallet.technicalDetails') }}</span>
             </button>
 
             <div v-if="showTechnical" class="bg-surface-card rounded-3xl border border-border shadow-sm divide-y divide-border overflow-hidden animate-fade-in-up">

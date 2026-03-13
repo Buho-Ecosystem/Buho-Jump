@@ -3,7 +3,7 @@
  * Telegram-style contact picker — pill search, follow list with
  * deterministic avatar colors, and universal npub/hex/nip05 resolve.
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContacts } from '../../composables/useContacts.js'
 import { useAccounts } from '../../composables/useAccounts.js'
@@ -28,6 +28,13 @@ const resolvedPubkey = ref(null)
 
 const filteredContacts = computed(() => searchContacts(input.value))
 const showContacts = computed(() => !resolvedPubkey.value && !resolving.value)
+
+// Clear stale state when user changes input
+watch(input, () => {
+  resolveError.value = ''
+  resolvedPubkey.value = null
+  resolvedProfile.value = null
+})
 
 onMounted(() => {
   if (activeAccount.value?.pubkey && needsLoad(activeAccount.value.pubkey)) {
@@ -82,7 +89,7 @@ function truncateNpub(pubkey) {
   <div class="animate-slide-in-right">
     <!-- Header -->
     <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-border">
-      <button @click="emit('back')" class="p-1 rounded-full hover:bg-surface-elevated transition-all duration-200" aria-label="Back">
+      <button @click="emit('back')" class="p-1 rounded-full hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.back')">
         <ArrowLeft class="w-5 h-5 text-text-secondary" />
       </button>
       <span class="text-[14px] font-semibold">{{ t('chat.newChat') }}</span>

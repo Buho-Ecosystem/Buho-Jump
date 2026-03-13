@@ -1,22 +1,23 @@
 /**
- * Chat composable — NIP-17 (primary) + NIP-04 (fallback) messaging.
+ * Chat composable — NIP-17 (send + receive) with NIP-04 read-back.
  *
- * Manages relay subscriptions, message persistence, conversations,
- * unread tracking, and inline zaps.
+ * Sending:
+ *   Local accounts → NIP-17 (kind 1059 gift wraps) with self-copy.
+ *   NIP-46 accounts → kind 4 via remote signer (NIP-44 encrypt preferred, NIP-04 fallback).
+ *
+ * Receiving: NIP-17 (kind 1059) + NIP-04/NIP-44 (kind 4) — reads all formats.
  *
  * All data is scoped per-account — switching accounts triggers a
  * full reset: close subscriptions, load the new account's messages,
  * and re-subscribe to relays.
- *
- * Local accounts: NIP-17 (gift-wrapped, kind 1059 → kind 14)
- * NIP-46 accounts: NIP-04 (kind 4) via signer
  */
 
 import { ref, computed } from 'vue'
 import {
-  nip04, nip44, finalizeEvent, hexToBytes,
-  wrapDirectMessage, unwrapDirectMessage,
+  nip04, nip44, nip59, hexToBytes,
+  unwrapDirectMessage,
 } from 'nostr-core'
+import { useMessaging } from './useMessaging.js'
 import { getActiveAccount } from '../lib/accounts.js'
 import { getPool } from '../lib/relayPool.js'
 import { getPoolRelays, getOutboxRelays, getInboxRelays, DEFAULT_CHAT_RELAYS } from '../lib/relays.js'
@@ -30,7 +31,7 @@ const currentAccountPubkey = ref(null) // tracks which account owns the data
 let subscription = null
 
 // Message shape:
-// { id, sender: 'me'|pubkey, content, created_at, protocol: 'nip17'|'nip04', type?: 'zap' }
+// { id, sender: 'me'|pubkey, content, created_at, protocol: 'nip17'|'nip04', type?: 'zap', status?: 'sending'|'sent'|'failed' }
 
 export function useChat() {
 
@@ -96,15 +97,8 @@ export function useChat() {
     if (!messages.value[pubkey]) {
       messages.value[pubkey] = []
     }
-    // Deduplicate by id
+    // Deduplicate by event/rumor ID
     if (messages.value[pubkey].some(m => m.id === msg.id)) return
-    // Content-based dedup: NIP-17 and NIP-04 copies of the same message have different IDs
-    const isDuplicate = messages.value[pubkey].some(m =>
-      m.sender === msg.sender &&
-      m.content === msg.content &&
-      Math.abs(m.created_at - msg.created_at) < 60
-    )
-    if (isDuplicate) return
     messages.value[pubkey] = [...messages.value[pubkey], msg]
     persistMessages()
 
@@ -124,64 +118,112 @@ export function useChat() {
     const account = await getActiveAccount()
     if (!account) throw new Error('No active account')
 
+    const now = Math.floor(Date.now() / 1000)
     const pool = getPool()
+    const senderPubkey = account.pubkey
 
-    // Outbox model: own chat relays + recipient's NIP-65 write relays
-    const ownChatRelays = account.pubkey
-      ? await getPoolRelays(account.pubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
-      : DEFAULT_CHAT_RELAYS
-    let recipientWriteRelays = []
-    try { recipientWriteRelays = await getOutboxRelays(recipientPubkey) } catch { /* ignore */ }
-    const publishRelays = [...new Set([...ownChatRelays, ...recipientWriteRelays])]
+    // Generate a temporary ID for optimistic message
+    const tempId = `pending-${now}-${Math.random().toString(36).slice(2, 8)}`
 
-    if (account.mode === 'local' && account.secretHex) {
-      const secretKey = hexToBytes(account.secretHex)
-      const now = Math.floor(Date.now() / 1000)
+    // Add optimistic "sending" message immediately
+    addMessage(recipientPubkey, {
+      id: tempId,
+      sender: 'me',
+      content,
+      created_at: now,
+      protocol: account.secretHex ? 'nip17' : 'nip04',
+      status: 'sending',
+    })
 
-      // NIP-17: Gift-wrapped DM (modern clients)
-      const wrap = wrapDirectMessage(content, secretKey, recipientPubkey)
-      await pool.publish(publishRelays, wrap)
+    try {
+      // Outbox model: own chat relays + recipient's NIP-65 write relays
+      const ownChatRelays = await getPoolRelays(senderPubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
+      let recipientWriteRelays = []
+      try { recipientWriteRelays = await getOutboxRelays(recipientPubkey) } catch { /* ignore */ }
+      const publishRelays = [...new Set([...ownChatRelays, ...recipientWriteRelays])]
 
-      // NIP-04: Legacy DM (older clients)
-      const encrypted = nip04.encrypt(secretKey, recipientPubkey, content)
-      const legacyEvent = finalizeEvent({
-        kind: 4,
-        tags: [['p', recipientPubkey]],
-        content: encrypted,
-        created_at: now,
-      }, secretKey)
-      await pool.publish(publishRelays, legacyEvent)
+      let finalId = tempId
 
-      // Add to local state once (use NIP-17 wrap id)
-      addMessage(recipientPubkey, {
-        id: wrap.id,
-        sender: 'me',
-        content,
-        created_at: now,
-        protocol: 'nip17',
-      })
-    } else {
-      // NIP-04 fallback (works for both local and NIP-46 via background)
-      const secretKey = hexToBytes(account.secretHex || account.nip46ClientSecretHex)
-      const encrypted = nip04.encrypt(secretKey, recipientPubkey, content)
+      if (account.secretHex) {
+        // ── Local account → NIP-17 gift wraps ──
+        const secretKey = hexToBytes(account.secretHex)
 
-      const event = finalizeEvent({
-        kind: 4,
-        tags: [['p', recipientPubkey]],
-        content: encrypted,
-        created_at: Math.floor(Date.now() / 1000),
-      }, secretKey)
+        const rumor = nip59.createRumor({
+          kind: 14,
+          content,
+          tags: [['p', recipientPubkey]],
+          created_at: now,
+        }, senderPubkey)
 
-      await pool.publish(publishRelays, event)
+        const sealForRecipient = nip59.createSeal(rumor, secretKey, recipientPubkey)
+        const wrapForRecipient = nip59.createWrap(sealForRecipient, recipientPubkey)
 
-      addMessage(recipientPubkey, {
-        id: event.id,
-        sender: 'me',
-        content,
-        created_at: Math.floor(Date.now() / 1000),
-        protocol: 'nip04',
-      })
+        const sealForSelf = nip59.createSeal(rumor, secretKey, senderPubkey)
+        const wrapForSelf = nip59.createWrap(sealForSelf, senderPubkey)
+
+        await Promise.all([
+          pool.publish(publishRelays, wrapForRecipient),
+          pool.publish(publishRelays, wrapForSelf),
+        ])
+
+        finalId = rumor.id
+      } else {
+        // ── NIP-46 account → kind 4 via remote signer (NIP-44 encrypt, NIP-04 fallback) ──
+        const { send } = useMessaging()
+        let ciphertext
+        try {
+          ciphertext = await send('CHAT_ENCRYPT', recipientPubkey, content, 'nip44')
+        } catch {
+          ciphertext = await send('CHAT_ENCRYPT', recipientPubkey, content)
+        }
+        const signed = await send('CHAT_SIGN', {
+          kind: 4,
+          content: ciphertext,
+          tags: [['p', recipientPubkey]],
+          created_at: now,
+        })
+
+        await pool.publish(publishRelays, signed)
+
+        finalId = signed.id
+      }
+
+      // Update optimistic message: replace temp ID with real ID, mark as sent
+      updateMessageStatus(recipientPubkey, tempId, 'sent', finalId)
+    } catch (err) {
+      // Mark message as failed
+      updateMessageStatus(recipientPubkey, tempId, 'failed')
+      throw err
     }
+  }
+
+  function updateMessageStatus(pubkey, msgId, status, newId) {
+    const msgs = messages.value[pubkey]
+    if (!msgs) return
+    const idx = msgs.findIndex(m => m.id === msgId)
+    if (idx === -1) return
+    const updated = { ...msgs[idx], status }
+    if (newId) updated.id = newId
+    messages.value[pubkey] = [
+      ...msgs.slice(0, idx),
+      updated,
+      ...msgs.slice(idx + 1),
+    ]
+    persistMessages()
+  }
+
+  async function retryMessage(recipientPubkey, msgId) {
+    const msgs = messages.value[recipientPubkey]
+    if (!msgs) return
+    const msg = msgs.find(m => m.id === msgId && m.status === 'failed')
+    if (!msg) return
+
+    // Remove the failed message
+    messages.value[recipientPubkey] = msgs.filter(m => m.id !== msgId)
+    persistMessages()
+
+    // Re-send
+    await sendMessage(recipientPubkey, msg.content)
   }
 
   /**
@@ -213,72 +255,90 @@ export function useChat() {
     const pool = getPool()
     const myPubkey = account.pubkey
     const secretKey = account.secretHex ? hexToBytes(account.secretHex) : null
-
-    if (!secretKey) return // Can't decrypt without secret key
+    const isLocal = !!secretKey
+    const { send } = !isLocal ? useMessaging() : {}
 
     // Determine "since" — last known message or 30 days ago
-    let since = Math.floor(Date.now() / 1000) - 86400 * 30
+    const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 86400 * 30
+    let latest = thirtyDaysAgo
     for (const msgs of Object.values(messages.value)) {
       for (const m of msgs) {
-        if (m.created_at > since) since = m.created_at
+        if (m.created_at > latest) latest = m.created_at
       }
     }
     // Go back 1 hour from latest to catch any we missed
-    since = Math.max(since - 3600, Math.floor(Date.now() / 1000) - 86400 * 30)
+    const since = Math.max(latest - 3600, thirtyDaysAgo)
 
     // Inbox model: own chat relays + own NIP-65 read relays
-    const ownChatRelays = account.pubkey
-      ? await getPoolRelays(account.pubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
-      : DEFAULT_CHAT_RELAYS
+    const ownChatRelays = await getPoolRelays(myPubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
     let inboxRelays = []
     try { inboxRelays = await getInboxRelays(myPubkey) } catch { /* ignore */ }
     const subscribeRelays = [...new Set([...ownChatRelays, ...inboxRelays])]
-    console.log('[chat] subscribing to', subscribeRelays.length, 'relays:', subscribeRelays)
 
     const subs = []
 
-    // NIP-17: Gift wraps addressed to us (kind 1059)
-    subs.push(pool.subscribe(subscribeRelays, {
-      kinds: [1059],
-      '#p': [myPubkey],
-      since,
-    }, {
-      onevent(event) {
-        try {
-          const dm = unwrapDirectMessage(event, secretKey)
-          if (dm.sender === myPubkey) return // Skip our own wrapped messages
-          console.log('[chat] NIP-17 received from', dm.sender.slice(0, 8))
-          addMessage(dm.sender, {
-            id: dm.id,
-            sender: dm.sender,
-            content: dm.content,
-            created_at: dm.created_at,
-            protocol: 'nip17',
-          })
-        } catch (err) {
-          console.warn('[chat] NIP-17 decrypt failed:', err.message)
-        }
-      },
-    }))
+    // ── NIP-17: Gift wraps addressed to us (kind 1059) ──
+    // Only for local accounts — unwrap requires the secret key
+    if (isLocal) {
+      subs.push(pool.subscribe(subscribeRelays, {
+        kinds: [1059],
+        '#p': [myPubkey],
+        since,
+      }, {
+        onevent(event) {
+          try {
+            const dm = unwrapDirectMessage(event, secretKey)
 
-    // NIP-04: DMs sent TO us (kind 4)
+            if (dm.sender === myPubkey) {
+              // Self-copy: message we sent (from this or another client)
+              const pTag = dm.tags?.find(t => t[0] === 'p')
+              if (!pTag) return
+              addMessage(pTag[1], {
+                id: dm.id,
+                sender: 'me',
+                content: dm.content,
+                created_at: dm.created_at,
+                protocol: 'nip17',
+              })
+            } else {
+              // Incoming message from someone else
+              addMessage(dm.sender, {
+                id: dm.id,
+                sender: dm.sender,
+                content: dm.content,
+                created_at: dm.created_at,
+                protocol: 'nip17',
+              })
+            }
+          } catch { /* decrypt failed — not for us or corrupt */ }
+        },
+      }))
+    }
+
+    // ── NIP-04/44: Legacy DMs sent TO us (kind 4) ──
     subs.push(pool.subscribe(subscribeRelays, {
       kinds: [4],
       '#p': [myPubkey],
       since,
     }, {
-      onevent(event) {
+      async onevent(event) {
         try {
           let content
-          try {
-            // Try NIP-44 first (modern clients encrypt kind 4 with NIP-44)
-            const convKey = nip44.getConversationKey(secretKey, event.pubkey)
-            content = nip44.decrypt(event.content, convKey)
-          } catch {
-            // Fall back to NIP-04
-            content = nip04.decrypt(secretKey, event.pubkey, event.content)
+          if (isLocal) {
+            try {
+              const convKey = nip44.getConversationKey(secretKey, event.pubkey)
+              content = nip44.decrypt(event.content, convKey)
+            } catch {
+              content = nip04.decrypt(secretKey, event.pubkey, event.content)
+            }
+          } else {
+            // NIP-46: decrypt via remote signer (try NIP-44 first, fall back to NIP-04)
+            try {
+              content = await send('CHAT_DECRYPT', event.pubkey, event.content, 'nip44')
+            } catch {
+              content = await send('CHAT_DECRYPT', event.pubkey, event.content)
+            }
           }
-          console.log('[chat] NIP-04/44 received from', event.pubkey.slice(0, 8))
           addMessage(event.pubkey, {
             id: event.id,
             sender: event.pubkey,
@@ -286,29 +346,36 @@ export function useChat() {
             created_at: event.created_at,
             protocol: 'nip04',
           })
-        } catch (err) {
-          console.warn('[chat] NIP-04/44 decrypt failed:', err.message)
-        }
+        } catch { /* decrypt failed */ }
       },
     }))
 
-    // NIP-04: DMs sent BY us (kind 4, author = us)
+    // ── NIP-04/44: Legacy DMs sent BY us (kind 4, author = us) ──
     subs.push(pool.subscribe(subscribeRelays, {
       kinds: [4],
       authors: [myPubkey],
       since,
     }, {
-      onevent(event) {
+      async onevent(event) {
         const pTag = event.tags.find(t => t[0] === 'p')
         if (!pTag) return
         const recipientPubkey = pTag[1]
         try {
           let content
-          try {
-            const convKey = nip44.getConversationKey(secretKey, recipientPubkey)
-            content = nip44.decrypt(event.content, convKey)
-          } catch {
-            content = nip04.decrypt(secretKey, recipientPubkey, event.content)
+          if (isLocal) {
+            try {
+              const convKey = nip44.getConversationKey(secretKey, recipientPubkey)
+              content = nip44.decrypt(event.content, convKey)
+            } catch {
+              content = nip04.decrypt(secretKey, recipientPubkey, event.content)
+            }
+          } else {
+            // NIP-46: decrypt via remote signer (try NIP-44 first, fall back to NIP-04)
+            try {
+              content = await send('CHAT_DECRYPT', recipientPubkey, event.content, 'nip44')
+            } catch {
+              content = await send('CHAT_DECRYPT', recipientPubkey, event.content)
+            }
           }
           addMessage(recipientPubkey, {
             id: event.id,
@@ -317,9 +384,7 @@ export function useChat() {
             created_at: event.created_at,
             protocol: 'nip04',
           })
-        } catch (err) {
-          console.warn('[chat] NIP-04/44 sent-by-us decrypt failed:', err.message)
-        }
+        } catch { /* decrypt failed */ }
       },
     }))
 
@@ -389,6 +454,10 @@ export function useChat() {
   }
 
   function cleanup() {
+    if (persistTimer) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+    }
     if (subscription) {
       subscription.close()
       subscription = null
@@ -405,6 +474,7 @@ export function useChat() {
     switchAccount,
     loadMessages,
     sendMessage,
+    retryMessage,
     addZapMessage,
     subscribe,
     markRead,

@@ -86,7 +86,7 @@ onMounted(() => init())
       @click="emit('new-chat')"
       class="chat-fab absolute bottom-4 right-4 z-10"
       :title="t('chat.newChat')"
-      aria-label="New chat"
+      :aria-label="t('chat.newChat')"
     >
       <PenSquare class="w-5 h-5" />
     </button>

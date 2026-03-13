@@ -9,7 +9,7 @@
  * - Profile publishing/fetching
  */
 
-import { finalizeEvent, getPublicKey, hexToBytes, bytesToHex, randomBytes, nip04, nip44, nip19, NWC } from 'nostr-core'
+import { finalizeEvent, getPublicKey, hexToBytes, bytesToHex, randomBytes, nip19, NWC, createSecretKeySigner } from 'nostr-core'
 import {
   getActiveAccount,
   getAccounts,
@@ -51,7 +51,7 @@ import {
   createNip65Event, DEFAULT_ACCOUNT_RELAYS,
 } from '../lib/relays.js'
 import { getPool } from '../lib/relayPool.js'
-import { connectBunker, createNostrConnectURI, awaitNostrConnect } from '../lib/nip46-bridge.js'
+import { connectBunker, createNostrConnectURI, awaitNostrConnect, parseConnectionURI } from '../lib/nip46-bridge.js'
 import { openPromptWindow, supportsWindowsApi } from '../lib/browser/capabilities.js'
 import { notifyDm, notifyPayment, setupNotificationClickHandler } from '../lib/notifications.js'
 import { saveSession, getSession, clearSession } from '../lib/session.js'
@@ -63,7 +63,7 @@ let remoteSigner = null
 let pendingPermissions = new Map()
 let _cachedPassword = null // In-memory cache of session password
 let rejectedOrigins = new Set() // Anti-spam: tracks rejected origins
-let _nostrConnectAbort = null // Abort handle for pending nostrconnect flow
+let _nostrConnectAbort = null // AbortController for pending nostrconnect flow
 
 // ── Session restore (service worker wake-up) ─────────────────────
 let _sessionLoadPromise = null
@@ -103,33 +103,40 @@ const ALL_PERMISSION_METHODS = [
   'weblnEnable',
 ]
 
-async function requestPermission(host, method, kind, eventData) {
+async function requestPermission(host, method, kind, eventData, meta) {
   const activeId = await getActiveAccountId()
-  const existing = await checkPermission(host, method, kind, activeId)
-  if (existing === 'allow') return true
-  if (existing === 'deny') return false
+  // Payment prompts always show (per-transaction approval) — never auto-approve from stored perms
+  if (method !== 'weblnSendPayment') {
+    const existing = await checkPermission(host, method, kind, activeId)
+    if (existing === 'allow') return true
+    if (existing === 'deny') return false
+  }
 
   // Check if this is the first time this host is asking for any permission
+  // Payment prompts never use the first-visit flow — they always show per-transaction
   const allPerms = await getPermissions(activeId)
   const hostPerms = allPerms[host]
-  const firstVisit = !hostPerms || Object.keys(hostPerms).length === 0
+  const firstVisit = method !== 'weblnSendPayment' && (!hostPerms || Object.keys(hostPerms).length === 0)
 
   return new Promise((resolve) => {
     const requestId = crypto.randomUUID()
     pendingPermissions.set(requestId, { resolve })
 
-    // Store event data for signEvent so prompt can display it
-    if (method === 'signEvent' && eventData) {
+    // Store extra data so the prompt can display context
+    if (eventData) {
       chrome.storage.local.set({ [`prompt_event_${requestId}`]: eventData })
     }
 
+    // Build prompt URL with site metadata from the requesting tab
+    const siteTitle = meta?.siteTitle || ''
+    const siteFavicon = meta?.siteFavicon || ''
     const url = chrome.runtime.getURL(
-      `/prompt.html?requestId=${requestId}&host=${encodeURIComponent(host)}&method=${encodeURIComponent(method)}&kind=${kind ?? ''}&firstVisit=${firstVisit}`
+      `/prompt.html?requestId=${requestId}&host=${encodeURIComponent(host)}&method=${encodeURIComponent(method)}&kind=${kind ?? ''}&firstVisit=${firstVisit}&siteTitle=${encodeURIComponent(siteTitle)}&siteFavicon=${encodeURIComponent(siteFavicon)}`
     )
 
-    // Dynamic sizing: taller for signEvent (event data) and first-visit (all permissions)
-    const promptHeight = (method === 'signEvent' || firstVisit) ? 560 : 440
-    openPromptWindow(url, { width: 400, height: promptHeight }).then((win) => {
+    // Dynamic sizing: taller for complex prompts
+    const promptHeight = firstVisit ? 720 : (method === 'signEvent' || method === 'weblnSendPayment') ? 640 : 520
+    openPromptWindow(url, { width: 420, height: promptHeight }).then((win) => {
       // Prompt window guard: reject if window/tab is closed without response
       if (supportsWindowsApi && win?.id) {
         const onRemoved = (windowId) => {
@@ -165,6 +172,25 @@ async function ensureRemoteSigner() {
   } finally {
     nip46Reconnecting = false
   }
+}
+
+/**
+ * Get a Signer for the active account (local or NIP-46).
+ * Both return the same nostr-core Signer interface.
+ */
+async function getSigner() {
+  const account = await getActiveAccount()
+  if (!account) return null
+
+  if (account.mode === 'local' && account.secretHex) {
+    return createSecretKeySigner(hexToBytes(account.secretHex))
+  }
+
+  if (account.mode === 'nip46') {
+    return ensureRemoteSigner()
+  }
+
+  return null
 }
 
 // ── Lock gate — prompts user to unlock when locked ───────────────
@@ -211,27 +237,28 @@ async function requireUnlocked(origin) {
 }
 
 // ── NIP-07 Handlers ──────────────────────────────────────────────
+// All handlers use the unified Signer interface from nostr-core.
+// Both local (createSecretKeySigner) and remote (NostrConnect) signers
+// share: getPublicKey, signEvent, nip04, nip44.
+// Only NostrConnect additionally provides getRelays.
+
+/** Extract site metadata from the Chrome sender object for richer prompt display. */
+function getSiteMeta(sender) {
+  return {
+    siteTitle: sender?.tab?.title || '',
+    siteFavicon: sender?.tab?.favIconUrl || '',
+  }
+}
+
 async function handleGetPublicKey(sender) {
   const host = new URL(sender.url).hostname
   await requireUnlocked(host)
-  const allowed = await requestPermission(host, 'getPublicKey')
+  const allowed = await requestPermission(host, 'getPublicKey', null, null, getSiteMeta(sender))
   if (!allowed) return { error: 'Permission denied' }
 
-  const account = await getActiveAccount()
-  if (!account) return { error: 'No active account' }
-
-  if (account.mode === 'local') {
-    return { result: account.pubkey }
-  }
-
-  if (account.mode === 'nip46') {
-    const signer = await ensureRemoteSigner()
-    if (!signer) return { error: 'Not connected to remote signer' }
-    const pubkey = await signer.getPublicKey()
-    return { result: pubkey }
-  }
-
-  return { error: 'No signer available' }
+  const signer = await getSigner()
+  if (!signer) return { error: 'No signer available' }
+  return { result: await signer.getPublicKey() }
 }
 
 async function handleSignEvent(params, sender) {
@@ -239,41 +266,22 @@ async function handleSignEvent(params, sender) {
   await requireUnlocked(host)
   const event = params[0]
   if (!event) return { error: 'No event provided' }
-  const allowed = await requestPermission(host, 'signEvent', event.kind, event)
+  const allowed = await requestPermission(host, 'signEvent', event.kind, event, getSiteMeta(sender))
   if (!allowed) return { error: 'Permission denied' }
 
-  const account = await getActiveAccount()
-  if (!account) return { error: 'No active account' }
-
-  if (account.mode === 'local') {
-    const secretKey = hexToBytes(account.secretHex)
-    const signed = finalizeEvent(event, secretKey)
-    return { result: signed }
-  }
-
-  if (account.mode === 'nip46') {
-    const signer = await ensureRemoteSigner()
-    if (!signer) return { error: 'Not connected to remote signer' }
-    const signed = await signer.signEvent(event)
-    return { result: signed }
-  }
-
-  return { error: 'No signer available' }
+  const signer = await getSigner()
+  if (!signer) return { error: 'No signer available' }
+  return { result: await signer.signEvent(event) }
 }
 
 async function handleGetRelays() {
-  const account = await getActiveAccount()
-
-  if (account?.mode === 'nip46') {
-    const signer = await ensureRemoteSigner()
-    if (signer) {
-      try {
-        return { result: await signer.getRelays() }
-      } catch { /* fall through */ }
-    }
+  const signer = await getSigner()
+  if (signer?.getRelays) {
+    try { return { result: await signer.getRelays() } } catch { /* fall through */ }
   }
 
-  // Return stored account relays as NIP-07 relay map
+  // Fallback: return stored account relays as NIP-07 relay map
+  const account = await getActiveAccount()
   if (account?.pubkey) {
     const relays = await getPoolRelays(account.pubkey, 'account')
     const map = {}
@@ -291,36 +299,21 @@ async function handleEncryptDecrypt(type, params, sender) {
   await requireUnlocked(host)
   const [pubkey, text] = params
   const method = type.toLowerCase()
-  const allowed = await requestPermission(host, method)
+  const allowed = await requestPermission(host, method, null, null, getSiteMeta(sender))
   if (!allowed) return { error: 'Permission denied' }
 
-  const account = await getActiveAccount()
-  if (!account) return { error: 'No active account' }
+  const signer = await getSigner()
+  if (!signer) return { error: 'No signer available' }
 
-  // NIP-46 remote encryption
-  if (account.mode === 'nip46') {
-    const signer = await ensureRemoteSigner()
-    if (!signer) return { error: 'Not connected to remote signer' }
-
-    if (type === 'NIP04_ENCRYPT') return { result: await signer.nip04Encrypt(pubkey, text) }
-    if (type === 'NIP04_DECRYPT') return { result: await signer.nip04Decrypt(pubkey, text) }
-    if (type === 'NIP44_ENCRYPT') return { result: await signer.nip44Encrypt(pubkey, text) }
-    if (type === 'NIP44_DECRYPT') return { result: await signer.nip44Decrypt(pubkey, text) }
+  if (type === 'NIP04_ENCRYPT' || type === 'NIP04_DECRYPT') {
+    if (!signer.nip04) return { error: 'Signer does not support NIP-04 encryption' }
+    if (type === 'NIP04_ENCRYPT') return { result: await signer.nip04.encrypt(pubkey, text) }
+    return { result: await signer.nip04.decrypt(pubkey, text) }
   }
-
-  // Local encryption
-  if (account.mode !== 'local') return { error: 'No signer available' }
-  const secretKey = hexToBytes(account.secretHex)
-
-  if (type === 'NIP04_ENCRYPT') return { result: await nip04.encrypt(secretKey, pubkey, text) }
-  if (type === 'NIP04_DECRYPT') return { result: await nip04.decrypt(secretKey, pubkey, text) }
-  if (type === 'NIP44_ENCRYPT') {
-    const ck = nip44.getConversationKey(secretKey, pubkey)
-    return { result: nip44.encrypt(text, ck) }
-  }
-  if (type === 'NIP44_DECRYPT') {
-    const ck = nip44.getConversationKey(secretKey, pubkey)
-    return { result: nip44.decrypt(text, ck) }
+  if (type === 'NIP44_ENCRYPT' || type === 'NIP44_DECRYPT') {
+    if (!signer.nip44) return { error: 'Signer does not support NIP-44 encryption' }
+    if (type === 'NIP44_ENCRYPT') return { result: await signer.nip44.encrypt(pubkey, text) }
+    return { result: await signer.nip44.decrypt(pubkey, text) }
   }
 
   return { error: 'Unknown encrypt/decrypt method' }
@@ -385,7 +378,7 @@ function subscribeNwcNotifications() {
 async function handleWeblnEnable(sender) {
   const host = new URL(sender.url).hostname
   await requireUnlocked(host)
-  const allowed = await requestPermission(host, 'weblnEnable')
+  const allowed = await requestPermission(host, 'weblnEnable', null, null, getSiteMeta(sender))
   if (!allowed) return { error: 'Permission denied' }
   try { await ensureNWC(); return { result: { enabled: true } } }
   catch (err) { return { error: err.message } }
@@ -415,8 +408,10 @@ async function handleWeblnSendPayment(params, sender) {
     } catch (err) { return { error: err.message } }
   }
 
-  // No budget or over budget — prompt user
-  const allowed = await requestPermission(host, 'weblnSendPayment')
+  // No budget or over budget — prompt user (pass amount + budget info)
+  const allowance = await getAllowance(host)
+  const paymentMeta = { amountSats, budgetSats: allowance?.budget || null, spentSats: allowance?.spent || 0 }
+  const allowed = await requestPermission(host, 'weblnSendPayment', null, paymentMeta, getSiteMeta(sender))
   if (!allowed) return { error: 'Permission denied' }
   try {
     const nwc = await ensureNWC()
@@ -680,14 +675,17 @@ export default defineBackground(() => {
             try {
               // Gracefully disconnect any existing remote signer before connecting
               if (remoteSigner) { try { await remoteSigner.disconnect() } catch {} remoteSigner = null }
-              const signer = await connectBunker(bunkerUri, (await getAccounts())[accountId]?.nip46ClientSecretHex)
+              const parsed = parseConnectionURI(bunkerUri)
+              const clientSecret = (await getAccounts())[accountId]?.nip46ClientSecretHex
+              if (!clientSecret) return { error: 'Account missing client secret key' }
+              const signer = await connectBunker(bunkerUri, clientSecret)
               remoteSigner = signer
               const pubkey = await signer.getPublicKey()
               const updates = {
                 pubkey,
                 nip46Session: {
-                  signerPubkey: signer.remotePubkey,
-                  relays: signer.relayUrls,
+                  signerPubkey: parsed.remotePubkey,
+                  relays: parsed.relayUrls,
                   bunkerUri,
                 },
               }
@@ -714,7 +712,7 @@ export default defineBackground(() => {
           }
           case 'DISCONNECT_NIP46':
             if (remoteSigner) { await remoteSigner.disconnect(); remoteSigner = null }
-            if (_nostrConnectAbort) { _nostrConnectAbort(); _nostrConnectAbort = null }
+            if (_nostrConnectAbort) { _nostrConnectAbort.abort(); _nostrConnectAbort = null }
             return { result: { disconnected: true } }
 
           // ── Nostr Connect (reverse flow — signer scans our QR) ──
@@ -725,29 +723,33 @@ export default defineBackground(() => {
               if (!account?.nip46ClientSecretHex) return { error: 'Account not found' }
               const clientPubkey = getPublicKey(hexToBytes(account.nip46ClientSecretHex))
               const secret = bytesToHex(randomBytes(16))
+              const effectiveRelay = relayUrl || 'wss://relay.nsec.app'
               const uri = createNostrConnectURI({
                 clientPubkey,
-                relayUrl: relayUrl || 'wss://relay.nsec.app',
+                relayUrl: effectiveRelay,
                 secret,
                 name: 'Buho Jump',
               })
-              // Start listening in background — store abort handle
-              if (_nostrConnectAbort) { _nostrConnectAbort(); _nostrConnectAbort = null }
-              const connectPromise = awaitNostrConnect({
+              // Cancel any pending nostrconnect flow
+              if (_nostrConnectAbort) { _nostrConnectAbort.abort(); _nostrConnectAbort = null }
+              const abortController = new AbortController()
+              _nostrConnectAbort = abortController
+              nip46Reconnecting = true
+              // Start listening in background — popup polls GET_NIP46_STATUS
+              awaitNostrConnect({
                 secretKey: account.nip46ClientSecretHex,
-                relayUrl: relayUrl || 'wss://relay.nsec.app',
+                relayUrl: effectiveRelay,
                 secret,
                 timeout: 90000,
-              })
-              _nostrConnectAbort = () => { /* timeout will clean up */ }
-              // Handle result async — popup polls GET_NIP46_STATUS
-              connectPromise.then(async (signer) => {
+                signal: abortController.signal,
+              }).then(async ({ signer, remotePubkey, relayUrl: connectedRelay }) => {
                 remoteSigner = signer
+                _nostrConnectAbort = null
                 const pubkey = await signer.getPublicKey()
                 const updates = { pubkey, nip46Session: {
-                  signerPubkey: signer.remotePubkey,
-                  relays: signer.relayUrls,
-                  bunkerUri: `bunker://${signer.remotePubkey}?relay=${encodeURIComponent(relayUrl || 'wss://relay.nsec.app')}`,
+                  signerPubkey: remotePubkey,
+                  relays: [connectedRelay],
+                  bunkerUri: `bunker://${remotePubkey}?relay=${encodeURIComponent(connectedRelay)}`,
                 } }
                 try {
                   const profile = await fetchProfile(pubkey)
@@ -755,17 +757,20 @@ export default defineBackground(() => {
                 } catch {}
                 await updateAccount(accountId, updates)
                 await setActiveAccount(accountId)
-                nip46Reconnecting = false
               }).catch(() => {
                 _nostrConnectAbort = null
+              }).finally(() => {
+                nip46Reconnecting = false
               })
               return { result: { uri, secret } }
             } catch (err) {
+              nip46Reconnecting = false
               return { error: err.message }
             }
           }
           case 'CANCEL_NOSTR_CONNECT':
-            if (_nostrConnectAbort) { _nostrConnectAbort(); _nostrConnectAbort = null }
+            if (_nostrConnectAbort) { _nostrConnectAbort.abort(); _nostrConnectAbort = null }
+            nip46Reconnecting = false
             return { result: { cancelled: true } }
 
           // ── Profile ──
@@ -895,6 +900,36 @@ export default defineBackground(() => {
             return { result: { removed: true } }
           }
 
+          // ── Chat crypto (internal — used by popup chat for NIP-46 accounts) ──
+          case 'CHAT_ENCRYPT': {
+            const [pubkey, text, method] = params || []
+            const signer = await getSigner()
+            if (!signer) return { error: 'No signer available' }
+            if (method === 'nip44') {
+              if (!signer.nip44) return { error: 'Signer does not support NIP-44' }
+              return { result: await signer.nip44.encrypt(pubkey, text) }
+            }
+            if (!signer.nip04) return { error: 'Signer does not support NIP-04' }
+            return { result: await signer.nip04.encrypt(pubkey, text) }
+          }
+          case 'CHAT_DECRYPT': {
+            const [pubkey, ciphertext, method] = params || []
+            const signer = await getSigner()
+            if (!signer) return { error: 'No signer available' }
+            if (method === 'nip44') {
+              if (!signer.nip44) return { error: 'Signer does not support NIP-44' }
+              return { result: await signer.nip44.decrypt(pubkey, ciphertext) }
+            }
+            if (!signer.nip04) return { error: 'Signer does not support NIP-04' }
+            return { result: await signer.nip04.decrypt(pubkey, ciphertext) }
+          }
+          case 'CHAT_SIGN': {
+            const [eventTemplate] = params || []
+            const signer = await getSigner()
+            if (!signer) return { error: 'No signer available' }
+            return { result: await signer.signEvent(eventTemplate) }
+          }
+
           // ── Relay management ──
           case 'GET_RELAY_CONFIG': {
             const account = await getActiveAccount()
@@ -1009,15 +1044,17 @@ export default defineBackground(() => {
             const activeId = await getActiveAccountId()
 
             if (decision === 'allow_all') {
-              // Grant all standard permissions for this host
+              // Grant all standard permissions for this host (never includes weblnSendPayment)
               for (const m of ALL_PERMISSION_METHODS) {
                 await setPermission(host, m, 'allow', null, activeId)
               }
-              // Also grant the specific method+kind that triggered this
-              if (method && !ALL_PERMISSION_METHODS.includes(method)) {
-                await setPermission(host, method, 'allow', kind || null, activeId)
-              }
               pending.resolve(true)
+            } else if (decision === 'deny_all') {
+              // Block all methods for this host
+              for (const m of [...ALL_PERMISSION_METHODS, 'weblnSendPayment']) {
+                await setPermission(host, m, 'deny', null, activeId)
+              }
+              pending.resolve(false)
             } else if (decision === 'allow_always' || decision === 'deny_always') {
               await setPermission(host, method, decision === 'allow_always' ? 'allow' : 'deny', kind || null, activeId)
               pending.resolve(decision === 'allow_always')

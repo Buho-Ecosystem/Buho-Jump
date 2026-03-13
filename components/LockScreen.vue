@@ -60,6 +60,14 @@ const strengthColor = computed(() => {
   return 'bg-success'
 })
 
+const strengthTextColor = computed(() => {
+  const l = passwordStrength.value.level
+  if (l === 0) return 'text-error'
+  if (l === 1) return 'text-warning'
+  if (l === 2) return 'text-brand'
+  return 'text-success'
+})
+
 const mismatch = computed(() => {
   return props.isSetup && confirmPassword.value.length > 0 && password.value !== confirmPassword.value
 })
@@ -181,7 +189,7 @@ onUnmounted(() => {
               :class="i <= passwordStrength.level ? strengthColor : 'bg-border'"
             />
           </div>
-          <p class="text-[10px] text-text-muted transition-colors">{{ passwordStrength.label }}</p>
+          <p class="text-[10px] transition-colors" :class="strengthTextColor">{{ passwordStrength.label }}</p>
         </div>
       </div>
 

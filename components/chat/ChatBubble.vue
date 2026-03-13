@@ -1,10 +1,13 @@
 <script setup>
 /**
  * Telegram-style chat bubble — timestamp always inside bubble,
- * check mark for sent, grouped spacing, curved tail on last in group.
+ * status icons for sent messages (sending/sent/failed), grouped spacing.
  */
 import { computed } from 'vue'
-import { Check, Zap, Shield } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
+import { Check, Zap, Loader2, AlertCircle } from 'lucide-vue-next'
+
+const { t } = useI18n()
 
 const props = defineProps({
   message: { type: Object, required: true },
@@ -12,9 +15,12 @@ const props = defineProps({
   isFirstInGroup: { type: Boolean, default: true },
 })
 
+const emit = defineEmits(['retry'])
+
 const isSent = computed(() => props.message.sender === 'me')
 const isZap = computed(() => props.message.type === 'zap')
-const isNip17 = computed(() => props.message.protocol === 'nip17')
+const isFailed = computed(() => props.message.status === 'failed')
+const isSending = computed(() => props.message.status === 'sending')
 
 const timeStr = computed(() => {
   const d = new Date(props.message.created_at * 1000)
@@ -34,8 +40,11 @@ const bubbleRadius = computed(() => {
     : 'rounded-[12px]'
 })
 
-// Spacer width: accounts for timestamp + optional check icon
-const spacerWidth = computed(() => isSent.value ? 'w-[68px]' : 'w-[52px]')
+// Spacer width: accounts for timestamp + status icon
+const spacerWidth = computed(() => {
+  if (isSent.value) return isFailed.value ? 'w-[80px]' : 'w-[68px]'
+  return 'w-[52px]'
+})
 </script>
 
 <template>
@@ -53,7 +62,7 @@ const spacerWidth = computed(() => isSent.value ? 'w-[68px]' : 'w-[52px]')
         isZap
           ? 'chat-bubble-zap'
           : isSent
-            ? 'chat-bubble-sent'
+            ? (isFailed ? 'chat-bubble-sent opacity-60' : 'chat-bubble-sent')
             : 'chat-bubble-received',
         isLastInGroup && !isZap && isSent ? 'chat-tail-sent' : '',
         isLastInGroup && !isZap && !isSent ? 'chat-tail-received' : '',
@@ -75,13 +84,31 @@ const spacerWidth = computed(() => isSent.value ? 'w-[68px]' : 'w-[52px]')
 
       <!-- Timestamp + status (floating bottom-right inside bubble, Telegram-style) -->
       <span class="float-right relative top-[4px] ml-2 flex items-center gap-0.5 select-none">
-        <Shield
-          v-if="isNip17"
-          class="w-[10px] h-[10px] opacity-40"
-        />
         <span class="text-[10px] opacity-50 tabular-nums">{{ timeStr }}</span>
-        <Check v-if="isSent" class="w-[14px] h-[14px] opacity-40" />
+        <!-- Status indicators for sent messages -->
+        <template v-if="isSent">
+          <Loader2 v-if="isSending" class="w-[12px] h-[12px] opacity-40 animate-spin" />
+          <button
+            v-else-if="isFailed"
+            @click.stop="emit('retry', message.id)"
+            class="inline-flex items-center gap-0.5 text-error opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
+            :title="t('chat.tapToRetry')"
+          >
+            <AlertCircle class="w-[13px] h-[13px]" />
+          </button>
+          <Check v-else class="w-[14px] h-[14px] opacity-40" />
+        </template>
       </span>
     </div>
+  </div>
+
+  <!-- Failed message hint (below bubble) -->
+  <div v-if="isFailed" class="flex justify-end mt-0.5 mb-1 px-2">
+    <button
+      @click="emit('retry', message.id)"
+      class="text-[10px] text-error/70 hover:text-error transition-colors"
+    >
+      {{ t('chat.tapToRetry') }}
+    </button>
   </div>
 </template>

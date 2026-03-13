@@ -67,7 +67,7 @@ function copyPubkey() {
   navigator.clipboard.writeText(activeAccount.value.npub)
   copied.value = true
   toast.success(t('common.copiedToClipboard'))
-  setTimeout(() => (copied.value = false), 1500)
+  setTimeout(() => (copied.value = false), 2500)
 }
 
 // ── Account switching ──
@@ -218,7 +218,7 @@ function onWizardComplete() {
             <code class="flex-1 text-[11px] bg-surface-base px-3 py-2 rounded-lg font-mono text-text-muted truncate">
               {{ truncateKey(activeAccount.npub, 16, 8) }}
             </code>
-            <button @click="copyPubkey" class="p-2 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0">
+            <button @click="copyPubkey" :aria-label="t('common.copy')" class="p-2 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0">
               <Check v-if="copied" class="w-4 h-4 text-success" />
               <Copy v-else class="w-4 h-4 text-text-muted" />
             </button>
@@ -377,7 +377,7 @@ function onWizardComplete() {
       <BottomSheet :open="!!confirmingDelete" variant="danger" @close="cancelDelete">
         <template #icon><AlertTriangle class="w-4 h-4 text-error" /></template>
         <template #title>{{ t('account.deleteTitle') }}</template>
-        <template #description>{{ t('account.deleteDesc') }}</template>
+        <template #description>{{ accounts.find(a => a.id === confirmingDelete)?.mode === 'nip46' ? t('account.deleteDescRemote') : t('account.deleteDescLocal') }}</template>
         <template #actions>
           <button @click="cancelDelete" :disabled="deletingAccount"
             class="py-2 text-xs rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold disabled:opacity-60">

@@ -26,7 +26,7 @@ async function handleConnect() {
     nwcUri.value = ''
     toast.success(t('wallet.walletConnected'))
   } catch (err) {
-    error.value = err.message || t('wallet.connectFailed')
+    error.value = err.message || t('wallet.connectFailedDetail')
     toast.error(error.value)
   }
 }
@@ -64,12 +64,14 @@ function onScan(val) {
       @close="showScanner = false"
     />
 
-    <input
-      v-else
-      v-model="nwcUri"
-      placeholder="nostr+walletconnect://..."
-      class="w-full bg-surface-card border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-brand transition-all duration-200 font-mono placeholder:text-text-muted"
-    />
+    <div v-else class="space-y-1.5">
+      <input
+        v-model="nwcUri"
+        placeholder="nostr+walletconnect://..."
+        class="w-full bg-surface-card border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-brand transition-all duration-200 font-mono placeholder:text-text-muted"
+      />
+      <p class="text-[10px] text-text-muted px-1 leading-relaxed">{{ t('wallet.nwcHelp') }}</p>
+    </div>
 
     <button
       @click="handleConnect"

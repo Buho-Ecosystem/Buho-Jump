@@ -77,7 +77,7 @@ const hasTechnicalData = computed(() => !!props.tx.payment_hash || !!props.tx.pr
 function copy(text, field) {
   navigator.clipboard.writeText(text)
   copiedField.value = field
-  setTimeout(() => (copiedField.value = ''), 1500)
+  setTimeout(() => (copiedField.value = ''), 2500)
 }
 </script>
 
@@ -92,6 +92,8 @@ function copy(text, field) {
           @click="showTechnical = !showTechnical"
           class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200"
           :class="showTechnical ? 'text-brand' : 'text-text-muted'"
+          :aria-label="t('wallet.technicalDetails')"
+          :title="t('wallet.technicalDetails')"
         >
           <Code class="w-4 h-4" />
         </button>

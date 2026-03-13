@@ -148,7 +148,7 @@ function relayHostname(url) {
 
     <!-- Header -->
     <div class="flex items-center gap-2">
-      <button v-if="!hideBack" @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
+      <button v-if="!hideBack" @click="emit('back')" :aria-label="t('common.back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
       <span class="text-sm font-semibold">{{ t('relay.title') }}</span>
@@ -210,9 +210,14 @@ function relayHostname(url) {
       </button>
 
       <!-- Empty state -->
-      <div v-if="activeRelays.length === 0" class="bg-surface-card rounded-3xl border border-border shadow-sm p-6 text-center">
-        <Globe class="w-5 h-5 text-text-muted mx-auto mb-2" />
+      <div v-if="activeRelays.length === 0" class="bg-surface-card rounded-3xl border border-border shadow-sm p-6 text-center space-y-2">
+        <Globe class="w-5 h-5 text-text-muted mx-auto" />
         <p class="text-xs text-text-muted">{{ t('relay.empty') }}</p>
+        <p class="text-[10px] text-text-muted">{{ t('relay.emptyHint') }}</p>
+        <button @click="confirmReset = true"
+          class="text-[11px] text-brand font-medium hover:underline transition-all duration-200">
+          {{ t('relay.resetDefaults') }}
+        </button>
       </div>
     </div>
 

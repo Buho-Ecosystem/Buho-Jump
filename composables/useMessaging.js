@@ -16,13 +16,14 @@ export function useMessaging() {
    * @returns {Promise<any>} - the result from the background
    */
   async function send(type, ...params) {
-    const timeout = SLOW_OPS.has(type) ? SLOW_TIMEOUT : DEFAULT_TIMEOUT
+    const ms = SLOW_OPS.has(type) ? SLOW_TIMEOUT : DEFAULT_TIMEOUT
+    let timer
     const response = await Promise.race([
       chrome.runtime.sendMessage({ type, params }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out')), timeout)
-      ),
-    ])
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Request timed out')), ms)
+      }),
+    ]).finally(() => clearTimeout(timer))
     if (response?.error) throw new Error(response.error)
     return response?.result
   }

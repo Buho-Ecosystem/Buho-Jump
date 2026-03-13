@@ -111,7 +111,7 @@ function copyInvoice() {
   navigator.clipboard.writeText(invoice.value)
   copied.value = true
   toast.success('Invoice copied')
-  setTimeout(() => (copied.value = false), 1500)
+  setTimeout(() => (copied.value = false), 2500)
 }
 
 function reset() {

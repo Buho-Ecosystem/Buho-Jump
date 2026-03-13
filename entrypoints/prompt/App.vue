@@ -45,13 +45,18 @@ const showPassword = ref(false)
 const faviconFailed = ref(false)
 const eventData = ref(null)
 const showEventData = ref(false)
+const siteTitle = ref('')
+const siteFavicon = ref('')
 
 // Profile fetch with timeout
 async function fetchWithTimeout(message, ms = 5000) {
+  let timer
   return Promise.race([
     chrome.runtime.sendMessage(message),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
-  ])
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timeout')), ms)
+    }),
+  ]).finally(() => clearTimeout(timer))
 }
 
 onMounted(async () => {
@@ -63,6 +68,8 @@ onMounted(async () => {
   method.value = params.get('method') || ''
   kind.value = params.get('kind') || ''
   firstVisit.value = params.get('firstVisit') === 'true'
+  siteTitle.value = params.get('siteTitle') || ''
+  siteFavicon.value = params.get('siteFavicon') || ''
 
   // Unlock mode — only needs origin context, no account data
   if (mode.value === 'unlock') {
@@ -71,8 +78,9 @@ onMounted(async () => {
   }
 
   try {
-    const accounts = await fetchWithTimeout({ type: 'GET_ACCOUNTS', params: [] })
-    const active = Array.isArray(accounts) ? accounts.find(a => a.isActive) : null
+    const accountsRes = await fetchWithTimeout({ type: 'GET_ACCOUNTS', params: [] })
+    const accountList = accountsRes?.result || accountsRes
+    const active = Array.isArray(accountList) ? accountList.find(a => a.isActive) : null
     if (active) {
       accountName.value = active.name || ''
       accountNpub.value = active.npub || ''
@@ -94,8 +102,8 @@ onMounted(async () => {
     // Non-critical — continue without profile data
   }
 
-  // Load event data for signEvent prompts
-  if (method.value === 'signEvent' && requestId.value) {
+  // Load extra data (event data for signEvent, payment info for weblnSendPayment)
+  if (requestId.value) {
     try {
       const key = `prompt_event_${requestId.value}`
       const data = await chrome.storage.local.get(key)
@@ -235,6 +243,8 @@ const isHttp = computed(() => {
 })
 
 const faviconUrl = computed(() => {
+  // Prefer browser-provided favicon (higher quality, correct path)
+  if (siteFavicon.value) return siteFavicon.value
   try {
     const url = new URL(host.value.startsWith('http') ? host.value : `https://${host.value}`)
     return `${url.origin}/favicon.ico`
@@ -247,6 +257,19 @@ const faviconUrl = computed(() => {
 const hostInitial = computed(() => {
   const h = displayHost.value || '?'
   return h[0].toUpperCase()
+})
+
+// Payment info (weblnSendPayment)
+const paymentAmount = computed(() => {
+  if (method.value !== 'weblnSendPayment' || !eventData.value) return null
+  return eventData.value.amountSats || null
+})
+
+const paymentBudget = computed(() => {
+  if (method.value !== 'weblnSendPayment' || !eventData.value) return null
+  const { budgetSats, spentSats } = eventData.value
+  if (!budgetSats) return null
+  return { budget: budgetSats, spent: spentSats || 0, remaining: budgetSats - (spentSats || 0) }
 })
 
 const accountModeBadge = computed(() => {
@@ -311,20 +334,25 @@ async function submitUnlock() {
       }],
     })
     if (res?.error) {
-      unlockError.value = res.error
+      const msg = res.error
+      if (msg.startsWith('TOO_MANY_ATTEMPTS:')) {
+        unlockError.value = t('lock.tooManyAttempts', { seconds: msg.split(':')[1] })
+      } else {
+        unlockError.value = msg
+      }
       unlockBusy.value = false
     } else {
       window.close()
     }
   } catch (err) {
-    unlockError.value = err.message || 'Failed to unlock'
+    unlockError.value = err.message || t('lock.wrongPassword')
     unlockBusy.value = false
   }
 }
 </script>
 
 <template>
-  <div class="w-[400px] min-h-[400px] bg-surface-base text-text-primary flex flex-col select-none">
+  <div class="w-full min-h-[400px] bg-surface-base text-text-primary flex flex-col select-none">
 
     <!-- Top accent strip -->
     <div class="h-[3px] bg-gradient-to-r from-brand via-brand-light to-brand" />
@@ -389,6 +417,7 @@ async function submitUnlock() {
               @click="showPassword = !showPassword"
               type="button"
               tabindex="-1"
+              :aria-label="showPassword ? t('prompt.hidePassword') : t('prompt.showPassword')"
               class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-elevated transition-all duration-200"
             >
               <Eye v-if="!showPassword" class="w-3.5 h-3.5" />
@@ -448,8 +477,10 @@ async function submitUnlock() {
             <span v-else class="text-sm font-bold">{{ hostInitial }}</span>
           </div>
           <div class="min-w-0 flex-1">
-            <div class="text-sm font-extrabold truncate">{{ displayHost }}</div>
+            <div v-if="siteTitle" class="text-sm font-extrabold truncate">{{ siteTitle }}</div>
+            <div class="text-[11px] font-semibold truncate" :class="siteTitle ? 'text-text-secondary' : 'text-sm font-extrabold'">{{ displayHost }}</div>
             <div class="text-[10px] text-text-muted mt-0.5 truncate font-mono">{{ fullOrigin }}</div>
+            <div class="text-[11px] text-text-secondary mt-0.5 font-medium">{{ t('prompt.wantsAccess') }}</div>
           </div>
         </div>
 
@@ -487,13 +518,27 @@ async function submitUnlock() {
             </span>
           </div>
 
+          <!-- Payment amount (weblnSendPayment) -->
+          <div v-if="method === 'weblnSendPayment'" class="px-4 py-3 border-t border-border bg-surface-elevated/40">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] text-text-muted font-medium">{{ t('prompt.payAmount') }}</span>
+              <span class="text-base font-extrabold text-error">{{ paymentAmount ? paymentAmount.toLocaleString() + ' sats' : t('prompt.payAmountUnknown') }}</span>
+            </div>
+            <div v-if="paymentBudget" class="flex items-center justify-between mt-1.5 pt-1.5 border-t border-border/50">
+              <span class="text-[10px] text-text-muted">{{ t('prompt.budgetRemaining') }}</span>
+              <span class="text-[11px] font-semibold" :class="paymentAmount && paymentBudget.remaining >= paymentAmount ? 'text-success' : 'text-warning'">
+                {{ paymentBudget.remaining.toLocaleString() }} / {{ paymentBudget.budget.toLocaleString() }} sats
+              </span>
+            </div>
+          </div>
+
           <!-- Detail footer -->
           <div v-if="permInfo.detail" class="px-4 py-2.5 border-t border-border bg-surface-elevated/40">
             <p class="text-[10px] text-text-muted leading-relaxed">{{ permInfo.detail }}</p>
           </div>
 
           <!-- Raw event data (signEvent only) -->
-          <div v-if="eventData" class="border-t border-border">
+          <div v-if="eventData && method === 'signEvent'" class="border-t border-border">
             <button @click="showEventData = !showEventData"
               class="w-full flex items-center gap-2 px-4 py-2 text-[10px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
               <FileSignature class="w-3 h-3 shrink-0" />
@@ -585,9 +630,9 @@ async function submitUnlock() {
             {{ t('prompt.decideSeparately') }}
           </button>
 
-          <!-- Block (tertiary text link) -->
+          <!-- Block all (tertiary text link) -->
           <button
-            @click="respond('deny_always')"
+            @click="respond('deny_all')"
             :disabled="!!deciding"
             class="w-full flex items-center justify-center gap-1.5 py-2 text-[10px] text-text-muted hover:text-error transition-all duration-200 font-medium"
           >
@@ -601,48 +646,74 @@ async function submitUnlock() {
         <!-- ════════════════════════════════════════════════ -->
         <template v-else>
           <div class="space-y-2 stagger-4 animate-fade-in-up">
-            <!-- Primary: Allow (remembers) -->
-            <button
-              @click="respond('allow_always')"
-              :disabled="!!deciding"
-              class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all duration-200 btn-primary"
-            >
-              <Check v-if="deciding !== 'allow_always'" class="w-4 h-4" />
-              <Loader2 v-else class="w-4 h-4 animate-spin" />
-              {{ t('prompt.allow') }}
-            </button>
 
-            <!-- Secondary: Deny (equal visual weight) -->
-            <button
-              @click="respond('deny_once')"
-              :disabled="!!deciding"
-              class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all duration-200"
-            >
-              <X v-if="deciding !== 'deny_once'" class="w-4 h-4" />
-              <Loader2 v-else class="w-4 h-4 animate-spin" />
-              {{ t('prompt.deny') }}
-            </button>
-
-            <!-- Granular options row -->
-            <div class="flex items-center justify-center gap-4 pt-0.5">
+            <!-- ── Payment prompt: allow_once / deny (no "always allow") ── -->
+            <template v-if="method === 'weblnSendPayment'">
               <button
                 @click="respond('allow_once')"
                 :disabled="!!deciding"
-                class="flex items-center gap-1 text-[10px] text-text-muted hover:text-success transition-all duration-200 font-medium disabled:opacity-50"
+                class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all duration-200 btn-primary"
               >
-                <Clock class="w-3 h-3" />
-                {{ t('prompt.allowOnce') }}
+                <Zap v-if="deciding !== 'allow_once'" class="w-4 h-4" />
+                <Loader2 v-else class="w-4 h-4 animate-spin" />
+                {{ t('prompt.confirmPayment') }}
               </button>
-              <span class="text-border">|</span>
+
               <button
-                @click="respond('deny_always')"
+                @click="respond('deny_once')"
                 :disabled="!!deciding"
-                class="flex items-center gap-1 text-[10px] text-text-muted hover:text-error transition-all duration-200 font-medium disabled:opacity-50"
+                class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all duration-200"
               >
-                <ShieldOff class="w-3 h-3" />
-                {{ t('prompt.denyAlways') }}
+                <X v-if="deciding !== 'deny_once'" class="w-4 h-4" />
+                <Loader2 v-else class="w-4 h-4 animate-spin" />
+                {{ t('prompt.deny') }}
               </button>
-            </div>
+            </template>
+
+            <!-- ── Standard permission prompt ── -->
+            <template v-else>
+              <button
+                @click="respond('allow_always')"
+                :disabled="!!deciding"
+                class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all duration-200 btn-primary"
+              >
+                <Check v-if="deciding !== 'allow_always'" class="w-4 h-4" />
+                <Loader2 v-else class="w-4 h-4 animate-spin" />
+                {{ t('prompt.allowAlways') }}
+              </button>
+
+              <button
+                @click="respond('deny_once')"
+                :disabled="!!deciding"
+                class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all duration-200"
+              >
+                <X v-if="deciding !== 'deny_once'" class="w-4 h-4" />
+                <Loader2 v-else class="w-4 h-4 animate-spin" />
+                {{ t('prompt.notNow') }}
+              </button>
+
+              <!-- Granular options row -->
+              <div class="flex items-center justify-center gap-3 pt-1">
+                <button
+                  @click="respond('allow_once')"
+                  :disabled="!!deciding"
+                  class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-success hover:bg-success/8 transition-all duration-200 font-medium disabled:opacity-50"
+                >
+                  <Clock class="w-3.5 h-3.5" />
+                  {{ t('prompt.allowOnce') }}
+                </button>
+                <span class="text-border text-[10px]">|</span>
+                <button
+                  @click="respond('deny_always')"
+                  :disabled="!!deciding"
+                  class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-error hover:bg-error/8 transition-all duration-200 font-medium disabled:opacity-50"
+                >
+                  <ShieldOff class="w-3.5 h-3.5" />
+                  {{ t('prompt.denyAlways') }}
+                </button>
+              </div>
+            </template>
+
           </div>
         </template>
 

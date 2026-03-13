@@ -34,6 +34,13 @@ const confirmRevokeAll = ref(false)
 const revokingAll = ref(false)
 const revokingMethod = ref(null)
 
+function methodLabel(method) {
+  const key = `sites.methodLabel_${method}`
+  const translated = t(key)
+  // If no translation found, fall back to the raw method name
+  return translated !== key ? translated : method
+}
+
 const remaining = computed(() => {
   if (!allowance.value) return 0
   return Math.max(0, allowance.value.budget - allowance.value.spent)
@@ -129,7 +136,7 @@ async function handleRevokeAll() {
 
     <!-- Header -->
     <div class="flex items-center gap-2">
-      <button @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
+      <button @click="emit('back')" :aria-label="t('common.back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
       <span class="text-sm font-semibold">{{ t('sites.title') }}</span>
@@ -157,7 +164,7 @@ async function handleRevokeAll() {
             :class="entry.decision === 'allow' ? 'bg-success/10 text-success' : 'bg-error/10 text-error'">
             {{ entry.decision === 'allow' ? t('sites.allowed') : t('sites.denied') }}
           </span>
-          <span class="text-xs font-medium">{{ method }}</span>
+          <span class="text-xs font-medium">{{ methodLabel(method) }}</span>
         </div>
         <button @click="handleRevokeMethod(method)"
           :disabled="revokingMethod === method"

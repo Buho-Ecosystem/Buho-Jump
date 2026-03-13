@@ -11,10 +11,13 @@ const passwordSet = ref(false)
 const loading = ref(true)
 const failedAttempts = ref(0)
 const lockoutUntil = ref(0)
+const autoLockCountdown = ref(0) // seconds until auto-lock (0 = no warning)
 
 const { send } = useMessaging()
 
 let autoLockTimer = null
+let autoLockWarningTimer = null
+let autoLockCountdownInterval = null
 let _initialized = false
 
 export function useLock() {
@@ -49,7 +52,7 @@ export function useLock() {
     const now = Date.now()
     if (lockoutUntil.value > now) {
       const remaining = Math.ceil((lockoutUntil.value - now) / 1000)
-      throw new Error(`Too many attempts. Try again in ${remaining}s`)
+      throw new Error(`TOO_MANY_ATTEMPTS:${remaining}`)
     }
 
     try {
@@ -79,15 +82,35 @@ export function useLock() {
     await send('CHANGE_PASSWORD', oldPassword, newPassword)
   }
 
-  // Auto-lock timer
+  // Auto-lock timer with 30-second warning countdown
+  const WARNING_SECONDS = 30
+
   function startAutoLock() {
     clearAutoLock()
     chrome.storage.local.get('autoLockMinutes').then(({ autoLockMinutes }) => {
       const minutes = autoLockMinutes ?? 5
       if (minutes <= 0) return // "never" option
+      const totalMs = minutes * 60 * 1000
+
       autoLockTimer = setTimeout(() => {
+        autoLockCountdown.value = 0
         lock()
-      }, minutes * 60 * 1000)
+      }, totalMs)
+
+      // Start warning countdown 30s before lock
+      const warningDelay = totalMs - WARNING_SECONDS * 1000
+      if (warningDelay > 0) {
+        autoLockWarningTimer = setTimeout(() => {
+          autoLockCountdown.value = WARNING_SECONDS
+          autoLockCountdownInterval = setInterval(() => {
+            autoLockCountdown.value--
+            if (autoLockCountdown.value <= 0) {
+              clearInterval(autoLockCountdownInterval)
+              autoLockCountdownInterval = null
+            }
+          }, 1000)
+        }, warningDelay)
+      }
     })
   }
 
@@ -96,6 +119,15 @@ export function useLock() {
       clearTimeout(autoLockTimer)
       autoLockTimer = null
     }
+    if (autoLockWarningTimer) {
+      clearTimeout(autoLockWarningTimer)
+      autoLockWarningTimer = null
+    }
+    if (autoLockCountdownInterval) {
+      clearInterval(autoLockCountdownInterval)
+      autoLockCountdownInterval = null
+    }
+    autoLockCountdown.value = 0
   }
 
   function resetAutoLock() {
@@ -123,6 +155,7 @@ export function useLock() {
     loading,
     failedAttempts,
     lockoutUntil,
+    autoLockCountdown,
     checkState,
     setup,
     unlock,

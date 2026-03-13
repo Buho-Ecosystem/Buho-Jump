@@ -22,7 +22,7 @@ import { executeLnurlPay, fetchLnurlPayParams, fetchLnurlPayInvoice } from '../.
 import QrScanner from '../QrScanner.vue'
 import {
   ArrowLeft, ScanLine, Zap, ArrowUpRight, ArrowLeftRight,
-  Check, AlertTriangle, Loader2, AtSign, Store, Timer,
+  Check, AlertTriangle, Loader2, AtSign, Store, Timer, Code,
 } from 'lucide-vue-next'
 
 const emit = defineEmits(['back', 'done'])
@@ -32,6 +32,8 @@ const { toFiat, fiatToSats, currency, loadRate } = useFiat()
 
 // ── State ──
 const step = ref('input') // 'input' | 'confirm' | 'merchant-confirm' | 'result'
+const showInvoicePreview = ref(false)
+const showPaymentProof = ref(false)
 const input = ref('')
 const amountSats = ref('')
 const amountFiat = ref('')
@@ -233,7 +235,7 @@ async function resolveMerchantPayment() {
     startCountdown()
     step.value = 'merchant-confirm'
   } catch (err) {
-    payError.value = err.message || 'Could not resolve merchant payment'
+    payError.value = err.message || t('wallet.lnurlFailed')
   } finally {
     resolving.value = false
   }
@@ -250,6 +252,12 @@ async function proceed() {
     return
   }
 
+  // Early balance check for amount-specified payments
+  if (effectiveSats.value > 0 && status.value?.balance != null && effectiveSats.value > status.value.balance) {
+    payError.value = t('wallet.insufficientBalance', { balance: formatSats(status.value.balance) })
+    return
+  }
+
   if (detected.value.type === 'lnaddress') {
     resolving.value = true
     try {
@@ -257,7 +265,7 @@ async function proceed() {
       resolvedInvoice.value = result.invoice
       step.value = 'confirm'
     } catch (err) {
-      payError.value = err.message || 'Could not resolve Lightning Address'
+      payError.value = err.message || t('wallet.addressResolveFailed')
     } finally {
       resolving.value = false
     }
@@ -271,7 +279,7 @@ async function proceed() {
       resolvedInvoice.value = result.invoice
       step.value = 'confirm'
     } catch (err) {
-      payError.value = err.message || 'LNURL request failed'
+      payError.value = err.message || t('wallet.lnurlFailed')
     } finally {
       resolving.value = false
     }
@@ -291,7 +299,7 @@ async function confirmPay() {
     stopCountdown()
     step.value = 'result'
   } catch (err) {
-    payError.value = err.message || 'Payment failed'
+    payError.value = err.message || t('wallet.paymentFailed')
   } finally {
     paying.value = false
   }
@@ -585,9 +593,16 @@ function reset() {
         </div>
       </div>
 
-      <!-- Invoice preview -->
-      <div class="bg-surface-base rounded-lg px-3 py-2 text-[10px] font-mono text-text-muted break-all max-h-16 overflow-y-auto">
-        {{ (resolvedInvoice || input.trim()).slice(0, 200) }}{{ (resolvedInvoice || input.trim()).length > 200 ? '...' : '' }}
+      <!-- Invoice preview (collapsible) -->
+      <div class="space-y-1">
+        <button @click="showInvoicePreview = !showInvoicePreview"
+          class="flex items-center gap-1 text-[10px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
+          <Code class="w-3 h-3" />
+          {{ showInvoicePreview ? t('wallet.hideInvoiceDetails') : t('wallet.showInvoiceDetails') }}
+        </button>
+        <div v-if="showInvoicePreview" class="bg-surface-base rounded-lg px-3 py-2 text-[10px] font-mono text-text-muted break-all max-h-16 overflow-y-auto animate-fade-in">
+          {{ (resolvedInvoice || input.trim()).slice(0, 200) }}{{ (resolvedInvoice || input.trim()).length > 200 ? '...' : '' }}
+        </div>
       </div>
 
       <!-- Error -->
@@ -634,8 +649,12 @@ function reset() {
         </div>
 
         <div v-if="payResult?.preimage" class="mt-4 text-left">
-          <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-1">{{ t('wallet.preimage') }}</p>
-          <code class="block text-[10px] bg-surface-base px-2.5 py-1.5 rounded-lg font-mono text-text-secondary break-all">
+          <button @click="showPaymentProof = !showPaymentProof"
+            class="flex items-center gap-1 text-[10px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
+            <Code class="w-3 h-3" />
+            {{ t('wallet.preimage') }}
+          </button>
+          <code v-if="showPaymentProof" class="block mt-1 text-[10px] bg-surface-base px-2.5 py-1.5 rounded-lg font-mono text-text-secondary break-all animate-fade-in">
             {{ payResult.preimage }}
           </code>
         </div>

@@ -15,7 +15,7 @@ import { formatSats } from '../../lib/utils.js'
 import ChatBubble from './ChatBubble.vue'
 import { getAvatarColor } from '../../lib/avatarColor.js'
 import {
-  ArrowLeft, Send, Zap, Loader2, Shield, X,
+  ArrowLeft, Send, Zap, Loader2, Lock, X,
   MoreHorizontal, Copy, Check, ExternalLink,
   ChevronDown,
 } from 'lucide-vue-next'
@@ -27,7 +27,7 @@ const props = defineProps({
 const emit = defineEmits(['back'])
 
 const { t } = useI18n()
-const { getMessages, sendMessage, markRead, addZapMessage, currentAccountPubkey } = useChat()
+const { getMessages, sendMessage, retryMessage, markRead, addZapMessage, currentAccountPubkey } = useChat()
 const { fetchProfile, getCachedProfile } = useContacts()
 const { status: walletStatus, payInvoice } = useWallet()
 const toast = useToast()
@@ -143,11 +143,11 @@ async function handleSend() {
     await sendMessage(props.pubkey, text)
     input.value = ''
     resetTextareaHeight()
-    scrollToBottom()
-  } catch (err) {
-    toast.error(err.message || t('chat.sendFailed'))
+  } catch {
+    // Failed status is shown on the message bubble itself
   } finally {
     sending.value = false
+    scrollToBottom()
   }
 }
 
@@ -173,11 +173,20 @@ async function handleZap(amount) {
   }
 }
 
+async function handleRetry(msgId) {
+  try {
+    await retryMessage(props.pubkey, msgId)
+    scrollToBottom()
+  } catch (err) {
+    toast.error(err.message || t('chat.sendFailed'))
+  }
+}
+
 function copyNpub() {
   try {
     navigator.clipboard.writeText(nip19.npubEncode(props.pubkey))
     copied.value = true
-    setTimeout(() => (copied.value = false), 1500)
+    setTimeout(() => (copied.value = false), 2500)
   } catch {}
 }
 
@@ -197,10 +206,16 @@ function scrollToBottom() {
   })
 }
 
-function onScroll() {
-  if (!scrollRef.value) return
+function isNearBottom() {
+  if (!scrollRef.value) return true
   const { scrollTop, scrollHeight, clientHeight } = scrollRef.value
-  showScrollBtn.value = scrollHeight - scrollTop - clientHeight > 80
+  return scrollHeight - scrollTop - clientHeight <= 80
+}
+
+function onScroll() {
+  const nearBottom = isNearBottom()
+  showScrollBtn.value = !nearBottom
+  if (nearBottom) markRead(props.pubkey)
 }
 
 function onKeydown(e) {
@@ -213,7 +228,7 @@ function onKeydown(e) {
 function autoResize(e) {
   const el = e.target
   el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 80) + 'px'
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
 }
 
 function resetTextareaHeight() {
@@ -245,8 +260,10 @@ onUnmounted(() => {
 })
 
 watch(messageList, () => {
-  markRead(props.pubkey)
-  scrollToBottom()
+  if (isNearBottom()) {
+    markRead(props.pubkey)
+    scrollToBottom()
+  }
 })
 </script>
 
@@ -255,7 +272,7 @@ watch(messageList, () => {
 
     <!-- Header (Telegram-style) -->
     <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-border shrink-0 bg-surface-base">
-      <button @click="emit('back')" class="p-1 rounded-full hover:bg-surface-elevated transition-all duration-200" aria-label="Back">
+      <button @click="emit('back')" class="p-1 rounded-full hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.back')">
         <ArrowLeft class="w-5 h-5 text-text-secondary" />
       </button>
 
@@ -276,7 +293,7 @@ watch(messageList, () => {
 
       <!-- Menu -->
       <div ref="menuRef" class="relative">
-        <button @click.stop="showMenu = !showMenu" class="p-1.5 rounded-full hover:bg-surface-elevated transition-all duration-200" aria-label="Menu">
+        <button @click.stop="showMenu = !showMenu" class="p-1.5 rounded-full hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.menu')">
           <MoreHorizontal class="w-5 h-5 text-text-muted" />
         </button>
         <div v-if="showMenu" class="absolute right-0 top-full mt-1 w-44 bg-surface-card rounded-3xl border border-border shadow-lg z-50 overflow-hidden animate-scale-in origin-top-right">
@@ -315,15 +332,17 @@ watch(messageList, () => {
             :message="item.message"
             :is-first-in-group="item.isFirstInGroup"
             :is-last-in-group="item.isLastInGroup"
+            @retry="handleRetry"
           />
         </template>
 
         <!-- Empty thread -->
         <div v-if="messageList.length === 0" class="flex flex-col items-center justify-center py-12 text-center">
           <div class="w-12 h-12 rounded-full bg-brand/10 flex items-center justify-center mb-3">
-            <Shield class="w-6 h-6 text-brand" />
+            <Lock class="w-6 h-6 text-brand" />
           </div>
-          <p class="text-xs text-text-muted">{{ t('chat.encryptedHint') }}</p>
+          <p class="text-xs text-text-muted font-medium mb-1">{{ t('chat.emptyThreadTitle') }}</p>
+          <p class="text-[10px] text-text-muted/70">{{ t('chat.encryptedHint') }}</p>
         </div>
       </div>
 
@@ -347,7 +366,7 @@ watch(messageList, () => {
             <Zap class="w-3.5 h-3.5 text-warning" />
             <span class="text-[11px] font-semibold">{{ t('chat.zapTitle') }}</span>
           </div>
-          <button @click="showZapPicker = false" class="p-0.5 rounded hover:bg-surface-elevated transition-all duration-200" aria-label="Close">
+          <button @click="showZapPicker = false" class="p-0.5 rounded hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.close')">
             <X class="w-3.5 h-3.5 text-text-muted" />
           </button>
         </div>
@@ -374,7 +393,7 @@ watch(messageList, () => {
             @click="handleZap()"
             :disabled="zapping || !customZapAmount"
             class="px-3 py-1.5 text-[10px] rounded-2xl font-semibold transition-all duration-200 disabled:opacity-40 flex items-center gap-1 chat-bubble-zap"
-            aria-label="Send zap"
+            :aria-label="t('chat.zapTitle')"
           >
             <Loader2 v-if="zapping" class="w-3 h-3 animate-spin" />
             <Zap v-else class="w-3 h-3" />
@@ -395,7 +414,7 @@ watch(messageList, () => {
         class="p-2 rounded-full transition-all duration-200 shrink-0"
         :class="showZapPicker ? 'bg-warning/15 text-warning' : 'hover:bg-surface-elevated text-text-muted'"
         :title="t('chat.zapTitle')"
-        aria-label="Send zap"
+        :aria-label="t('chat.zapTitle')"
       >
         <Zap class="w-5 h-5" />
       </button>
@@ -409,7 +428,7 @@ watch(messageList, () => {
           @input="autoResize"
           :placeholder="t('chat.inputPlaceholder')"
           rows="1"
-          class="chat-input-pill w-full resize-none max-h-20"
+          class="chat-input-pill w-full resize-none max-h-[120px]"
         />
       </div>
 
@@ -419,7 +438,7 @@ watch(messageList, () => {
         :disabled="!input.trim() || sending"
         class="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all disabled:opacity-30"
         :class="input.trim() ? 'bg-brand text-surface-base' : 'bg-surface-elevated text-text-muted'"
-        aria-label="Send message"
+        :aria-label="t('chat.sendMessage')"
       >
         <Loader2 v-if="sending" class="w-4 h-4 animate-spin" />
         <Send v-else class="w-4 h-4" />
