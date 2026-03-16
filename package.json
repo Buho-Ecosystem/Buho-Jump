@@ -1,7 +1,7 @@
 {
   "name": "buho-jump",
-  "description": "Buho Jump — Nostr key manager, NIP-07 signer, NIP-46 remote signing, NWC wallet & WebLN provider",
-  "version": "0.1.0",
+  "description": "Your Bitcoin Lightning wallet and companion for Nostr apps, social identity, encrypted messaging and instant payments.",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "author": "Buho (https://github.com/DoktorShift)",

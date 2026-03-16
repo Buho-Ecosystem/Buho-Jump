@@ -12,8 +12,8 @@ export default defineConfig({
     },
   },
   manifest: ({ browser }) => ({
-    name: 'Buho Jump',
-    description: 'Nostr key manager, NIP-07 signer, NIP-46 remote signing, NWC wallet & WebLN provider — by Buho',
+    name: 'Buho Jump - Bitcoin Wallet for Lightning & Nostr',
+    description: 'Your Bitcoin Lightning wallet and companion for Nostr apps, social identity, encrypted messaging and instant payments.',
     icons: {
       48: 'logo/icon-48x48.png',
       96: 'logo/icon-96x96.png',
