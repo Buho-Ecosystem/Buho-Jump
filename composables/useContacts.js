@@ -14,13 +14,14 @@ import { getPoolRelays, DEFAULT_ACCOUNT_RELAYS } from '../lib/relays.js'
 const profileCache = new Map()
 const contacts = ref([])
 const loading = ref(false)
-let loadedForPubkey = null // tracks which account's follow list is loaded
+let loadedForPubkey = null
 
 export function useContacts() {
   /**
    * Load follow list (kind 3) for a pubkey, then batch-fetch profiles.
    */
   async function loadFollowList(pubkey) {
+    if (loading.value) return // prevent concurrent loads
     loading.value = true
     loadedForPubkey = pubkey
     try {
@@ -40,8 +41,8 @@ export function useContacts() {
       const latest = events.sort((a, b) => b.created_at - a.created_at)[0]
       const pubkeys = nip02.getFollowedPubkeys(latest)
 
-      // Batch-fetch profiles
-      await fetchProfiles(pubkeys)
+      // Batch-fetch profiles using account relays, not hardcoded defaults
+      await fetchProfiles(pubkeys, relays)
 
       contacts.value = pubkeys.map(pk => ({
         pubkey: pk,
@@ -57,19 +58,20 @@ export function useContacts() {
 
   /**
    * Batch-fetch kind 0 profiles, cache results.
+   * Uses provided relays or falls back to account defaults.
    */
-  async function fetchProfiles(pubkeys) {
+  async function fetchProfiles(pubkeys, relays) {
     const missing = pubkeys.filter(pk => !profileCache.has(pk))
     if (missing.length === 0) return
 
+    const useRelays = relays || DEFAULT_ACCOUNT_RELAYS
     try {
       const pool = getPool()
-      const events = await pool.querySync(DEFAULT_ACCOUNT_RELAYS, {
+      const events = await pool.querySync(useRelays, {
         kinds: [0],
         authors: missing,
       }, { maxWait: 5000 })
 
-      // Group by author, take latest
       const latest = {}
       for (const e of events) {
         if (!latest[e.pubkey] || e.created_at > latest[e.pubkey].created_at) {
@@ -104,6 +106,7 @@ export function useContacts() {
   /**
    * Resolve user input to a pubkey.
    * Supports: npub, nprofile, hex, NIP-05 (user@domain).
+   * NIP-05 resolution has a 10-second timeout.
    */
   async function resolveInput(input) {
     input = input.trim()
@@ -124,12 +127,17 @@ export function useContacts() {
 
     if (/^[0-9a-f]{64}$/i.test(input)) return input.toLowerCase()
 
-    // NIP-05 resolution via nostr-core (user@domain or _@domain)
+    // NIP-05 resolution with 10s timeout
     if (input.includes('@')) {
       try {
-        const result = await nip05.queryNip05(input)
+        const result = await Promise.race([
+          nip05.queryNip05(input),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('NIP-05 lookup timed out')), 10000)
+          ),
+        ])
         if (result?.pubkey) return result.pubkey
-      } catch { /* NIP-05 lookup failed */ }
+      } catch { /* NIP-05 lookup failed or timed out */ }
     }
 
     return null
@@ -153,7 +161,6 @@ export function useContacts() {
 
   /**
    * Reset contacts state on account switch.
-   * Clears the follow list so it reloads for the new account.
    */
   function resetContacts() {
     contacts.value = []

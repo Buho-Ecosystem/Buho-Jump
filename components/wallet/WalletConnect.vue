@@ -1,6 +1,7 @@
 <script setup>
 /**
  * Wallet connection screen — paste NWC URI or scan QR.
+ * Supports naming the wallet for multi-wallet management.
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -9,22 +10,30 @@ import { useToast } from '../../composables/useToast.js'
 
 const { t } = useI18n()
 import QrScanner from '../QrScanner.vue'
-import { Link, ScanLine, Loader2 } from 'lucide-vue-next'
+import { Link, ScanLine, Loader2, ArrowLeft } from 'lucide-vue-next'
 
-const { connect, connecting } = useWallet()
+const emit = defineEmits(['back'])
+
+const { connect, connecting, wallets } = useWallet()
 const toast = useToast()
 
 const nwcUri = ref('')
+const walletName = ref('')
 const showScanner = ref(false)
 const error = ref('')
+
+// Show back button if user already has wallets (adding another)
+const hasExistingWallets = wallets.value.length > 0
 
 async function handleConnect() {
   if (!nwcUri.value.trim()) return
   error.value = ''
   try {
-    await connect(nwcUri.value.trim())
+    await connect(nwcUri.value.trim(), walletName.value.trim() || undefined)
     nwcUri.value = ''
+    walletName.value = ''
     toast.success(t('wallet.walletConnected'))
+    emit('back')
   } catch (err) {
     error.value = err.message || t('wallet.connectFailedDetail')
     toast.error(error.value)
@@ -40,13 +49,32 @@ function onScan(val) {
 <template>
   <div class="space-y-4 animate-fade-in-up">
 
+    <!-- Back button when adding another wallet -->
+    <button
+      v-if="hasExistingWallets"
+      @click="emit('back')"
+      class="flex items-center gap-1 text-xs text-text-muted hover:text-brand transition-colors"
+    >
+      <ArrowLeft class="w-3.5 h-3.5" />
+      {{ t('common.back') }}
+    </button>
+
     <div class="flex flex-col items-center gap-3 py-2">
       <img src="/nwc/nwc-logo.svg" alt="NWC" class="w-16 h-16" />
       <div class="text-center">
-        <p class="text-sm font-extrabold text-text-primary">{{ t('wallet.noWallet') }}</p>
+        <p class="text-sm font-extrabold text-text-primary">
+          {{ hasExistingWallets ? t('wallet.addWallet') : t('wallet.noWallet') }}
+        </p>
         <p class="text-xs text-text-muted mt-1">{{ t('wallet.noWalletDesc') }}</p>
       </div>
     </div>
+
+    <!-- Wallet name -->
+    <input
+      v-model="walletName"
+      :placeholder="t('wallet.walletName')"
+      class="w-full bg-surface-card border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-brand transition-all duration-200 placeholder:text-text-muted"
+    />
 
     <div class="flex items-center justify-end">
       <button

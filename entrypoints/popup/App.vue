@@ -21,18 +21,23 @@ import EmptyState from '../../components/EmptyState.vue'
 import SiteDetail from '../../components/SiteDetail.vue'
 import BottomSheet from '../../components/BottomSheet.vue'
 import SlidePanel from '../../components/SlidePanel.vue'
+import BottomTabs from '../../components/popup/BottomTabs.vue'
 // Chat sub-views
 import ChatHome from '../../components/chat/ChatHome.vue'
 import ChatThread from '../../components/chat/ChatThread.vue'
 import ContactPicker from '../../components/chat/ContactPicker.vue'
+import GroupThread from '../../components/chat/GroupThread.vue'
+import GroupCreate from '../../components/chat/GroupCreate.vue'
+import GroupInfo from '../../components/chat/GroupInfo.vue'
 import { useChat } from '../../composables/useChat.js'
+import { useGroups } from '../../composables/useGroups.js'
 import { useContacts } from '../../composables/useContacts.js'
 import { useRelays } from '../../composables/useRelays.js'
 // Wallet sub-views
 import WalletConnect from '../../components/wallet/WalletConnect.vue'
 import NoWalletHome from '../../components/wallet/NoWalletHome.vue'
-import { getAvatarColor } from '../../lib/avatarColor.js'
 import WalletHome from '../../components/wallet/WalletHome.vue'
+import WalletSelector from '../../components/wallet/WalletSelector.vue'
 import SendFlow from '../../components/wallet/SendFlow.vue'
 import ReceiveFlow from '../../components/wallet/ReceiveFlow.vue'
 import TransactionHistory from '../../components/wallet/TransactionHistory.vue'
@@ -41,10 +46,10 @@ import RelaySettings from '../../components/RelaySettings.vue'
 import NotificationSettings from '../../components/NotificationSettings.vue'
 import OpenInBrowserButton from '../../components/OpenInBrowserButton.vue'
 import {
-  Wallet, Plus, ArrowLeft, Globe, Coins,
+  Plus, ArrowLeft, Globe, Coins,
   Copy, Check, Trash2, User, Zap, Sun, Moon, Palette,
   Lock, ShieldCheck, ChevronDown, AlertTriangle, AtSign, ExternalLink,
-  Settings, X, Loader2, CheckCircle, Languages, MessageSquare, Radio, Bell,
+  Settings, X, Loader2, CheckCircle, Languages, Radio, Bell,
   QrCode, Maximize2,
 } from 'lucide-vue-next'
 
@@ -73,8 +78,9 @@ const showReceivePanel = ref(false)
 const showWalletConnect = ref(false)
 
 // Chat sub-view state
-const chatView = ref('home') // 'home' | 'thread' | 'new'
+const chatView = ref('home') // 'home' | 'thread' | 'new' | 'group-thread' | 'group-create' | 'group-info'
 const chatPubkey = ref(null)
+const chatGroupKey = ref(null) // "groupId:relay" for group views
 const selectedTx = ref(null)
 
 // Delete confirmation state
@@ -141,12 +147,13 @@ const profileLoading = ref(false)
 
 const { locked, passwordSet, loading: lockLoading, autoLockCountdown, setup: setupPassword, unlock, lock, resetAutoLock } = useLock()
 const { accounts, activeAccount, nip46Status, load: loadAccounts, switchTo, remove, fetchProfile, loadNip46Status } = useAccounts()
-const { status: walletStatus, loadStatus: loadWallet, disconnect: disconnectWallet } = useWallet()
+const { status: walletStatus, wallets: savedWallets, switching: walletSwitching, loadStatus: loadWallet, loadWallets, disconnect: disconnectWallet, switchWallet, rename: renameWallet } = useWallet()
 const { policies: permissions, load: loadPermissions, revokeDomain } = usePermissions()
 const { currentTheme, currentMode, themes, themeIds, setTheme, toggleMode } = useTheme()
 const toast = useToast()
 const { currency: fiatCurrency, setCurrency: setFiatCurrency } = useFiat()
 const { switchAccount: switchChatAccount, unreadTotal: chatUnreadTotal } = useChat()
+const { switchAccount: switchGroupAccount, unreadTotal: groupUnreadTotal } = useGroups()
 const { resetContacts } = useContacts()
 const { relayConfig, loadRelays } = useRelays()
 const showCurrencyPicker = ref(false)
@@ -170,8 +177,10 @@ watch(activeTab, () => {
   selectedTx.value = null
   selectedSite.value = null
   showPermissionsPopup.value = false
+  showWalletConnect.value = false
   chatView.value = 'home'
   chatPubkey.value = null
+  chatGroupKey.value = null
   showSendPanel.value = false
   showReceivePanel.value = false
 })
@@ -208,11 +217,13 @@ watch(() => activeAccount.value?.pubkey, (newPubkey, oldPubkey) => {
     showSendPanel.value = false
     showReceivePanel.value = false
 
-    // Reset chat state & subscriptions
+    // Reset chat + group state & subscriptions
     chatView.value = 'home'
     chatPubkey.value = null
+    chatGroupKey.value = null
     resetContacts()
     switchChatAccount()
+    switchGroupAccount()
 
     // Reload account-scoped relay config
     loadRelays()
@@ -329,7 +340,34 @@ async function handleRevokeDomain(host) {
 }
 
 async function handleDisconnectWallet() {
-  await disconnectWallet()
+  const activeId = walletStatus.value.activeWallet?.id
+  await disconnectWallet(activeId)
+  walletView.value = 'home'
+  toast.info(t('toast.walletDisconnected'))
+}
+
+async function handleSwitchWallet(walletId) {
+  try {
+    await switchWallet(walletId)
+    walletView.value = 'home'
+    const name = savedWallets.value.find(w => w.id === walletId)?.name || ''
+    toast.success(t('wallet.walletSwitched', { name }))
+  } catch (err) {
+    toast.error(err.message || t('wallet.connectFailed'))
+  }
+}
+
+async function handleRenameWallet(walletId, name) {
+  try {
+    await renameWallet(walletId, name)
+    toast.success(t('wallet.walletRenamed'))
+  } catch (err) {
+    toast.error(err.message)
+  }
+}
+
+async function handleRemoveWallet(walletId) {
+  await disconnectWallet(walletId)
   walletView.value = 'home'
   toast.info(t('toast.walletDisconnected'))
 }
@@ -373,7 +411,7 @@ async function handleUnlock(password) {
 }
 
 async function loadData() {
-  await Promise.all([loadAccounts(), loadWallet(), loadPermissions(), loadRelays()])
+  await Promise.all([loadAccounts(), loadWallet(), loadWallets(), loadPermissions(), loadRelays()])
   dataLoaded.value = true
   if (accounts.value.length === 0) {
     showWizard.value = true
@@ -525,32 +563,31 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
       </div>
 
       <!-- ═══ Profile Header ═══ -->
-      <header class="flex items-center gap-3 px-4 py-2.5 border-b border-border shrink-0">
+      <header class="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
         <!-- Profile area (tappable to expand identity) -->
         <button
           v-if="activeAccount"
           @click="toggleIdentity"
-          class="flex items-center gap-2.5 flex-1 min-w-0 text-left transition-all duration-200 rounded-lg -ml-1 pl-1 py-0.5"
+          class="flex items-center gap-2 min-w-0 text-left transition-all duration-200 rounded-lg -ml-1 pl-1 py-0.5 shrink"
           :class="activeTab === 'identity' ? 'bg-surface-elevated/50' : 'hover:bg-surface-elevated/30'"
         >
           <!-- Avatar -->
-          <div class="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-border shadow-sm"
+          <div class="w-7 h-7 rounded-full overflow-hidden shrink-0 border border-border shadow-sm"
             :class="profileData?.picture ? '' : 'bg-brand flex items-center justify-center'">
             <img v-if="profileData?.picture" :src="profileData.picture" alt="" class="w-full h-full object-cover" @error="profileData.picture = null" />
             <div v-else-if="profileLoading && !profileData" class="w-full h-full skeleton-shimmer" />
-            <span v-else class="text-surface-base text-xs font-bold">{{ displayName[0]?.toUpperCase() }}</span>
+            <span v-else class="text-surface-base text-[10px] font-bold">{{ displayName[0]?.toUpperCase() }}</span>
           </div>
-          <!-- Name + npub -->
-          <div class="flex-1 min-w-0">
-            <div class="text-[13px] font-extrabold truncate leading-tight">{{ displayName }}</div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-[9px] text-text-muted truncate font-mono">{{ activeAccount.npub ? truncateKey(activeAccount.npub, 8, 4) : '' }}</span>
+          <!-- Name + mode badge -->
+          <div class="min-w-0">
+            <div class="text-[12px] font-extrabold truncate leading-tight max-w-[90px]">{{ displayName }}</div>
+            <div class="flex items-center gap-1">
               <span v-if="activeAccount.mode === 'nip46' && nip46Status.reconnecting"
-                class="flex items-center gap-0.5 text-[8px] font-semibold px-1 py-px rounded-full shrink-0 bg-info/10 text-info">
+                class="flex items-center gap-0.5 text-[7px] font-semibold px-1 py-px rounded-full shrink-0 bg-info/10 text-info">
                 <Loader2 class="w-2 h-2 animate-spin" />
                 {{ t('account.reconnecting') }}
               </span>
-              <span v-else class="flex items-center gap-0.5 text-[8px] font-semibold px-1 py-px rounded-full shrink-0"
+              <span v-else class="flex items-center gap-0.5 text-[7px] font-semibold px-1 py-px rounded-full shrink-0"
                 :class="activeAccount.mode === 'local'
                   ? 'bg-success/10 text-success'
                   : nip46Status.connected ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'">
@@ -562,18 +599,33 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               </span>
             </div>
           </div>
-          <ChevronDown class="w-3.5 h-3.5 text-text-muted transition-transform duration-200 shrink-0" :class="activeTab === 'identity' ? 'rotate-180' : ''" />
+          <ChevronDown class="w-3 h-3 text-text-muted transition-transform duration-200 shrink-0" :class="activeTab === 'identity' ? 'rotate-180' : ''" />
         </button>
         <!-- Fallback when no account -->
-        <div v-else class="flex items-center gap-2 flex-1">
+        <div v-else class="flex items-center gap-2 shrink-0">
           <Zap class="w-5 h-5 text-brand" />
           <span class="font-semibold text-sm tracking-tight">Buho Jump</span>
         </div>
 
+        <!-- Spacer -->
+        <div class="flex-1" />
+
+        <!-- Wallet selector -->
+        <WalletSelector
+          :wallets="savedWallets"
+          :balance="walletStatus.balance"
+          :connected="walletStatus.connected"
+          :switching="walletSwitching"
+          @switch="handleSwitchWallet"
+          @add="showWalletConnect = true; activeTab = 'wallet'"
+          @rename="handleRenameWallet"
+          @remove="handleRemoveWallet"
+        />
+
         <!-- Open full page -->
         <button @click="openFullPage" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0"
           :title="t('settings.openFullPage')">
-          <Maximize2 class="w-4 h-4 text-text-muted" />
+          <Maximize2 class="w-3.5 h-3.5 text-text-muted" />
         </button>
 
         <!-- Settings button + dropdown -->
@@ -1083,19 +1135,17 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
           <!-- ══════════════════════════════════════════════ -->
           <section v-else-if="activeTab === 'wallet'" class="p-4">
 
-            <!-- Not connected -->
-            <template v-if="!walletStatus.connected">
-              <WalletConnect v-if="showWalletConnect" />
-              <NoWalletHome v-else
-                :display-name="displayName"
-                :npub="activeAccount?.npub || ''"
-                :profile-picture="profileData?.picture || ''"
-                :avatar-color="activeAccount?.pubkey ? getAvatarColor(activeAccount.pubkey) : ''"
-                @connect-wallet="showWalletConnect = true"
-                @open-chat="activeTab = 'chat'"
-                @open-settings="showSettings = true"
-              />
-            </template>
+            <!-- Add wallet flow (reachable from empty state + wallet selector) -->
+            <WalletConnect
+              v-if="showWalletConnect"
+              @back="showWalletConnect = false"
+            />
+
+            <!-- Not connected — show empty state -->
+            <NoWalletHome
+              v-else-if="!walletStatus.connected"
+              @connect-wallet="showWalletConnect = true"
+            />
 
             <!-- Connected: sub-views -->
             <template v-else>
@@ -1127,11 +1177,13 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
           <!-- ══════════════════════════════════════════════ -->
           <section v-else-if="activeTab === 'chat'"
             class="flex flex-col flex-1 min-h-0"
-            :class="chatView === 'thread' ? '' : ''">
+            :class="chatView === 'thread' || chatView === 'group-thread' ? '' : ''">
             <ChatHome
               v-if="chatView === 'home'"
               @open="(pk) => { chatPubkey = pk; chatView = 'thread' }"
+              @open-group="(gk) => { chatGroupKey = gk; chatView = 'group-thread' }"
               @new-chat="chatView = 'new'"
+              @new-group="chatView = 'group-create'"
               class="flex-1 min-h-0 pt-2"
             />
 
@@ -1147,33 +1199,36 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               @back="chatView = 'home'"
               @open="(pk) => { chatPubkey = pk; chatView = 'thread' }"
             />
+
+            <GroupThread
+              v-else-if="chatView === 'group-thread' && chatGroupKey"
+              :group-key="chatGroupKey"
+              @back="chatView = 'home'; chatGroupKey = null"
+              @info="chatView = 'group-info'"
+              class="flex-1 min-h-0"
+            />
+
+            <GroupCreate
+              v-else-if="chatView === 'group-create'"
+              @back="chatView = 'home'"
+              @joined="(gk) => { chatGroupKey = gk; chatView = 'group-thread' }"
+            />
+
+            <GroupInfo
+              v-else-if="chatView === 'group-info' && chatGroupKey"
+              :group-key="chatGroupKey"
+              @back="chatView = 'group-thread'"
+            />
           </section>
 
           </div><!-- /scrollable content -->
 
         <!-- ═══ Bottom Tab Bar ═══ -->
-        <nav class="bottom-tabs">
-          <button
-            @click="activeTab = 'wallet'"
-            class="bottom-tab"
-            :class="{ active: activeTab === 'wallet' }"
-          >
-            <Wallet class="w-4 h-4" />
-            {{ t('tabs.wallet') }}
-          </button>
-          <button
-            @click="activeTab = 'chat'"
-            class="bottom-tab"
-            :class="{ active: activeTab === 'chat' }"
-          >
-            <MessageSquare class="w-4 h-4" />
-            {{ t('tabs.chat') }}
-            <span
-              v-if="chatUnreadTotal > 0 && activeTab !== 'chat'"
-              class="tab-badge"
-            />
-          </button>
-        </nav>
+        <BottomTabs
+          :active-tab="activeTab"
+          :unread-count="chatUnreadTotal + groupUnreadTotal"
+          @update:active-tab="activeTab = $event"
+        />
 
         <!-- Send slide panel -->
         <SlidePanel :open="showSendPanel" @close="showSendPanel = false">

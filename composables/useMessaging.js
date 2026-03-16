@@ -4,7 +4,7 @@
  */
 
 // Longer timeout for operations that involve relay connections
-const SLOW_OPS = new Set(['CONNECT_NIP46', 'PUBLISH_PROFILE', 'PUBLISH_NIP65', 'FETCH_PROFILE', 'FETCH_NIP65'])
+const SLOW_OPS = new Set(['CONNECT_NIP46', 'PUBLISH_PROFILE', 'PUBLISH_NIP65', 'FETCH_PROFILE', 'FETCH_NIP65', 'CONNECT_WALLET', 'SWITCH_WALLET'])
 const DEFAULT_TIMEOUT = 15000 // 15s for CRUD / storage ops
 const SLOW_TIMEOUT = 45000   // 45s for relay / network ops
 

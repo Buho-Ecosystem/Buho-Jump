@@ -4,7 +4,7 @@
  * Vertical nav with icons, collapses to horizontal on small screens.
  */
 import { useI18n } from 'vue-i18n'
-import { Globe, User, Radio, Sliders, Info } from 'lucide-vue-next'
+import { Globe, User, Wallet, MessageSquare, Radio, Sliders, Info } from 'lucide-vue-next'
 
 defineProps({ activePage: { type: String, required: true } })
 const emit = defineEmits(['navigate'])
@@ -13,6 +13,8 @@ const { t } = useI18n()
 const navItems = [
   { id: 'sites', icon: Globe, label: () => t('options.sites') },
   { id: 'account', icon: User, label: () => t('options.account') },
+  { id: 'wallets', icon: Wallet, label: () => t('options.wallets') },
+  { id: 'messaging', icon: MessageSquare, label: () => t('options.messaging') },
   { id: 'relays', icon: Radio, label: () => t('options.relays') },
   { id: 'preferences', icon: Sliders, label: () => t('options.preferences') },
   { id: 'about', icon: Info, label: () => t('options.about') },

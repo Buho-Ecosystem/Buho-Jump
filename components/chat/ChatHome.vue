@@ -1,59 +1,98 @@
 <script setup>
 /**
- * Telegram-style chat home — conversation list with pill search bar
- * and floating action button for new chat.
+ * Unified chat home — DMs + Groups in one list with filter tabs,
+ * invitation banner, and floating action button.
  */
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChat } from '../../composables/useChat.js'
+import { useGroups } from '../../composables/useGroups.js'
 import { useContacts } from '../../composables/useContacts.js'
 import { useMuteList } from '../../composables/useMuteList.js'
 import ConversationItem from './ConversationItem.vue'
-import { MessageSquare, PenSquare, Search, Loader2, ChevronDown, VolumeX } from 'lucide-vue-next'
+import GroupConversationItem from './GroupConversationItem.vue'
+import GroupInvitationBanner from './GroupInvitationBanner.vue'
+import { MessageSquare, PenSquare, Search, ChevronDown, VolumeX, Users } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const emit = defineEmits(['open', 'new-chat'])
+const emit = defineEmits(['open', 'open-group', 'new-chat', 'new-group'])
 
-const { conversations, init, initialized, currentAccountPubkey } = useChat()
-const { getCachedProfile } = useContacts()
+const { conversations, init: initChat, initialized: chatInitialized, currentAccountPubkey } = useChat()
+const { groupConversations, init: initGroups, initialized: groupsInitialized } = useGroups()
+const { getCachedProfile, fetchProfiles } = useContacts()
 const { isMuted, load: loadMuteList } = useMuteList()
+
 const search = ref('')
 const showMuted = ref(false)
+const filter = ref('all') // 'all' | 'dms' | 'groups'
 
-const filtered = computed(() => {
+const initialized = computed(() => chatInitialized.value && groupsInitialized.value)
+
+// Unified conversation list: DMs + Groups merged and sorted by recency
+const unified = computed(() => {
   const q = search.value.toLowerCase()
-  const list = q
-    ? conversations.value.filter(c => {
-        const profile = getCachedProfile(c.pubkey)
-        const name = profile?.display_name || profile?.name || ''
-        const identity = profile?.nip05 || ''
-        // Search by name, identity, pubkey, or message content
-        if (name.toLowerCase().includes(q) ||
-          identity.toLowerCase().includes(q) ||
-          c.pubkey.includes(q)) return true
-        // Search message content within conversation
-        if (c.lastMessage?.content?.toLowerCase().includes(q)) return true
-        return false
-      })
-    : conversations.value
-  return list.filter(c => !isMuted(c.pubkey))
+
+  // DMs
+  let dms = conversations.value
+    .filter(c => !isMuted(c.pubkey))
+    .map(c => ({ ...c, type: 'dm' }))
+
+  // Groups
+  let grps = groupConversations.value
+    .map(c => ({ ...c, type: 'group' }))
+
+  // Search filter
+  if (q) {
+    dms = dms.filter(c => {
+      const profile = getCachedProfile(c.pubkey)
+      const name = profile?.display_name || profile?.name || ''
+      const identity = profile?.nip05 || ''
+      return name.toLowerCase().includes(q) ||
+        identity.toLowerCase().includes(q) ||
+        c.pubkey.includes(q) ||
+        c.lastMessage?.content?.toLowerCase().includes(q)
+    })
+    grps = grps.filter(c => {
+      const name = c.group?.name || c.group?.id || ''
+      return name.toLowerCase().includes(q) ||
+        c.lastMessage?.content?.toLowerCase().includes(q)
+    })
+  }
+
+  // Tab filter
+  if (filter.value === 'dms') return dms.sort(byRecency)
+  if (filter.value === 'groups') return grps.sort(byRecency)
+  return [...dms, ...grps].sort(byRecency)
 })
 
 const mutedConversations = computed(() =>
   conversations.value.filter(c => isMuted(c.pubkey))
 )
 
+const hasAnyContent = computed(() =>
+  unified.value.length > 0 || mutedConversations.value.length > 0
+)
+
+function byRecency(a, b) {
+  const aTs = a.lastMessage?.created_at || a.group?.joinedAt || 0
+  const bTs = b.lastMessage?.created_at || b.group?.joinedAt || 0
+  return bTs - aTs
+}
+
 onMounted(async () => {
-  await init()
+  await Promise.all([initChat(), initGroups()])
   if (currentAccountPubkey.value) {
     await loadMuteList(currentAccountPubkey.value)
   }
+  // Batch-fetch profiles for DM participants
+  const pubkeys = conversations.value.map(c => c.pubkey).filter(pk => !getCachedProfile(pk))
+  if (pubkeys.length > 0) fetchProfiles(pubkeys)
 })
 </script>
 
 <template>
   <div class="relative h-full">
-    <!-- Search bar (Telegram pill style) -->
+    <!-- Search bar -->
     <div class="px-3 pb-2">
       <div class="relative">
         <Search class="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -64,6 +103,24 @@ onMounted(async () => {
         />
       </div>
     </div>
+
+    <!-- Filter tabs -->
+    <div class="flex items-center gap-1 px-3 pb-2">
+      <button
+        v-for="f in ['all', 'dms', 'groups']"
+        :key="f"
+        @click="filter = f"
+        class="px-3 py-1 rounded-full text-[11px] font-semibold transition-all duration-200"
+        :class="filter === f
+          ? 'bg-brand/10 text-brand'
+          : 'text-text-muted hover:text-text-secondary hover:bg-surface-elevated'"
+      >
+        {{ t(`chat.filter${f[0].toUpperCase() + f.slice(1)}`) }}
+      </button>
+    </div>
+
+    <!-- Invitation banner -->
+    <GroupInvitationBanner />
 
     <!-- Loading skeleton -->
     <div v-if="!initialized" class="px-3 space-y-1">
@@ -77,20 +134,28 @@ onMounted(async () => {
     </div>
 
     <!-- Conversation list -->
-    <div v-else-if="filtered.length > 0 || mutedConversations.length > 0" class="pb-16">
+    <div v-else-if="hasAnyContent" class="pb-16">
       <div class="divide-y divide-border/30">
-        <ConversationItem
-          v-for="conv in filtered"
-          :key="conv.pubkey"
-          :pubkey="conv.pubkey"
-          :last-message="conv.lastMessage"
-          :unread="conv.unread"
-          @click="emit('open', conv.pubkey)"
-        />
+        <template v-for="conv in unified" :key="conv.type === 'dm' ? conv.pubkey : conv.groupKey">
+          <ConversationItem
+            v-if="conv.type === 'dm'"
+            :pubkey="conv.pubkey"
+            :last-message="conv.lastMessage"
+            :unread="conv.unread"
+            @click="emit('open', conv.pubkey)"
+          />
+          <GroupConversationItem
+            v-else
+            :group="conv.group"
+            :last-message="conv.lastMessage"
+            :unread="conv.unread"
+            @click="emit('open-group', conv.groupKey)"
+          />
+        </template>
       </div>
 
-      <!-- Muted conversations (collapsible) -->
-      <div v-if="mutedConversations.length > 0" class="mt-1">
+      <!-- Muted conversations (DMs only) -->
+      <div v-if="mutedConversations.length > 0 && filter !== 'groups'" class="mt-1">
         <button @click="showMuted = !showMuted"
           class="w-full flex items-center gap-2 px-4 py-2 text-[10px] text-text-muted font-semibold uppercase tracking-wider hover:text-text-secondary transition-colors">
           <VolumeX class="w-3 h-3" />
@@ -111,17 +176,29 @@ onMounted(async () => {
     </div>
 
     <!-- Empty state -->
-    <div v-else class="flex flex-col items-center justify-center py-16 text-center space-y-3">
+    <div v-else class="flex flex-col items-center justify-center py-12 text-center space-y-4 px-6">
       <div class="w-14 h-14 rounded-full bg-brand/10 flex items-center justify-center">
         <MessageSquare class="w-7 h-7 text-brand" />
       </div>
       <div>
         <p class="text-sm font-semibold">{{ t('chat.emptyTitle') }}</p>
-        <p class="text-xs text-text-muted mt-1">{{ t('chat.emptyDesc') }}</p>
+        <p class="text-xs text-text-muted mt-1 leading-relaxed">{{ t('chat.emptyDesc') }}</p>
+      </div>
+      <div class="flex gap-2">
+        <button @click="emit('new-chat')"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-brand text-surface-base text-xs font-semibold hover:bg-brand-hover transition-all btn-primary">
+          <PenSquare class="w-3.5 h-3.5" />
+          {{ t('chat.startChat') }}
+        </button>
+        <button @click="emit('new-group')"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-surface-card border border-border text-xs font-semibold text-text-secondary hover:border-brand/20 hover:text-brand transition-all">
+          <Users class="w-3.5 h-3.5" />
+          {{ t('group.joinGroup') }}
+        </button>
       </div>
     </div>
 
-    <!-- FAB (Telegram-style floating action button) -->
+    <!-- FAB -->
     <button
       @click="emit('new-chat')"
       class="chat-fab absolute bottom-4 right-4 z-10"

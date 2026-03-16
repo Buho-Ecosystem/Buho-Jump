@@ -40,7 +40,11 @@ import {
   decryptData,
 } from '../lib/crypto.js'
 import { isBlocked, getBlocklist, addToBlocklist, removeFromBlocklist } from '../lib/blocklist.js'
-import { getWalletConfig, saveWalletConfig, clearWalletConfig } from '../lib/wallet.js'
+import {
+  getActiveWallet, getWalletSummaries,
+  addWallet, removeWallet, setActiveWallet, renameWallet,
+  reEncryptWallets, clearAllWallets,
+} from '../lib/wallet.js'
 import {
   getAllowances, getAllowance, setAllowance,
   recordSpend, checkBudget, removeAllowance, resetAllowanceSpend,
@@ -339,11 +343,11 @@ function parseBolt11Amount(invoice) {
 // ── NWC / WebLN Handlers ─────────────────────────────────────────
 async function ensureNWC() {
   if (nwcClient?.connected) return nwcClient
-  const config = await getWalletConfig(_cachedPassword)
-  if (!config?.connectionUri) throw new Error('No wallet connected')
+  const wallet = await getActiveWallet(_cachedPassword)
+  if (!wallet?.connectionUri) throw new Error('No wallet connected')
   if (nwcNotifUnsub) { try { nwcNotifUnsub() } catch {} nwcNotifUnsub = null }
   if (nwcClient) { try { nwcClient.close() } catch {} }
-  nwcClient = new NWC(config.connectionUri)
+  nwcClient = new NWC(wallet.connectionUri)
   await nwcClient.connect()
   subscribeNwcNotifications()
   return nwcClient
@@ -609,6 +613,7 @@ export default defineBackground(() => {
           case 'CHANGE_PASSWORD': {
             const [oldPw, newPw] = params || []
             await changePassword(oldPw, newPw)
+            await reEncryptWallets(oldPw, newPw)
             _cachedPassword = newPw
             await saveSession({ password: newPw, unlockedAt: Date.now() })
             return { result: { ok: true } }
@@ -813,28 +818,66 @@ export default defineBackground(() => {
 
           // ── Wallet ──
           case 'CONNECT_WALLET': {
-            const uri = params?.[0]
-            await saveWalletConfig({ connectionUri: uri }, _cachedPassword)
+            const [uri, walletName] = params || []
+            await addWallet(uri, walletName || null, _cachedPassword)
+            if (nwcNotifUnsub) { try { nwcNotifUnsub() } catch {} nwcNotifUnsub = null }
             if (nwcClient) { try { nwcClient.close() } catch {} }
             nwcClient = null
             try { await ensureNWC(); return { result: { connected: true } } }
             catch (err) { return { error: err.message } }
           }
-          case 'DISCONNECT_WALLET':
+          case 'DISCONNECT_WALLET': {
+            const [walletId] = params || []
             if (nwcNotifUnsub) { try { nwcNotifUnsub() } catch {} nwcNotifUnsub = null }
             if (nwcClient) { try { nwcClient.close() } catch {}; nwcClient = null }
-            await clearWalletConfig()
+            if (walletId) {
+              await removeWallet(walletId, _cachedPassword)
+            } else {
+              await clearAllWallets()
+            }
+            // Reconnect to next active wallet if one exists
+            try { await ensureNWC() } catch { /* no wallet left — fine */ }
             return { result: { disconnected: true } }
+          }
           case 'GET_WALLET_STATUS': {
-            const config = await getWalletConfig(_cachedPassword)
+            const wallet = await getActiveWallet(_cachedPassword)
             try {
-              if (config?.connectionUri) {
+              if (wallet?.connectionUri) {
                 const nwc = await ensureNWC()
                 const bal = await nwc.getBalance()
-                return { result: { connected: true, balance: Math.floor(bal.balance / 1000) } }
+                return { result: {
+                  connected: true,
+                  balance: Math.floor(bal.balance / 1000),
+                  activeWallet: { id: wallet.id, name: wallet.name },
+                } }
               }
             } catch { /* fall through */ }
-            return { result: { connected: false, balance: null } }
+            return { result: { connected: false, balance: null, activeWallet: null } }
+          }
+          case 'GET_WALLETS': {
+            const summaries = await getWalletSummaries(_cachedPassword)
+            return { result: summaries }
+          }
+          case 'SWITCH_WALLET': {
+            const [switchId] = params || []
+            await setActiveWallet(switchId, _cachedPassword)
+            if (nwcNotifUnsub) { try { nwcNotifUnsub() } catch {} nwcNotifUnsub = null }
+            if (nwcClient) { try { nwcClient.close() } catch {} }
+            nwcClient = null
+            try {
+              await ensureNWC()
+              const nwc = nwcClient
+              const bal = await nwc.getBalance()
+              return { result: {
+                connected: true,
+                balance: Math.floor(bal.balance / 1000),
+              } }
+            } catch (err) { return { error: err.message } }
+          }
+          case 'RENAME_WALLET': {
+            const [renameId, newName] = params || []
+            await renameWallet(renameId, newName, _cachedPassword)
+            return { result: { ok: true } }
           }
           case 'WALLET_GET_INFO': {
             const nwc = await ensureNWC()

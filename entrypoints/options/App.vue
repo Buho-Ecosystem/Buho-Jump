@@ -16,6 +16,8 @@ import ConnectedSitesPage from '../../components/options/ConnectedSitesPage.vue'
 import AccountPage from '../../components/options/AccountPage.vue'
 import PreferencesPage from '../../components/options/PreferencesPage.vue'
 import AboutPage from '../../components/options/AboutPage.vue'
+import WalletPage from '../../components/options/WalletPage.vue'
+import MessagingPage from '../../components/options/MessagingPage.vue'
 import RelaySettings from '../../components/RelaySettings.vue'
 import { Zap } from 'lucide-vue-next'
 
@@ -44,7 +46,7 @@ const lockBusy = ref(false)
 // Deep-link from query param
 const urlParams = new URLSearchParams(window.location.search)
 const initialPage = urlParams.get('page') || 'sites'
-const validPages = ['sites', 'account', 'relays', 'preferences', 'about']
+const validPages = ['sites', 'account', 'wallets', 'messaging', 'relays', 'preferences', 'about']
 const activePage = ref(validPages.includes(initialPage) ? initialPage : 'sites')
 
 function navigate(page) {
@@ -113,6 +115,8 @@ async function handleUnlock(password) {
         <div class="max-w-3xl mx-auto animate-fade-in-up">
           <ConnectedSitesPage v-if="activePage === 'sites'" />
           <AccountPage v-else-if="activePage === 'account'" />
+          <WalletPage v-else-if="activePage === 'wallets'" />
+          <MessagingPage v-else-if="activePage === 'messaging'" />
           <div v-else-if="activePage === 'relays'" class="max-w-lg">
             <div class="mb-5">
               <h1 class="text-lg font-extrabold">{{ t('options.relays') }}</h1>
