@@ -7,11 +7,13 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContacts } from '../../composables/useContacts.js'
 import { useAccounts } from '../../composables/useAccounts.js'
-import { nip19 } from 'nostr-core'
+import { nip19, nip50 } from 'nostr-core'
+import { getPool } from '../../lib/relayPool.js'
+import { getPoolRelays, DEFAULT_ACCOUNT_RELAYS } from '../../lib/relays.js'
 import { getAvatarColor } from '../../lib/avatarColor.js'
 import {
   ArrowLeft, Search, Loader2, User,
-  AlertCircle, Users,
+  AlertCircle, Users, Globe,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -26,6 +28,10 @@ const resolveError = ref('')
 const resolvedProfile = ref(null)
 const resolvedPubkey = ref(null)
 
+// NIP-50 relay search
+const relaySearchResults = ref([])
+const relaySearching = ref(false)
+
 const filteredContacts = computed(() => searchContacts(input.value))
 const showContacts = computed(() => !resolvedPubkey.value && !resolving.value)
 
@@ -34,6 +40,7 @@ watch(input, () => {
   resolveError.value = ''
   resolvedPubkey.value = null
   resolvedProfile.value = null
+  relaySearchResults.value = []
 })
 
 onMounted(() => {
@@ -73,6 +80,35 @@ function openResolved() {
 
 function openContact(pubkey) {
   emit('open', pubkey)
+}
+
+async function searchRelays() {
+  const q = input.value.trim()
+  if (!q || q.length < 2) return
+
+  relaySearching.value = true
+  relaySearchResults.value = []
+  try {
+    const pool = getPool()
+    const relays = activeAccount.value?.pubkey
+      ? await getPoolRelays(activeAccount.value.pubkey, 'account').catch(() => DEFAULT_ACCOUNT_RELAYS)
+      : DEFAULT_ACCOUNT_RELAYS
+    const filter = nip50.buildSearchFilter(q, { kinds: [0], limit: 10 })
+    const events = await pool.querySync(relays, filter, { maxWait: 6000 })
+
+    const profiles = []
+    const seen = new Set()
+    for (const e of events) {
+      if (seen.has(e.pubkey)) continue
+      seen.add(e.pubkey)
+      try {
+        const p = JSON.parse(e.content)
+        profiles.push({ pubkey: e.pubkey, profile: p })
+      } catch { /* malformed */ }
+    }
+    relaySearchResults.value = profiles
+  } catch { /* relay search failed */ }
+  finally { relaySearching.value = false }
 }
 
 function truncateNpub(pubkey) {
@@ -194,6 +230,47 @@ function truncateNpub(pubkey) {
         <!-- No contacts -->
         <div v-else class="text-center py-8">
           <p class="text-xs text-text-muted">{{ t('chat.noContacts') }}</p>
+        </div>
+
+        <!-- NIP-50 relay search -->
+        <div v-if="input.trim().length >= 2 && !resolvedPubkey && !resolving" class="mt-3 pt-3 border-t border-border">
+          <button v-if="relaySearchResults.length === 0 && !relaySearching"
+            @click="searchRelays"
+            class="w-full flex items-center justify-center gap-2 py-2.5 text-xs rounded-3xl bg-surface-card border border-border text-text-secondary hover:text-brand hover:border-brand/20 transition-all duration-200 font-semibold">
+            <Globe class="w-3.5 h-3.5" />
+            {{ t('chat.searchNostr') }}
+          </button>
+
+          <div v-if="relaySearching" class="flex items-center justify-center gap-2 py-4 text-xs text-text-muted">
+            <Loader2 class="w-3.5 h-3.5 animate-spin text-brand" />
+            {{ t('chat.searchingNostr') }}
+          </div>
+
+          <div v-if="relaySearchResults.length > 0" class="space-y-0 max-h-60 overflow-y-auto -mx-3">
+            <div class="flex items-center gap-1.5 px-4 mb-2">
+              <Globe class="w-3 h-3 text-text-muted" />
+              <span class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+                {{ t('chat.nostrResults') }} ({{ relaySearchResults.length }})
+              </span>
+            </div>
+            <button
+              v-for="r in relaySearchResults"
+              :key="r.pubkey"
+              @click="openContact(r.pubkey)"
+              class="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface-elevated transition-all duration-200 text-left"
+            >
+              <div class="w-[42px] h-[42px] rounded-full shrink-0 overflow-hidden flex items-center justify-center"
+                :style="!r.profile?.picture ? { background: getAvatarColor(r.pubkey) } : {}">
+                <img v-if="r.profile?.picture" :src="r.profile.picture" alt="" class="w-full h-full object-cover" @error="r.profile.picture = null" />
+                <span v-else class="text-sm font-semibold text-white">{{ ((r.profile?.name || '?')[0]).toUpperCase() }}</span>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="text-[13px] font-medium truncate">{{ r.profile?.display_name || r.profile?.name || truncateNpub(r.pubkey) }}</div>
+                <div v-if="r.profile?.nip05" class="text-[11px] text-brand truncate">{{ r.profile.nip05 }}</div>
+                <div v-else class="text-[11px] text-text-muted truncate">{{ truncateNpub(r.pubkey) }}</div>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     </div>

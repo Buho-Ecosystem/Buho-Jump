@@ -6,19 +6,19 @@ import { truncateKey } from '../lib/utils.js'
 import {
   KeyRound, Download, Link2, ArrowRight, ArrowLeft, Eye, EyeOff,
   Copy, Check, AlertTriangle, Globe, UserRound, Shield, ScanLine,
-  Loader2, Wifi, CheckCircle2, XCircle, ShieldAlert, FileDown,
-  Sparkles, ArrowDown, CircleCheck, Info,
+  Loader2, Wifi, CheckCircle2, XCircle, ShieldAlert,
+  Sparkles, Info, RotateCcw,
 } from 'lucide-vue-next'
 import QrScanner from './QrScanner.vue'
 
 const emit = defineEmits(['complete', 'cancel'])
 const { t } = useI18n()
 
-const { create, importKey, createRemote, connectRemote, startNostrConnect, cancelNostrConnect, loadNip46Status, nip46Status: nip46GlobalStatus, publishProfile, fetchProfile, load: loadAccounts } = useAccounts()
+const { create, createWithMnemonic, importKey, importMnemonic, createRemote, connectRemote, startNostrConnect, cancelNostrConnect, loadNip46Status, nip46Status: nip46GlobalStatus, publishProfile, fetchProfile, load: loadAccounts } = useAccounts()
 
 // ── Wizard state ──
 const step = ref(1)
-const mode = ref(null) // 'new' | 'import' | 'nip46'
+const mode = ref(null) // 'new' | 'import' | 'recover' | 'nip46'
 const loading = ref(false)
 const error = ref('')
 
@@ -32,6 +32,10 @@ const copied = ref(false)
 const showScanner = ref(false)
 const backupConfirmed = ref(false)
 const downloadedKey = ref(false)
+
+// ── Mnemonic state ──
+const mnemonicWords = ref('')
+const mnemonicDisplay = ref([]) // 12 words for backup display
 
 // ── NIP-46 connection state ──
 const nip46Status = ref('')
@@ -55,6 +59,13 @@ const modes = computed(() => [
     recommended: true,
   },
   {
+    id: 'recover',
+    icon: RotateCcw,
+    title: t('wizard.modeRecoverTitle'),
+    desc: t('wizard.modeRecoverDesc'),
+    recommended: false,
+  },
+  {
     id: 'import',
     icon: Download,
     title: t('wizard.modeImportTitle'),
@@ -72,6 +83,7 @@ const modes = computed(() => [
 
 const canProceedStep2 = computed(() => {
   if (mode.value === 'new') return displayName.value.trim().length > 0
+  if (mode.value === 'recover') return mnemonicWords.value.trim().split(/\s+/).filter(Boolean).length >= 12
   if (mode.value === 'import') return importNsec.value.trim().length > 0
   if (mode.value === 'nip46') return nip46Method.value === 'nostrconnect' || bunkerUri.value.trim().length > 0
   return false
@@ -80,12 +92,14 @@ const canProceedStep2 = computed(() => {
 const totalSteps = computed(() => {
   if (mode.value === 'nip46') return 3
   if (mode.value === 'import') return 4
+  if (mode.value === 'recover') return 4
   return 5 // new: choose → name → backup → profile → done
 })
 
 const stepLabels = computed(() => {
   if (mode.value === 'nip46') return [t('wizard.stepSetup'), t('wizard.stepConnect'), t('wizard.stepDone')]
   if (mode.value === 'import') return [t('wizard.stepSetup'), t('wizard.stepImport'), t('wizard.stepProfile'), t('wizard.stepDone')]
+  if (mode.value === 'recover') return [t('wizard.stepSetup'), t('wizard.stepRecover'), t('wizard.stepProfile'), t('wizard.stepDone')]
   return [t('wizard.stepSetup'), t('wizard.stepName'), t('wizard.stepBackup'), t('wizard.stepProfile'), t('wizard.stepDone')]
 })
 
@@ -110,8 +124,8 @@ function goBack() {
   } else if (step.value === 3 && mode.value === 'new') {
     // Backup step — allow going back to name input
     step.value = 2
-  } else if (step.value === 3 && mode.value === 'import') {
-    // Profile step — allow going back to import input
+  } else if (step.value === 3 && (mode.value === 'import' || mode.value === 'recover')) {
+    // Profile step — allow going back to input
     step.value = 2
   } else if (step.value === 4 && mode.value === 'new') {
     // Profile step — allow going back to backup
@@ -125,10 +139,26 @@ async function handleStep2() {
 
   try {
     if (mode.value === 'new') {
-      const account = await create(displayName.value.trim())
+      const account = await createWithMnemonic(displayName.value.trim())
       if (!account) throw new Error('Account creation returned no data')
       createdAccount.value = account
+      mnemonicDisplay.value = account.mnemonic.split(' ')
       step.value = 3
+    } else if (mode.value === 'recover') {
+      const account = await importMnemonic(displayName.value.trim() || undefined, mnemonicWords.value.trim())
+      if (!account) throw new Error('Recovery failed')
+      createdAccount.value = account
+      step.value = 3
+      if (account.pubkey) {
+        fetchProfile(account.pubkey)
+          .then((existing) => {
+            if (existing) {
+              displayName.value = existing.display_name || existing.name || displayName.value
+              aboutMe.value = existing.about || ''
+            }
+          })
+          .catch(() => {})
+      }
     } else if (mode.value === 'import') {
       const account = await importKey(displayName.value.trim() || undefined, importNsec.value.trim())
       if (!account) throw new Error('Import returned no data')
@@ -233,7 +263,7 @@ async function handlePublishProfile() {
       ...(aboutMe.value.trim() && { about: aboutMe.value.trim() }),
     }
     publishResult.value = await publishProfile(profileData)
-    step.value = mode.value === 'import' ? 4 : 5
+    step.value = (mode.value === 'import' || mode.value === 'recover') ? 4 : 5
   } catch (err) {
     error.value = err.message || 'Failed to publish profile'
   } finally {
@@ -242,32 +272,18 @@ async function handlePublishProfile() {
 }
 
 function skipPublish() {
-  step.value = mode.value === 'import' ? 4 : 5
+  step.value = (mode.value === 'import' || mode.value === 'recover') ? 4 : 5
 }
 
 function finish() {
   emit('complete')
 }
 
-function copyNsec() {
-  if (!createdAccount.value?.nsec) return
-  navigator.clipboard.writeText(createdAccount.value.nsec)
+function copyMnemonic() {
+  if (!createdAccount.value?.mnemonic) return
+  navigator.clipboard.writeText(createdAccount.value.mnemonic)
   copied.value = true
   setTimeout(() => (copied.value = false), 2500)
-}
-
-function downloadNsec() {
-  if (!createdAccount.value?.nsec) return
-  const blob = new Blob([createdAccount.value.nsec], { type: 'text/plain' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `backup-key-${Date.now()}.txt`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-  downloadedKey.value = true
 }
 </script>
 
@@ -362,15 +378,16 @@ function downloadNsec() {
       <!-- Header -->
       <div class="text-center space-y-1.5">
         <h2 class="text-[15px] font-extrabold tracking-tight">
-          {{ mode === 'new' ? t('wizard.chooseName') : mode === 'import' ? t('wizard.importAccount') : t('wizard.connectSigner') }}
+          {{ mode === 'new' ? t('wizard.chooseName')
+            : mode === 'recover' ? t('wizard.recoverAccount')
+            : mode === 'import' ? t('wizard.importAccount')
+            : t('wizard.connectSigner') }}
         </h2>
         <p class="text-[11px] text-text-muted leading-relaxed max-w-[280px] mx-auto">
-          {{ mode === 'new'
-            ? t('wizard.chooseNameDesc')
-            : mode === 'import'
-              ? t('wizard.importAccountDesc')
-              : t('wizard.connectSignerDesc')
-          }}
+          {{ mode === 'new' ? t('wizard.chooseNameDesc')
+            : mode === 'recover' ? t('wizard.recoverAccountDesc')
+            : mode === 'import' ? t('wizard.importAccountDesc')
+            : t('wizard.connectSignerDesc') }}
         </p>
       </div>
 
@@ -428,6 +445,34 @@ function downloadNsec() {
           </div>
         </div>
       </template>
+
+      <!-- ── Recover: Name (optional) + Mnemonic input ── -->
+      <div v-if="mode === 'recover'" class="space-y-2">
+        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold block px-0.5">
+          {{ t('wizard.displayName') }} <span class="normal-case tracking-normal text-text-muted/60">{{ t('common.optional') }}</span>
+        </label>
+        <input v-model="displayName" placeholder="satoshi"
+          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50" />
+      </div>
+
+      <div v-if="mode === 'recover'" class="space-y-2">
+        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold block px-0.5">
+          {{ t('wizard.recoveryWords') }}
+        </label>
+        <textarea v-model="mnemonicWords"
+          :placeholder="t('wizard.recoveryWordsPlaceholder')"
+          rows="3"
+          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted/50 placeholder:font-sans resize-none lowercase" />
+        <div class="flex items-center justify-between px-0.5">
+          <p class="text-[10px] text-text-muted leading-relaxed">
+            {{ t('wizard.recoveryWordsHint') }}
+          </p>
+          <span class="text-[10px] tabular-nums font-mono"
+            :class="mnemonicWords.trim().split(/\s+/).filter(Boolean).length >= 12 ? 'text-success' : 'text-text-muted'">
+            {{ mnemonicWords.trim().split(/\s+/).filter(Boolean).length }}/12
+          </span>
+        </div>
+      </div>
 
       <!-- ── NIP-46: Connection method toggle ── -->
       <div v-if="mode === 'nip46' && !loading && nip46Status !== 'waiting'" class="space-y-3">
@@ -563,7 +608,7 @@ function downloadNsec() {
         class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all font-bold btn-primary flex items-center justify-center gap-2">
         <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
         <template v-else>
-          {{ mode === 'new' ? t('wizard.createAccount') : mode === 'import' ? t('wizard.importAccountBtn') : t('wizard.connect') }}
+          {{ mode === 'new' ? t('wizard.createAccount') : mode === 'recover' ? t('wizard.recoverAccountBtn') : mode === 'import' ? t('wizard.importAccountBtn') : t('wizard.connect') }}
           <ArrowRight class="w-4 h-4" />
         </template>
       </button>
@@ -585,51 +630,44 @@ function downloadNsec() {
         </p>
       </div>
 
-      <!-- Key display card -->
+      <!-- Recovery words card -->
       <div class="bg-surface-card rounded-3xl border border-warning/25 overflow-hidden shadow-sm">
 
         <!-- Warning banner -->
         <div class="bg-warning/8 px-4 py-2.5 flex items-center gap-2 border-b border-warning/15">
           <AlertTriangle class="w-3.5 h-3.5 text-warning shrink-0" />
-          <span class="text-[10px] text-warning font-semibold">{{ t('wizard.backupWarning') }}</span>
+          <span class="text-[10px] text-warning font-semibold">{{ t('wizard.mnemonicWarning') }}</span>
         </div>
 
-        <!-- The secret key -->
+        <!-- 12-word grid -->
         <div class="p-4 space-y-3">
-          <div class="relative bg-surface-base rounded-lg px-4 py-3 border border-border">
-            <div class="font-mono text-[11px] break-all leading-relaxed select-all"
-              :class="showNsec ? 'text-text-secondary' : 'blur-[6px] text-text-muted select-none pointer-events-none'">
-              {{ createdAccount?.nsec || '' }}
+          <div class="relative">
+            <div class="grid grid-cols-3 gap-2"
+              :class="showNsec ? '' : 'blur-[8px] select-none pointer-events-none'">
+              <div v-for="(word, i) in mnemonicDisplay" :key="i"
+                class="flex items-center gap-1.5 bg-surface-base rounded-lg px-2.5 py-2 border border-border">
+                <span class="text-[10px] text-text-muted font-mono w-4 text-right">{{ i + 1 }}</span>
+                <span class="text-[12px] font-medium text-text-secondary select-all">{{ word }}</span>
+              </div>
             </div>
-            <!-- Reveal overlay when blurred -->
+            <!-- Reveal overlay -->
             <button v-if="!showNsec" @click="showNsec = true"
-              class="absolute inset-0 flex items-center justify-center gap-2 bg-surface-base/60 rounded-lg cursor-pointer group">
+              class="absolute inset-0 flex items-center justify-center gap-2 bg-surface-card/60 rounded-lg cursor-pointer group">
               <Eye class="w-4 h-4 text-text-muted group-hover:text-brand transition-all duration-200" />
               <span class="text-[11px] font-semibold text-text-muted group-hover:text-brand transition-all duration-200">{{ t('wizard.clickToReveal') }}</span>
             </button>
           </div>
 
-          <!-- Action buttons -->
-          <div class="grid grid-cols-2 gap-2">
-            <button @click="copyNsec"
-              class="flex items-center justify-center gap-1.5 py-2.5 text-[11px] rounded-2xl font-semibold transition-all"
-              :class="copied
-                ? 'bg-success/10 text-success border border-success/20'
-                : 'bg-surface-elevated text-text-secondary hover:bg-surface-hover border border-border'">
-              <Check v-if="copied" class="w-3.5 h-3.5" />
-              <Copy v-else class="w-3.5 h-3.5" />
-              {{ copied ? t('common.copied') : t('wizard.copyKey') }}
-            </button>
-            <button @click="downloadNsec"
-              class="flex items-center justify-center gap-1.5 py-2.5 text-[11px] rounded-2xl font-semibold transition-all"
-              :class="downloadedKey
-                ? 'bg-success/10 text-success border border-success/20'
-                : 'bg-surface-elevated text-text-secondary hover:bg-surface-hover border border-border'">
-              <Check v-if="downloadedKey" class="w-3.5 h-3.5" />
-              <FileDown v-else class="w-3.5 h-3.5" />
-              {{ downloadedKey ? t('common.saved') : t('wizard.downloadFile') }}
-            </button>
-          </div>
+          <!-- Copy words -->
+          <button @click="copyMnemonic"
+            class="w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] rounded-2xl font-semibold transition-all"
+            :class="copied
+              ? 'bg-success/10 text-success border border-success/20'
+              : 'bg-surface-elevated text-text-secondary hover:bg-surface-hover border border-border'">
+            <Check v-if="copied" class="w-3.5 h-3.5" />
+            <Copy v-else class="w-3.5 h-3.5" />
+            {{ copied ? t('common.copied') : t('wizard.copyWords') }}
+          </button>
         </div>
       </div>
 
@@ -657,9 +695,9 @@ function downloadNsec() {
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
-    <!-- Step 3 (import): Profile editing          -->
+    <!-- Step 3 (import/recover): Profile editing   -->
     <!-- ═══════════════════════════════════════════ -->
-    <div v-if="step === 3 && mode === 'import'" class="space-y-4 animate-fade-in-up">
+    <div v-if="step === 3 && (mode === 'import' || mode === 'recover')" class="space-y-4 animate-fade-in-up">
 
       <!-- Back button -->
       <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
@@ -837,7 +875,7 @@ function downloadNsec() {
     <!-- ═══════════════════════════════════════════ -->
     <!-- Final step: Done                          -->
     <!-- ═══════════════════════════════════════════ -->
-    <div v-if="(step === 5 && mode === 'new') || (step === 4 && mode === 'import')" class="space-y-4 animate-fade-in-up">
+    <div v-if="(step === 5 && mode === 'new') || (step === 4 && (mode === 'import' || mode === 'recover'))" class="space-y-4 animate-fade-in-up">
       <div class="text-center space-y-2 pt-4">
         <div class="w-14 h-14 rounded-full bg-success/12 flex items-center justify-center mx-auto">
           <Check class="w-7 h-7 text-success" />

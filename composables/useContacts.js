@@ -7,7 +7,7 @@
  */
 
 import { ref } from 'vue'
-import { nip19 } from 'nostr-core'
+import { nip02, nip05, nip19 } from 'nostr-core'
 import { getPool } from '../lib/relayPool.js'
 import { getPoolRelays, DEFAULT_ACCOUNT_RELAYS } from '../lib/relays.js'
 
@@ -38,9 +38,7 @@ export function useContacts() {
       }
 
       const latest = events.sort((a, b) => b.created_at - a.created_at)[0]
-      const pubkeys = latest.tags
-        .filter(t => t[0] === 'p' && t[1])
-        .map(t => t[1])
+      const pubkeys = nip02.getFollowedPubkeys(latest)
 
       // Batch-fetch profiles
       await fetchProfiles(pubkeys)
@@ -126,24 +124,12 @@ export function useContacts() {
 
     if (/^[0-9a-f]{64}$/i.test(input)) return input.toLowerCase()
 
-    // NIP-05 resolution (user@domain or _@domain)
+    // NIP-05 resolution via nostr-core (user@domain or _@domain)
     if (input.includes('@')) {
-      const atIdx = input.lastIndexOf('@')
-      const name = input.slice(0, atIdx)
-      const domain = input.slice(atIdx + 1)
-      if (!name || !domain) return null
       try {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 8000)
-        const res = await fetch(
-          `https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(name)}`,
-          { signal: controller.signal }
-        )
-        clearTimeout(timeout)
-        if (!res.ok) return null
-        const data = await res.json()
-        if (data.names?.[name]) return data.names[name]
-      } catch { /* NIP-05 lookup failed or timed out */ }
+        const result = await nip05.queryNip05(input)
+        if (result?.pubkey) return result.pubkey
+      } catch { /* NIP-05 lookup failed */ }
     }
 
     return null
@@ -157,9 +143,9 @@ export function useContacts() {
     const q = query.toLowerCase()
     return contacts.value.filter(c => {
       const name = c.profile?.display_name || c.profile?.name || ''
-      const nip05 = c.profile?.nip05 || ''
+      const identity = c.profile?.nip05 || ''
       return name.toLowerCase().includes(q) ||
-        nip05.toLowerCase().includes(q) ||
+        identity.toLowerCase().includes(q) ||
         c.npub.includes(q) ||
         c.pubkey.includes(q)
     })

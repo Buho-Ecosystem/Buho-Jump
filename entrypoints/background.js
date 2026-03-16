@@ -9,14 +9,16 @@
  * - Profile publishing/fetching
  */
 
-import { finalizeEvent, getPublicKey, hexToBytes, bytesToHex, randomBytes, nip19, NWC, createSecretKeySigner } from 'nostr-core'
+import { finalizeEvent, getPublicKey, hexToBytes, bytesToHex, randomBytes, nip19, nip42, nip57, NWC, createSecretKeySigner, fetchPayRequest, fetchInvoice } from 'nostr-core'
 import {
   getActiveAccount,
   getAccounts,
   getActiveAccountId,
   setActiveAccount,
   createLocalAccount,
+  createAccountWithMnemonic,
   importAccount,
+  importFromMnemonic,
   createNip46Account,
   updateAccount,
   removeAccount,
@@ -50,7 +52,7 @@ import {
   resetPoolToDefaults, fetchNip65, fetchRelayInfo,
   createNip65Event, DEFAULT_ACCOUNT_RELAYS,
 } from '../lib/relays.js'
-import { getPool } from '../lib/relayPool.js'
+import { getPool, setAuthHandler } from '../lib/relayPool.js'
 import { connectBunker, createNostrConnectURI, awaitNostrConnect, parseConnectionURI } from '../lib/nip46-bridge.js'
 import { openPromptWindow, supportsWindowsApi } from '../lib/browser/capabilities.js'
 import { notifyDm, notifyPayment, setupNotificationClickHandler } from '../lib/notifications.js'
@@ -499,6 +501,19 @@ export default defineBackground(() => {
   // Set up notification click handler (opens popup to relevant tab)
   setupNotificationClickHandler()
 
+  // NIP-42: auto-sign relay auth challenges with active account's key
+  setAuthHandler(async (relay, challenge) => {
+    try {
+      const account = await getActiveAccount()
+      if (!account?.secretHex) return
+      const authEvent = nip42.createAuthEvent(
+        { relay: relay.url, challenge },
+        hexToBytes(account.secretHex)
+      )
+      await relay.auth(authEvent)
+    } catch { /* auth failed silently — relay may reject us */ }
+  })
+
   // Proactively reconnect NIP-46 signer on service worker startup
   proactiveReconnect()
 
@@ -649,8 +664,12 @@ export default defineBackground(() => {
             return { result: await getAccountSummaries() }
           case 'CREATE_ACCOUNT':
             return { result: await createLocalAccount(params?.[0]) }
+          case 'CREATE_ACCOUNT_MNEMONIC':
+            return { result: await createAccountWithMnemonic(params?.[0]) }
           case 'IMPORT_ACCOUNT':
             return { result: await importAccount(params?.[0], params?.[1]) }
+          case 'IMPORT_FROM_MNEMONIC':
+            return { result: await importFromMnemonic(params?.[0], params?.[1]) }
           case 'CREATE_NIP46_ACCOUNT':
             return { result: await createNip46Account(params?.[0]) }
           case 'SWITCH_ACCOUNT':
@@ -869,6 +888,49 @@ export default defineBackground(() => {
             return { result: sigResult }
           }
 
+          // ── Zaps (NIP-57) ──
+          case 'SEND_ZAP': {
+            const { recipientPubkey, amountSats, lightningAddress, content } = params?.[0] || {}
+            if (!lightningAddress || !amountSats) return { error: 'Missing zap parameters' }
+            const nwc = await ensureNWC()
+            const account = await getActiveAccount()
+            const amountMsats = amountSats * 1000
+
+            // Try NIP-57 for local accounts
+            if (account?.secretHex) {
+              try {
+                // Resolve Lightning Address to LNURL-pay URL (fetchPayRequest doesn't accept user@domain)
+                const [name, domain] = lightningAddress.split('@')
+                const lnurlPayUrl = `https://${domain}/.well-known/lnurlp/${name}`
+                const payReq = await fetchPayRequest(lnurlPayUrl)
+                if (payReq.allowsNostr && payReq.nostrPubkey) {
+                  const relays = await getPoolRelays(account.pubkey, 'account')
+                  const zapReq = nip57.createZapRequestEvent({
+                    recipientPubkey,
+                    amount: amountMsats,
+                    relays: relays.slice(0, 3),
+                    content: content || '',
+                    lnurl: lightningAddress,
+                  }, hexToBytes(account.secretHex))
+
+                  const invoice = await nip57.fetchZapInvoice({
+                    lnurl: payReq.callback,
+                    zapRequest: zapReq,
+                    amount: amountMsats,
+                  })
+
+                  const payResult = await nwc.payInvoice(invoice)
+                  return { result: { preimage: payResult.preimage, nip57: true } }
+                }
+              } catch { /* NIP-57 failed, fall through to plain payment */ }
+            }
+
+            // Fallback: plain Lightning Address payment
+            const inv = await fetchInvoice(lightningAddress, amountSats)
+            const payResult = await nwc.payInvoice(inv.invoice)
+            return { result: { preimage: payResult.preimage, nip57: false } }
+          }
+
           // ── Allowances (budgets) ──
           case 'GET_ALLOWANCES':
             return { result: await getAllowances() }
@@ -979,7 +1041,7 @@ export default defineBackground(() => {
             const [relayList] = params || []
             const account = await getActiveAccount()
             if (!account || account.mode !== 'local') return { error: 'Local account required' }
-            const template = createNip65Event(relayList, account.pubkey)
+            const template = createNip65Event(relayList)
             const secretKey = hexToBytes(account.secretHex)
             const event = finalizeEvent(template, secretKey)
             const relays = await getPoolRelays(account.pubkey, 'account')

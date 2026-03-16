@@ -17,21 +17,21 @@ import { useFiat } from '../../composables/useFiat.js'
 const { t } = useI18n()
 import { formatSats, detectPaymentInput } from '../../lib/utils.js'
 import { parseZARFromMetadata, getMerchantInitials } from '../../lib/merchantQR.js'
-import { fetchInvoice } from 'nostr-core'
-import { executeLnurlPay, fetchLnurlPayParams, fetchLnurlPayInvoice } from '../../lib/lnurl.js'
+import { fetchInvoice, lnurl as lnurlCore } from 'nostr-core'
+import { fetchLnurlPayParams, fetchLnurlPayInvoice, executeLnurlPay } from '../../lib/lnurl.js'
 import QrScanner from '../QrScanner.vue'
 import {
-  ArrowLeft, ScanLine, Zap, ArrowUpRight, ArrowLeftRight,
+  ArrowLeft, ScanLine, Zap, ArrowUpRight, ArrowDownLeft, ArrowLeftRight,
   Check, AlertTriangle, Loader2, AtSign, Store, Timer, Code,
 } from 'lucide-vue-next'
 
 const emit = defineEmits(['back', 'done'])
-const { payInvoice, status } = useWallet()
+const { payInvoice, makeInvoice, status } = useWallet()
 const toast = useToast()
 const { toFiat, fiatToSats, currency, loadRate } = useFiat()
 
 // ── State ──
-const step = ref('input') // 'input' | 'confirm' | 'merchant-confirm' | 'result'
+const step = ref('input') // 'input' | 'confirm' | 'merchant-confirm' | 'withdraw-confirm' | 'result'
 const showInvoicePreview = ref(false)
 const showPaymentProof = ref(false)
 const input = ref('')
@@ -54,6 +54,13 @@ const merchantRateStale = ref(false)
 const merchantLogoFailed = ref(false)
 const countdown = ref(90)
 let countdownTimer = null
+
+// ── LNURL-withdraw state ──
+const withdrawInfo = ref(null)
+const withdrawAmountSats = ref('')
+
+// ── Success action state (LNURL-pay) ──
+const successAction = ref(null)
 
 // Load rate for conversions
 loadRate()
@@ -95,9 +102,12 @@ const detectedColor = computed(() => {
   return 'text-success bg-success/10'
 })
 
+const isWithdraw = computed(() => detected.value?.lnurlType === 'withdraw')
+
 const needsAmount = computed(() => {
   if (!detected.value) return false
-  if (detected.value.type === 'merchant') return false // amount from LNURL metadata
+  if (detected.value.type === 'merchant') return false
+  if (isWithdraw.value) return false // amount entered separately in withdraw flow
   return detected.value.type === 'lnaddress' || detected.value.type === 'lnurl'
 })
 
@@ -127,6 +137,7 @@ const canProceed = computed(() => {
   if (detected.value.type === 'merchant-unsupported') return false
   if (detected.value.type === 'invoice') return true
   if (detected.value.type === 'merchant') return true
+  if (isWithdraw.value) return true
   if (needsAmount.value) return effectiveSats.value > 0
   return true
 })
@@ -228,7 +239,7 @@ async function resolveMerchantPayment() {
     }
 
     // Fetch the invoice from CryptoQR callback
-    const { invoice } = await fetchLnurlPayInvoice(params.callback, amountToSend)
+    const { invoice } = await fetchLnurlPayInvoice(params, amountToSend)
     resolvedInvoice.value = invoice
 
     // Start countdown — invoice is time-sensitive
@@ -255,6 +266,26 @@ async function proceed() {
   // Early balance check for amount-specified payments
   if (effectiveSats.value > 0 && status.value?.balance != null && effectiveSats.value > status.value.balance) {
     payError.value = t('wallet.insufficientBalance', { balance: formatSats(status.value.balance) })
+    return
+  }
+
+  // LNURL-withdraw → claim flow
+  if (isWithdraw.value) {
+    resolving.value = true
+    try {
+      const wr = await lnurlCore.fetchWithdrawRequest(detected.value.value)
+      withdrawInfo.value = {
+        ...wr,
+        minSats: Math.ceil(wr.minWithdrawable / 1000),
+        maxSats: Math.floor(wr.maxWithdrawable / 1000),
+      }
+      withdrawAmountSats.value = String(withdrawInfo.value.maxSats)
+      step.value = 'withdraw-confirm'
+    } catch (err) {
+      payError.value = err.message || t('wallet.withdrawFailed')
+    } finally {
+      resolving.value = false
+    }
     return
   }
 
@@ -287,6 +318,25 @@ async function proceed() {
   }
 
   step.value = 'confirm'
+}
+
+async function confirmWithdraw() {
+  paying.value = true
+  payError.value = ''
+  try {
+    const sats = parseInt(withdrawAmountSats.value) || 0
+    if (!sats || sats <= 0) throw new Error('Invalid amount')
+    // Create an invoice via NWC, then submit it to the withdraw service
+    const invoiceResult = await makeInvoice(sats, withdrawInfo.value.defaultDescription || 'LNURL withdraw')
+    if (!invoiceResult?.invoice) throw new Error('Failed to create invoice')
+    await lnurlCore.submitWithdrawRequest(withdrawInfo.value, invoiceResult.invoice)
+    payResult.value = { withdrawn: true, amount: sats }
+    step.value = 'result'
+  } catch (err) {
+    payError.value = err.message || t('wallet.withdrawFailed')
+  } finally {
+    paying.value = false
+  }
 }
 
 async function confirmPay() {
@@ -324,6 +374,9 @@ function reset() {
   merchantSats.value = 0
   merchantRateStale.value = false
   merchantLogoFailed.value = false
+  withdrawInfo.value = null
+  withdrawAmountSats.value = ''
+  successAction.value = null
   stopCountdown()
 }
 </script>
@@ -334,13 +387,16 @@ function reset() {
     <!-- Header -->
     <div class="flex items-center gap-2 mb-4">
       <button
-        @click="step === 'input' ? emit('back') : (step === 'merchant-confirm' ? reset() : (step = 'input'))"
+        @click="step === 'input' ? emit('back') : (step === 'merchant-confirm' || step === 'withdraw-confirm' ? reset() : (step = 'input'))"
         class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200"
       >
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
       <span class="text-sm font-extrabold">
-        {{ step === 'result' ? t('wallet.sendResult') : (step === 'merchant-confirm' ? t('wallet.merchantPayment') : t('wallet.sendTitle')) }}
+        {{ step === 'result' ? (payResult?.withdrawn ? t('wallet.withdrawSuccess') : t('wallet.sendResult'))
+          : step === 'merchant-confirm' ? t('wallet.merchantPayment')
+          : step === 'withdraw-confirm' ? t('wallet.withdrawTitle')
+          : t('wallet.sendTitle') }}
       </span>
     </div>
 
@@ -570,6 +626,58 @@ function reset() {
       </template>
     </div>
 
+    <!-- ═══ Step: Withdraw Confirm ═══ -->
+    <div v-if="step === 'withdraw-confirm'" class="space-y-4 animate-fade-in-up">
+      <div class="bg-surface-card rounded-3xl border border-border p-5 text-center shadow-sm">
+        <div class="w-10 h-10 rounded-[10px] bg-success/10 flex items-center justify-center mx-auto mb-3">
+          <ArrowDownLeft class="w-5 h-5 text-success" />
+        </div>
+        <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-1">{{ t('wallet.withdrawDesc') }}</p>
+
+        <!-- Amount input if range -->
+        <div v-if="withdrawInfo && withdrawInfo.minSats !== withdrawInfo.maxSats" class="mt-3 space-y-2">
+          <input v-model="withdrawAmountSats" type="number"
+            :min="withdrawInfo.minSats" :max="withdrawInfo.maxSats"
+            class="w-full bg-surface-base border border-border rounded-lg px-3 py-2.5 text-sm text-center outline-none focus:border-brand transition-colors tabular-nums" />
+          <p class="text-[10px] text-text-muted">
+            {{ t('wallet.withdrawMin', { min: formatSats(withdrawInfo.minSats) }) }} ·
+            {{ t('wallet.withdrawMax', { max: formatSats(withdrawInfo.maxSats) }) }}
+          </p>
+        </div>
+
+        <!-- Fixed amount -->
+        <div v-else class="text-2xl font-extrabold tracking-tight mt-2">
+          {{ formatSats(parseInt(withdrawAmountSats) || 0) }}
+          <span class="text-sm font-medium text-text-muted ml-1">{{ t('wallet.sats') }}</span>
+        </div>
+
+        <div v-if="toFiat(parseInt(withdrawAmountSats) || 0)" class="text-xs text-text-muted mt-1">
+          ≈ {{ toFiat(parseInt(withdrawAmountSats) || 0) }}
+        </div>
+
+        <p v-if="withdrawInfo?.defaultDescription" class="text-[10px] text-text-muted mt-3 truncate">
+          {{ withdrawInfo.defaultDescription }}
+        </p>
+      </div>
+
+      <div v-if="payError" class="flex items-start gap-2 p-2.5 rounded-lg bg-error/10 text-error text-xs animate-scale-in">
+        <AlertTriangle class="w-3.5 h-3.5 mt-0.5 shrink-0" />
+        <span>{{ payError }}</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button @click="reset" :disabled="paying"
+          class="py-2.5 text-sm rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold">
+          {{ t('common.cancel') }}
+        </button>
+        <button @click="confirmWithdraw" :disabled="paying"
+          class="py-2.5 text-sm rounded-2xl bg-success text-white hover:bg-success/90 disabled:opacity-60 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5">
+          <Loader2 v-if="paying" class="w-4 h-4 animate-spin" />
+          {{ paying ? t('wallet.withdrawClaiming') : t('wallet.withdrawClaim') }}
+        </button>
+      </div>
+    </div>
+
     <!-- ═══ Step: Confirm (normal) ═══ -->
     <div v-if="step === 'confirm'" class="space-y-4 animate-fade-in-up">
 
@@ -638,26 +746,39 @@ function reset() {
         <div class="w-12 h-12 rounded-full bg-success/15 flex items-center justify-center mx-auto mb-3">
           <Check class="w-6 h-6 text-success" />
         </div>
-        <h3 class="text-base font-extrabold mb-1">{{ t('wallet.paymentSent') }}</h3>
-        <p class="text-xs text-text-muted">
-          {{ merchantInfo ? `${t('wallet.merchantPaying')} ${merchantInfo.name}` : t('wallet.paymentSuccess') }}
-        </p>
 
-        <!-- Merchant payment summary -->
-        <div v-if="merchantInfo && merchantZAR" class="mt-3 text-sm text-text-secondary">
-          R{{ merchantZAR.toFixed(2) }} → {{ formatSats(merchantSats) }} sats
-        </div>
+        <!-- Withdraw success -->
+        <template v-if="payResult?.withdrawn">
+          <h3 class="text-base font-extrabold mb-1">{{ t('wallet.withdrawSuccess') }}</h3>
+          <p class="text-xs text-text-muted">{{ t('wallet.withdrawSuccessDesc') }}</p>
+          <div class="text-2xl font-extrabold tracking-tight mt-3">
+            +{{ formatSats(payResult.amount) }}
+            <span class="text-sm font-medium text-text-muted ml-1">{{ t('wallet.sats') }}</span>
+          </div>
+        </template>
 
-        <div v-if="payResult?.preimage" class="mt-4 text-left">
-          <button @click="showPaymentProof = !showPaymentProof"
-            class="flex items-center gap-1 text-[10px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
-            <Code class="w-3 h-3" />
-            {{ t('wallet.preimage') }}
-          </button>
-          <code v-if="showPaymentProof" class="block mt-1 text-[10px] bg-surface-base px-2.5 py-1.5 rounded-lg font-mono text-text-secondary break-all animate-fade-in">
-            {{ payResult.preimage }}
-          </code>
-        </div>
+        <!-- Payment success -->
+        <template v-else>
+          <h3 class="text-base font-extrabold mb-1">{{ t('wallet.paymentSent') }}</h3>
+          <p class="text-xs text-text-muted">
+            {{ merchantInfo ? `${t('wallet.merchantPaying')} ${merchantInfo.name}` : t('wallet.paymentSuccess') }}
+          </p>
+
+          <div v-if="merchantInfo && merchantZAR" class="mt-3 text-sm text-text-secondary">
+            R{{ merchantZAR.toFixed(2) }} → {{ formatSats(merchantSats) }} sats
+          </div>
+
+          <div v-if="payResult?.preimage" class="mt-4 text-left">
+            <button @click="showPaymentProof = !showPaymentProof"
+              class="flex items-center gap-1 text-[10px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
+              <Code class="w-3 h-3" />
+              {{ t('wallet.preimage') }}
+            </button>
+            <code v-if="showPaymentProof" class="block mt-1 text-[10px] bg-surface-base px-2.5 py-1.5 rounded-lg font-mono text-text-secondary break-all animate-fade-in">
+              {{ payResult.preimage }}
+            </code>
+          </div>
+        </template>
       </div>
 
       <button

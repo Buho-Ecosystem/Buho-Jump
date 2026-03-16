@@ -7,30 +7,48 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChat } from '../../composables/useChat.js'
 import { useContacts } from '../../composables/useContacts.js'
+import { useMuteList } from '../../composables/useMuteList.js'
 import ConversationItem from './ConversationItem.vue'
-import { MessageSquare, PenSquare, Search, Loader2 } from 'lucide-vue-next'
+import { MessageSquare, PenSquare, Search, Loader2, ChevronDown, VolumeX } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const emit = defineEmits(['open', 'new-chat'])
 
-const { conversations, init, initialized } = useChat()
+const { conversations, init, initialized, currentAccountPubkey } = useChat()
 const { getCachedProfile } = useContacts()
+const { isMuted, load: loadMuteList } = useMuteList()
 const search = ref('')
+const showMuted = ref(false)
 
 const filtered = computed(() => {
-  if (!search.value) return conversations.value
   const q = search.value.toLowerCase()
-  return conversations.value.filter(c => {
-    const profile = getCachedProfile(c.pubkey)
-    const name = profile?.display_name || profile?.name || ''
-    const nip05 = profile?.nip05 || ''
-    return name.toLowerCase().includes(q) ||
-      nip05.toLowerCase().includes(q) ||
-      c.pubkey.includes(q)
-  })
+  const list = q
+    ? conversations.value.filter(c => {
+        const profile = getCachedProfile(c.pubkey)
+        const name = profile?.display_name || profile?.name || ''
+        const identity = profile?.nip05 || ''
+        // Search by name, identity, pubkey, or message content
+        if (name.toLowerCase().includes(q) ||
+          identity.toLowerCase().includes(q) ||
+          c.pubkey.includes(q)) return true
+        // Search message content within conversation
+        if (c.lastMessage?.content?.toLowerCase().includes(q)) return true
+        return false
+      })
+    : conversations.value
+  return list.filter(c => !isMuted(c.pubkey))
 })
 
-onMounted(() => init())
+const mutedConversations = computed(() =>
+  conversations.value.filter(c => isMuted(c.pubkey))
+)
+
+onMounted(async () => {
+  await init()
+  if (currentAccountPubkey.value) {
+    await loadMuteList(currentAccountPubkey.value)
+  }
+})
 </script>
 
 <template>
@@ -59,15 +77,37 @@ onMounted(() => init())
     </div>
 
     <!-- Conversation list -->
-    <div v-else-if="filtered.length > 0" class="divide-y divide-border/30 pb-16">
-      <ConversationItem
-        v-for="conv in filtered"
-        :key="conv.pubkey"
-        :pubkey="conv.pubkey"
-        :last-message="conv.lastMessage"
-        :unread="conv.unread"
-        @click="emit('open', conv.pubkey)"
-      />
+    <div v-else-if="filtered.length > 0 || mutedConversations.length > 0" class="pb-16">
+      <div class="divide-y divide-border/30">
+        <ConversationItem
+          v-for="conv in filtered"
+          :key="conv.pubkey"
+          :pubkey="conv.pubkey"
+          :last-message="conv.lastMessage"
+          :unread="conv.unread"
+          @click="emit('open', conv.pubkey)"
+        />
+      </div>
+
+      <!-- Muted conversations (collapsible) -->
+      <div v-if="mutedConversations.length > 0" class="mt-1">
+        <button @click="showMuted = !showMuted"
+          class="w-full flex items-center gap-2 px-4 py-2 text-[10px] text-text-muted font-semibold uppercase tracking-wider hover:text-text-secondary transition-colors">
+          <VolumeX class="w-3 h-3" />
+          {{ t('chat.mutedSection', { count: mutedConversations.length }) }}
+          <ChevronDown class="w-3 h-3 ml-auto transition-transform duration-200" :class="showMuted ? 'rotate-180' : ''" />
+        </button>
+        <div v-if="showMuted" class="divide-y divide-border/30 opacity-50">
+          <ConversationItem
+            v-for="conv in mutedConversations"
+            :key="conv.pubkey"
+            :pubkey="conv.pubkey"
+            :last-message="conv.lastMessage"
+            :unread="0"
+            @click="emit('open', conv.pubkey)"
+          />
+        </div>
+      </div>
     </div>
 
     <!-- Empty state -->

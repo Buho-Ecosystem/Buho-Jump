@@ -23,7 +23,8 @@
     "copiedToClipboard": "Copied to clipboard",
     "pleaseWait": "Please wait",
     "menu": "Menu",
-    "close": "Close"
+    "close": "Close",
+    "settings": "Settings"
   },
 
   "lock": {
@@ -238,6 +239,21 @@
     "signerExplainer": "Your keys stay safely on the signer app. When an app needs to act as you, the request is sent to your signer for approval.",
     "howItWorks": "How it works:",
 
+    "modeRecoverTitle": "Recover with Words",
+    "modeRecoverDesc": "Restore your account using the 12 recovery words you saved.",
+    "stepRecover": "Recover",
+    "recoverAccount": "Recover Your Account",
+    "recoverAccountDesc": "Enter the 12 recovery words you saved when you created your account.",
+    "recoverAccountBtn": "Recover Account",
+    "recoveryWords": "Recovery words",
+    "recoveryWordsPlaceholder": "Enter your 12 words separated by spaces",
+    "recoveryWordsHint": "Enter the words in the exact order you received them.",
+
+    "mnemonicWarning": "Write these words down — they're the only way to recover your account",
+    "copyWords": "Copy words",
+    "backupMnemonicTitle": "Save Your Recovery Words",
+    "backupMnemonicDesc": "These 12 words are the only way to recover your account. Write them down and keep them safe.",
+
     "doneTitle": "You're All Set",
     "doneDesc": "Your account is ready. Apps can now ask to use it — you'll always be asked first.",
     "profileSaved": "Profile saved successfully",
@@ -348,6 +364,7 @@
 
     "noWallet": "No wallet connected",
     "noWalletDesc": "Paste the connection link from your wallet app to enable payments.",
+    "noWalletHomeDesc": "Connect a Lightning wallet to send and receive sats instantly.",
     "nwcHelp": "Get this from your wallet app (Alby, Mutiny, Coinos). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
     "connectWallet": "Connect Wallet",
     "connecting": "Connecting...",
@@ -431,7 +448,21 @@
     "paymentFailed": "Payment could not be completed. Check your wallet balance and internet connection.",
     "addressResolveFailed": "Could not resolve this address. Check it's correct and try again.",
     "lnurlFailed": "Could not complete this request. The service may be temporarily unavailable.",
-    "connectFailedDetail": "Could not connect to wallet. Make sure your connection link is correct and not expired."
+    "connectFailedDetail": "Could not connect to wallet. Make sure your connection link is correct and not expired.",
+
+    "withdrawTitle": "Claim Payment",
+    "withdrawDesc": "Someone is sending you sats",
+    "withdrawClaiming": "Claiming...",
+    "withdrawClaim": "Claim Sats",
+    "withdrawSuccess": "Payment Claimed",
+    "withdrawSuccessDesc": "The sats have been added to your wallet",
+    "withdrawFailed": "Could not claim this payment. The link may have expired or already been used.",
+    "withdrawMin": "Min: {min} sats",
+    "withdrawMax": "Max: {max} sats",
+
+    "successActionMessage": "Message from sender",
+    "successActionUrl": "Link from sender",
+    "successActionSecret": "Secret message"
   },
 
   "sites": {
@@ -508,7 +539,15 @@
     "daysAgo": "{n}d ago",
     "emptyThreadTitle": "No messages yet",
     "sendMessage": "Send message",
-    "tapToRetry": "Tap to retry"
+    "tapToRetry": "Tap to retry",
+    "muteUser": "Mute",
+    "unmuteUser": "Unmute",
+    "muted": "Muted",
+    "unmuted": "Unmuted",
+    "mutedSection": "Muted ({count})",
+    "searchNostr": "Search on Nostr",
+    "searchingNostr": "Searching...",
+    "nostrResults": "Found on Nostr"
   },
 
   "notifications": {

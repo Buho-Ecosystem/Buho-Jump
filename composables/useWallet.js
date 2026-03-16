@@ -75,6 +75,10 @@ export function useWallet() {
     return await send('WALLET_GET_BUDGET')
   }
 
+  async function sendZap({ recipientPubkey, amountSats, lightningAddress, content }) {
+    return await send('SEND_ZAP', { recipientPubkey, amountSats, lightningAddress, content })
+  }
+
   return {
     status,
     connecting,
@@ -91,5 +95,6 @@ export function useWallet() {
     listTransactions,
     payKeysend,
     signMessage,
+    sendZap,
   }
 }

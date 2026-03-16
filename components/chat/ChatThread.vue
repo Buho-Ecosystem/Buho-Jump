@@ -8,16 +8,16 @@ import { useI18n } from 'vue-i18n'
 import { useChat } from '../../composables/useChat.js'
 import { useContacts } from '../../composables/useContacts.js'
 import { useWallet } from '../../composables/useWallet.js'
+import { useMuteList } from '../../composables/useMuteList.js'
 import { useToast } from '../../composables/useToast.js'
 import { nip19 } from 'nostr-core'
-import { fetchInvoice } from 'nostr-core'
 import { formatSats } from '../../lib/utils.js'
 import ChatBubble from './ChatBubble.vue'
 import { getAvatarColor } from '../../lib/avatarColor.js'
 import {
   ArrowLeft, Send, Zap, Loader2, Lock, X,
   MoreHorizontal, Copy, Check, ExternalLink,
-  ChevronDown,
+  ChevronDown, VolumeX, Volume2,
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -29,8 +29,11 @@ const emit = defineEmits(['back'])
 const { t } = useI18n()
 const { getMessages, sendMessage, retryMessage, markRead, addZapMessage, currentAccountPubkey } = useChat()
 const { fetchProfile, getCachedProfile } = useContacts()
-const { status: walletStatus, payInvoice } = useWallet()
+const { status: walletStatus, sendZap } = useWallet()
+const { isMuted, mute, unmute } = useMuteList()
 const toast = useToast()
+
+const muted = computed(() => isMuted(props.pubkey))
 
 let mountedAccountPubkey = null
 
@@ -158,9 +161,11 @@ async function handleZap(amount) {
 
   zapping.value = true
   try {
-    const result = await fetchInvoice(lightningAddress.value, sats)
-    if (!result?.invoice) throw new Error('No invoice returned')
-    await payInvoice(result.invoice)
+    await sendZap({
+      recipientPubkey: props.pubkey,
+      amountSats: sats,
+      lightningAddress: lightningAddress.value,
+    })
     addZapMessage(props.pubkey, sats)
     showZapPicker.value = false
     customZapAmount.value = ''
@@ -196,6 +201,17 @@ function viewProfile() {
     const npub = nip19.npubEncode(props.pubkey)
     window.open(`https://njump.me/${npub}`, '_blank')
   } catch {}
+}
+
+async function toggleMute() {
+  showMenu.value = false
+  if (muted.value) {
+    await unmute(currentAccountPubkey.value, props.pubkey)
+    toast.info(t('chat.unmuted'))
+  } else {
+    await mute(currentAccountPubkey.value, props.pubkey)
+    toast.info(t('chat.muted'))
+  }
 }
 
 function scrollToBottom() {
@@ -307,6 +323,13 @@ watch(messageList, () => {
             class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left text-xs">
             <ExternalLink class="w-4 h-4 text-text-muted" />
             {{ t('chat.viewProfile') }}
+          </button>
+          <button @click="toggleMute"
+            class="w-full flex items-center gap-2.5 px-3 py-2.5 transition-all duration-200 text-left text-xs"
+            :class="muted ? 'hover:bg-success/8 text-success' : 'hover:bg-error/8 text-error'">
+            <Volume2 v-if="muted" class="w-4 h-4" />
+            <VolumeX v-else class="w-4 h-4" />
+            {{ muted ? t('chat.unmuteUser') : t('chat.muteUser') }}
           </button>
         </div>
       </div>

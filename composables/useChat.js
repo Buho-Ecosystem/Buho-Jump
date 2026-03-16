@@ -14,8 +14,7 @@
 
 import { ref, computed } from 'vue'
 import {
-  nip04, nip44, nip59, hexToBytes,
-  unwrapDirectMessage,
+  nip04, nip44, nip59, nip17, hexToBytes,
 } from 'nostr-core'
 import { useMessaging } from './useMessaging.js'
 import { getActiveAccount } from '../lib/accounts.js'
@@ -287,7 +286,7 @@ export function useChat() {
       }, {
         onevent(event) {
           try {
-            const dm = unwrapDirectMessage(event, secretKey)
+            const dm = nip17.unwrapDirectMessage(event, secretKey)
 
             if (dm.sender === myPubkey) {
               // Self-copy: message we sent (from this or another client)

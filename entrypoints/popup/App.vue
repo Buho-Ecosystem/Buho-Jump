@@ -30,6 +30,8 @@ import { useContacts } from '../../composables/useContacts.js'
 import { useRelays } from '../../composables/useRelays.js'
 // Wallet sub-views
 import WalletConnect from '../../components/wallet/WalletConnect.vue'
+import NoWalletHome from '../../components/wallet/NoWalletHome.vue'
+import { getAvatarColor } from '../../lib/avatarColor.js'
 import WalletHome from '../../components/wallet/WalletHome.vue'
 import SendFlow from '../../components/wallet/SendFlow.vue'
 import ReceiveFlow from '../../components/wallet/ReceiveFlow.vue'
@@ -68,6 +70,7 @@ const walletView = ref('home')
 const walletViewBefore = ref('home')
 const showSendPanel = ref(false)
 const showReceivePanel = ref(false)
+const showWalletConnect = ref(false)
 
 // Chat sub-view state
 const chatView = ref('home') // 'home' | 'thread' | 'new'
@@ -1081,7 +1084,18 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
           <section v-else-if="activeTab === 'wallet'" class="p-4">
 
             <!-- Not connected -->
-            <WalletConnect v-if="!walletStatus.connected" />
+            <template v-if="!walletStatus.connected">
+              <WalletConnect v-if="showWalletConnect" />
+              <NoWalletHome v-else
+                :display-name="displayName"
+                :npub="activeAccount?.npub || ''"
+                :profile-picture="profileData?.picture || ''"
+                :avatar-color="activeAccount?.pubkey ? getAvatarColor(activeAccount.pubkey) : ''"
+                @connect-wallet="showWalletConnect = true"
+                @open-chat="activeTab = 'chat'"
+                @open-settings="showSettings = true"
+              />
+            </template>
 
             <!-- Connected: sub-views -->
             <template v-else>

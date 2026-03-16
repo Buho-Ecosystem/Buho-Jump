@@ -27,8 +27,20 @@ export function useAccounts() {
     return result
   }
 
+  async function createWithMnemonic(name) {
+    const result = await send('CREATE_ACCOUNT_MNEMONIC', name || undefined)
+    await load()
+    return result
+  }
+
   async function importKey(name, nsecOrHex) {
     const result = await send('IMPORT_ACCOUNT', name || undefined, nsecOrHex)
+    await load()
+    return result
+  }
+
+  async function importMnemonic(name, mnemonic) {
+    const result = await send('IMPORT_FROM_MNEMONIC', name || undefined, mnemonic)
     await load()
     return result
   }
@@ -85,7 +97,9 @@ export function useAccounts() {
     nip46Status,
     load,
     create,
+    createWithMnemonic,
     importKey,
+    importMnemonic,
     createRemote,
     connectRemote,
     switchTo,
