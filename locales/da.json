@@ -21,9 +21,11 @@
     "optional": "valgfrit",
     "getStarted": "Kom i gang",
     "copiedToClipboard": "Kopieret til udklipsholder",
-    "pleaseWait": "Vent venligst"
+    "pleaseWait": "Vent venligst",
+    "showingOf": "Showing {shown} of {total}",
+    "showMore": "Show more",
+    "offline": "No internet connection"
   },
-
   "lock": {
     "createTitle": "Opret en Adgangskode",
     "unlockTitle": "Velkommen Tilbage",
@@ -43,12 +45,10 @@
     "strengthStrong": "Stærk",
     "mismatch": "Adgangskoderne matcher ikke"
   },
-
   "tabs": {
     "account": "Konto",
     "wallet": "Tegnebog"
   },
-
   "settings": {
     "appearance": "Udseende",
     "lightMode": "Lyst tema",
@@ -66,7 +66,6 @@
     "relaySettingsDesc": "Administrer relays til konto, tegnebog og chat",
     "version": "Buho Jump v{version}"
   },
-
   "relay": {
     "title": "Relay-indstillinger",
     "warning": "Advarsel: Ændring af disse indstillinger kan påvirke din grundlæggende oplevelse",
@@ -111,7 +110,6 @@
     "infoYes": "Ja",
     "infoNo": "Nej"
   },
-
   "account": {
     "activeDesc": "Aktiv konto — apps vil bruge denne profil",
     "appPermissions": "App-tilladelser",
@@ -131,19 +129,16 @@
     "external": "Ekstern",
     "local": "Lokal"
   },
-
   "wizard": {
     "addAccount": "Tilføj en Konto",
     "addAccountDesc": "Din konto lader dig logge ind i apps, poste og sende beskeder — alt uden en central server.",
     "recommended": "Anbefalet",
-
     "modeNewTitle": "Opret Ny Konto",
     "modeNewDesc": "Start forfra — vi sætter alt op for dig på få sekunder.",
     "modeImportTitle": "Jeg Har Allerede en Konto",
     "modeImportDesc": "Brug din eksisterende konto ved at indtaste din sikkerhedsnøgle.",
     "modeSignerTitle": "Ekstern Signer",
     "modeSignerDesc": "Forbind til en signer-app som nsec.app, Amber eller Primal.",
-
     "stepSetup": "Opsætning",
     "stepName": "Navn",
     "stepImport": "Importér",
@@ -151,14 +146,12 @@
     "stepBackup": "Sikkerhedskopi",
     "stepProfile": "Profil",
     "stepDone": "Færdig",
-
     "chooseName": "Vælg et Navn",
     "chooseNameDesc": "Vælg et navn som andre ser, når de interagerer med dig. Du kan ændre det når som helst.",
     "importAccount": "Importér Din Konto",
     "importAccountDesc": "Indtast sikkerhedsnøglen fra din eksisterende konto for at gendanne den her.",
     "connectSigner": "Forbind Din Signer",
     "connectSignerDesc": "Indsæt forbindelseslinket fra din signer-app.",
-
     "displayName": "Visningsnavn",
     "namePlaceholder": "f.eks. satoshi, alice, dit_navn",
     "nameHint": "Sådan ser andre dig. Brug dit rigtige navn, et kaldenavn, eller hvad du vil.",
@@ -168,11 +161,9 @@
     "connectionLink": "Forbindelseslink",
     "connectionPlaceholder": "bunker://... eller nostrconnect://...",
     "signerHint": "Få dette fra din signer-app (nsec.app, Amber, Primal). Dine nøgler forbliver der — vi ser dem aldrig.",
-
     "createAccount": "Opret Konto",
     "importAccountBtn": "Importér Konto",
     "connect": "Forbind",
-
     "connectPreparing": "Forbereder...",
     "connectConnecting": "Forbinder til din signer...",
     "connectFetchingProfile": "Indlæser din profil...",
@@ -181,7 +172,6 @@
     "progressSecureConnection": "Opretter sikker forbindelse",
     "progressConnecting": "Forbinder til din signer-app",
     "progressLoadingProfile": "Indlæser din profil",
-
     "backupTitle": "Gem Din Sikkerhedsnøgle",
     "backupDesc": "Dette er den eneste måde at gendanne din konto. Hvis du mister den, kan ingen hjælpe — heller ikke os.",
     "backupWarning": "Del aldrig dette med nogen — behandl det som en adgangskode",
@@ -190,7 +180,6 @@
     "downloadFile": "Download fil",
     "backupConfirm": "Jeg har gemt min sikkerhedsnøgle et sikkert sted",
     "backupConfirmHint": "Brug en adgangskodemanager, en sikker note, eller skriv det ned på papir og opbevar det sikkert.",
-
     "profileTitle": "Din Profil",
     "profileDesc": "Gennemgå dine profiloplysninger. Du kan opdatere dem når som helst.",
     "completeProfile": "Udfyld Din Profil",
@@ -199,19 +188,16 @@
     "aboutPlaceholder": "Fortæl verden om dig selv...",
     "saveProfile": "Gem Profil",
     "saving": "Gemmer...",
-
     "connectedTitle": "Forbundet",
     "connectedDesc": "Din signer er tilknyttet og klar til brug",
     "connectedBadge": "Aktiv",
     "signerExplainer": "Dine nøgler forbliver sikkert i signer-appen. Når en app skal handle på dine vegne, sendes anmodningen til din signer til godkendelse.",
     "howItWorks": "Sådan fungerer det:",
-
     "doneTitle": "Alt er Klar",
     "doneDesc": "Din konto er klar. Apps kan nu bede om at bruge den — du bliver altid spurgt først.",
     "profileSaved": "Profil gemt",
     "profileSyncLater": "Nogle servere kunne ikke nås — din profil synkroniseres senere"
   },
-
   "prompt": {
     "wantsAccess": "vil have adgang til din konto",
     "yourAccount": "Din Konto",
@@ -222,33 +208,26 @@
     "denyAlways": "Afvis altid",
     "moreOptions": "Flere muligheder",
     "fewerOptions": "Færre muligheder",
-
     "lockedTitle": "Buho Jump er låst",
     "lockedDesc": "En app har brug for adgang. Indtast din adgangskode for at fortsætte.",
-
     "permPublicLabel": "Se din offentlige profil",
     "permPublicWhat": "Appen vil vide hvem du er — som at vise dit profilkort.",
     "permPublicDetail": "Dette deler kun dine offentlige oplysninger. Den kan ikke poste eller handle på dine vegne.",
     "permPublicRisk": "Skrivebeskyttet",
-
     "permSignLabel": "Poste eller handle som dig",
     "permSignWhat": "Appen vil publicere noget med din konto — som et opslag, en reaktion eller en handling.",
     "permSignDetail": "Dette er som at trykke \"send\". Indholdet vil være synligt for andre.",
     "permSignRisk": "Skriveadgang",
-
     "permEncryptLabel": "Kryptere en besked",
     "permEncryptWhat": "Appen vil sende en privat besked, som kun modtageren kan læse.",
     "permEncryptDetail": "Beskeden krypteres inden den sendes.",
     "permEncryptRisk": "Beskeder",
-
     "permDecryptLabel": "Læse en privat besked",
     "permDecryptWhat": "Appen vil åbne en privat besked, der er sendt til dig.",
     "permDecryptDetail": "Den dekrypterede besked vil være synlig for appen.",
     "permDecryptRisk": "Beskeder",
-
     "permDefaultWhat": "Denne app anmoder om adgang til din konto.",
     "permDefaultRisk": "Tilladelse",
-
     "kindProfile": "Profiloplysninger",
     "kindNote": "Kort tekstnote",
     "kindContacts": "Kontaktliste",
@@ -261,7 +240,6 @@
     "kindAppData": "App-data",
     "kindGeneric": "Hændelsestype {kind}"
   },
-
   "wallet": {
     "balance": "Saldo",
     "refreshBalance": "Opdater saldo",
@@ -281,12 +259,10 @@
     "failedRefresh": "Opdatering mislykkedes",
     "walletConnected": "Tegnebog forbundet",
     "connectFailed": "Kunne ikke forbinde tegnebog",
-
     "noWallet": "Ingen tegnebog forbundet",
     "noWalletDesc": "Indsæt forbindelseslinket fra din tegnebogs-app for at aktivere betalinger.",
     "connectWallet": "Forbind Tegnebog",
     "connecting": "Forbinder...",
-
     "sendTitle": "Send Betaling",
     "sendResult": "Betalingsresultat",
     "invoiceLabel": "Faktura eller adresse",
@@ -306,7 +282,6 @@
     "paymentSuccess": "Din Lightning-betaling lykkedes",
     "preimage": "Preimage",
     "sendAnother": "Send endnu en betaling",
-
     "receiveTitle": "Modtag Betaling",
     "shareInvoice": "Del Faktura",
     "memo": "Note",
@@ -315,22 +290,18 @@
     "creating": "Opretter...",
     "requesting": "Anmoder",
     "newInvoice": "Ny Faktura",
-
     "historyTitle": "Transaktionshistorik",
     "loadMore": "Indlæs flere",
     "noResults": "Ingen transaktioner fundet",
-
     "detailTitle": "Transaktionsdetaljer",
     "description": "Beskrivelse",
     "date": "Dato",
     "fees": "Gebyrer",
     "paymentHash": "Betalingshash",
-
     "statusPending": "Afventer",
     "statusExpired": "Udløbet",
     "statusReceived": "Modtaget",
     "statusSent": "Sendt",
-
     "merchantPayment": "Butiksbetaling",
     "merchantDetected": "Butiks-QR registreret",
     "merchantPaying": "Betaler hos",
@@ -346,7 +317,6 @@
     "merchantNotSupported": "{name} QR-koder understøttes endnu ikke. Kun EMVCo detail-QR-koder (Pick n Pay, Checkers, Woolworths) fungerer i øjeblikket.",
     "merchantInsufficientBalance": "Utilstrækkelig saldo til denne betaling"
   },
-
   "toast": {
     "accountReady": "Konto klar",
     "switchedTo": "Skiftet til {name}",
@@ -358,12 +328,49 @@
     "failedRevoke": "Kunne ikke fjerne adgang",
     "failedPublish": "Kunne ikke gemme profil"
   },
-
   "qr": {
     "scanTitle": "Scan QR-kode",
     "startingCamera": "Starter kamera...",
     "uploadImage": "Upload et QR-kodebillede",
     "orUpload": "Eller upload en billedfil",
     "pointCamera": "Ret dit kamera mod en QR-kode"
+  },
+  "errors": {
+    "PERMISSION_DENIED": "Permission denied",
+    "NO_SIGNER": "No signer available",
+    "NO_ACCOUNT": "No active account",
+    "NO_EVENT": "No event provided",
+    "NO_PUBKEY": "No public key available",
+    "LOCAL_ACCOUNT_REQUIRED": "This action requires a local account",
+    "LOCKED": "Extension is locked",
+    "WRONG_PASSWORD": "Incorrect password"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "desc": "Choose which browser notifications you'd like to receive. You can change these anytime.",
+    "categories": "Categories",
+    "dms": "Messages",
+    "dmsDesc": "New encrypted messages from contacts",
+    "groups": "Group Messages",
+    "groupsDesc": "New messages in your groups and channels",
+    "payments": "Payments",
+    "paymentsDesc": "Incoming Lightning payments to your wallet",
+    "schedule": "Schedule",
+    "dnd": "Do Not Disturb",
+    "dndDesc": "Silence all notifications until turned off",
+    "quietHours": "Quiet Hours",
+    "quietHoursDesc": "Automatically silence notifications during set hours",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "hint": "Notifications appear as browser alerts even when the popup is closed.",
+    "settingsLabel": "Notifications",
+    "settingsDesc": "Manage browser alerts"
+  },
+  "chat": {
+    "initFailed": "Could not connect to relays. Try reloading.",
+    "contactsLoadFailed": "Could not load contacts. Check your connection."
+  },
+  "group": {
+    "initFailed": "Could not connect to group relays. Try reloading."
   }
 }

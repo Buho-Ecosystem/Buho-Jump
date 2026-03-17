@@ -13,8 +13,12 @@ export default defineConfig({
   },
   manifest: ({ browser }) => ({
     name: 'Buho Jump - Bitcoin Wallet for Lightning & Nostr',
+    short_name: 'Buho Jump',
     description: 'Your Bitcoin Lightning wallet and companion for Nostr apps, social identity, encrypted messaging and instant payments.',
+    version: '1.0.0',
+    homepage_url: 'https://github.com/Buho-Ecosystem/Buho-Jump',
     icons: {
+      16: 'favicon/favicon-16x16.png',
       48: 'logo/icon-48x48.png',
       96: 'logo/icon-96x96.png',
       128: 'logo/icon-128x128.png',
@@ -23,14 +27,18 @@ export default defineConfig({
     action: {
       default_title: 'Buho Jump',
       default_icon: {
+        16: 'favicon/favicon-16x16.png',
         48: 'logo/icon-48x48.png',
         96: 'logo/icon-96x96.png',
         128: 'logo/icon-128x128.png',
       },
     },
     permissions: browser === 'firefox'
-      ? ['storage', 'tabs', 'notifications']
-      : ['storage', 'tabs', 'windows', 'notifications'],
+      ? ['storage', 'tabs', 'notifications', 'alarms']
+      : ['storage', 'tabs', 'windows', 'notifications', 'alarms'],
+    ...(browser === 'chrome' && {
+      minimum_chrome_version: '110',
+    }),
     web_accessible_resources: [
       {
         resources: ['nostr-provider.js', 'webln-provider.js'],
@@ -41,6 +49,15 @@ export default defineConfig({
       browser_specific_settings: {
         gecko: {
           id: '@buho-jump',
+          strict_min_version: '115.0',
+          data_collection_permissions: {
+            required: [
+              'authenticationInfo',
+              'financialAndPaymentInfo',
+              'personalCommunications',
+            ],
+            optional: [],
+          },
         },
       },
     }),

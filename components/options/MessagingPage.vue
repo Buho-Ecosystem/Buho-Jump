@@ -3,7 +3,7 @@
  * Options page — Messaging management.
  * Three tabs: Conversations (DMs), Groups, Contacts.
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChat } from '../../composables/useChat.js'
 import { useGroups } from '../../composables/useGroups.js'
@@ -18,12 +18,14 @@ import BottomSheet from '../BottomSheet.vue'
 import {
   MessageSquare, Users, UserCircle, Search,
   Zap, Globe, Shield, LogOut, Plus, Link,
-  AlertTriangle, Loader2,
+  AlertTriangle, Loader2, ChevronRight,
 } from 'lucide-vue-next'
+
+const PAGE_SIZE = 20
 
 const { t } = useI18n()
 const { conversations, init: initChat, initialized: chatInit } = useChat()
-const { groups, groupConversations, init: initGroups, initialized: groupsInit, joinGroup, leaveGroup } = useGroups()
+const { groups, groupConversations, init: initGroups, initialized: groupsInit, joinRelayGroup, leaveGroup } = useGroups()
 const { contacts, loading: contactsLoading, loadFollowList, getCachedProfile, fetchProfiles } = useContacts()
 const { activeAccount } = useAccounts()
 const { isMuted } = useMuteList()
@@ -32,6 +34,9 @@ const toast = useToast()
 const tab = ref('conversations') // 'conversations' | 'groups' | 'contacts'
 const search = ref('')
 const initializing = ref(true)
+const visibleCount = ref(PAGE_SIZE)
+
+watch([tab, search], () => { visibleCount.value = PAGE_SIZE })
 
 // Group join form
 const showJoinForm = ref(false)
@@ -91,6 +96,12 @@ const filteredContacts = computed(() => {
   })
 })
 
+// Paginated contacts
+const paginatedContacts = computed(() => filteredContacts.value.slice(0, visibleCount.value))
+const hasMoreContacts = computed(() => visibleCount.value < filteredContacts.value.length)
+
+function showMoreContacts() { visibleCount.value += PAGE_SIZE }
+
 function profileName(pubkey) {
   const p = getCachedProfile(pubkey)
   return p?.display_name || p?.name || truncateNpub(pubkey)
@@ -107,7 +118,7 @@ async function handleJoinGroup() {
   if (!joinRelay.value.trim() || !joinGroupId.value.trim()) return
   joining.value = true
   try {
-    await joinGroup(joinGroupId.value.trim(), joinRelay.value.trim())
+    await joinRelayGroup(joinGroupId.value.trim(), joinRelay.value.trim())
     toast.success(t('group.accepted'))
     showJoinForm.value = false
     joinRelay.value = ''
@@ -123,7 +134,7 @@ async function handleLeaveGroup() {
   if (!leavingGroup.value) return
   leaveLoading.value = true
   try {
-    await leaveGroup(leavingGroup.value.id, leavingGroup.value.relay)
+    await leaveGroup(leavingGroup.value.id, leavingGroup.value.type, leavingGroup.value.relay)
     toast.info(t('group.leaveGroup'))
   } catch {
     toast.error(t('group.leaveFailed'))
@@ -151,7 +162,7 @@ async function handleLeaveGroup() {
         <MessageSquare v-if="tb === 'conversations'" class="w-3.5 h-3.5" />
         <Users v-else-if="tb === 'groups'" class="w-3.5 h-3.5" />
         <UserCircle v-else class="w-3.5 h-3.5" />
-        {{ tb === 'conversations' ? t('chat.filterDMs') : tb === 'groups' ? t('group.title') : t('chat.contacts') }}
+        {{ tb === 'conversations' ? t('chat.filterDms') : tb === 'groups' ? t('group.title') : t('chat.contacts') }}
       </button>
     </div>
 
@@ -208,11 +219,20 @@ async function handleLeaveGroup() {
 
       <!-- Join form -->
       <div v-if="showJoinForm" class="bg-surface-card rounded-3xl border border-border shadow-sm p-4 space-y-3">
-        <input v-model="joinRelay" placeholder="wss://groups.example.com"
-          class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors font-mono placeholder:text-text-muted" />
-        <input v-model="joinGroupId" :placeholder="t('group.groupId')"
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold">{{ t('group.joinExisting') }}</span>
+          <button @click="showJoinForm = false; joinRelay = ''; joinGroupId = ''"
+            class="text-[10px] text-text-muted hover:text-text-secondary transition-colors">{{ t('common.cancel') }}</button>
+        </div>
+        <div class="space-y-1">
+          <input v-model="joinRelay" :placeholder="t('group.serverPlaceholder')"
+            class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors font-mono placeholder:text-text-muted"
+            :class="joinRelay.trim() && !joinRelay.trim().startsWith('wss://') ? 'border-error' : ''" />
+          <p v-if="joinRelay.trim() && !joinRelay.trim().startsWith('wss://')" class="text-[9px] text-error px-1">{{ t('group.invalidRelay') }}</p>
+        </div>
+        <input v-model="joinGroupId" :placeholder="t('group.groupName')"
           class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted" />
-        <button @click="handleJoinGroup" :disabled="!joinRelay.trim() || !joinGroupId.trim() || joining"
+        <button @click="handleJoinGroup" :disabled="!joinRelay.trim() || !joinGroupId.trim() || joining || !joinRelay.trim().startsWith('wss://')"
           class="w-full py-2.5 text-xs rounded-2xl bg-brand text-surface-base font-semibold hover:bg-brand-hover disabled:opacity-40 transition-all btn-primary flex items-center justify-center gap-1.5">
           <Loader2 v-if="joining" class="w-3.5 h-3.5 animate-spin" />
           {{ joining ? t('group.joining') : t('group.joinGroup') }}
@@ -231,10 +251,8 @@ async function handleLeaveGroup() {
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium truncate">{{ g.name || g.id }}</div>
             <div class="flex items-center gap-2 text-[10px] text-text-muted">
-              <span class="flex items-center gap-0.5">
-                <Globe class="w-2.5 h-2.5" /> {{ g.relay }}
-              </span>
-              <span v-if="g.isOpen !== undefined" class="px-1 py-px rounded bg-surface-elevated font-medium">
+              <span v-if="g.about" class="truncate">{{ g.about }}</span>
+              <span v-if="g.isOpen !== undefined" class="px-1.5 py-0.5 rounded-full bg-surface-elevated font-medium shrink-0">
                 {{ g.isOpen ? t('group.openGroup') : t('group.closedGroup') }}
               </span>
             </div>
@@ -259,7 +277,7 @@ async function handleLeaveGroup() {
         <div v-for="i in 5" :key="i" class="skeleton-shimmer h-14 rounded-3xl" />
       </div>
       <div v-else-if="filteredContacts.length > 0" class="space-y-1">
-        <div v-for="c in filteredContacts" :key="c.pubkey"
+        <div v-for="c in paginatedContacts" :key="c.pubkey"
           class="flex items-center gap-3 px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
           <div class="w-10 h-10 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
             :style="!c.profile?.picture ? { background: getAvatarColor(c.pubkey) } : {}">
@@ -272,6 +290,13 @@ async function handleLeaveGroup() {
             <div v-else class="text-[11px] text-text-muted truncate">{{ truncateNpub(c.pubkey) }}</div>
           </div>
         </div>
+        <!-- Show more -->
+        <button v-if="hasMoreContacts" @click="showMoreContacts"
+          class="w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] text-text-muted hover:text-brand font-semibold transition-all duration-200">
+          <span>{{ t('common.showMore') }}</span>
+          <span class="text-[10px] opacity-60">({{ t('common.showingOf', { shown: paginatedContacts.length, total: filteredContacts.length }) }})</span>
+          <ChevronRight class="w-3 h-3" />
+        </button>
       </div>
       <div v-else class="bg-surface-card rounded-3xl border border-border p-8 text-center">
         <UserCircle class="w-6 h-6 text-text-muted mx-auto mb-2" />

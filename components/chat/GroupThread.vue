@@ -9,11 +9,12 @@ import { useGroups } from '../../composables/useGroups.js'
 import { useContacts } from '../../composables/useContacts.js'
 import { useToast } from '../../composables/useToast.js'
 import { nip19 } from 'nostr-core'
+import { truncateKey } from '../../lib/utils.js'
 import GroupBubble from './GroupBubble.vue'
 import {
-  ArrowLeft, Send, Loader2, Lock, X,
+  ArrowLeft, Send, Lock, X, Globe,
   MoreHorizontal, Copy, Check, ExternalLink, Info,
-  ChevronDown, Users,
+  ChevronDown, Users, MessageSquare,
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -22,20 +23,15 @@ const props = defineProps({
 
 const emit = defineEmits(['back', 'info'])
 const { t } = useI18n()
-const { groups, getMessages, sendGroupMessage, retryMessage, markRead, currentAccountPubkey } = useGroups()
+const { groups, getMessages, sendGroupMessage, retryMessage, markRead, currentAccountPubkey, gkey } = useGroups()
 const { getCachedProfile, fetchProfiles } = useContacts()
 const toast = useToast()
 
 const group = computed(() => {
-  const [gId, relay] = props.groupKey.split(':')
-  return groups.value.find(g => g.id === gId && g.relay === relay) || { id: gId, relay, name: gId }
+  return groups.value.find(g => gkey(g) === props.groupKey) || { id: props.groupKey, name: props.groupKey, type: 'relay' }
 })
 
-const groupId = computed(() => group.value.id)
-const groupRelay = computed(() => group.value.relay)
-
 const input = ref('')
-const sending = ref(false)
 const scrollRef = ref(null)
 const textareaRef = ref(null)
 const showMenu = ref(false)
@@ -88,7 +84,7 @@ const groupedMessages = computed(() => {
       if (parent) {
         replyContent = parent.content?.slice(0, 80) || ''
         const p = getCachedProfile(parent.sender)
-        replySenderName = p?.display_name || p?.name || parent.sender?.slice(0, 8) + '...'
+        replySenderName = p?.display_name || p?.name || truncateKey(nip19.npubEncode(parent.sender), 8, 4)
       }
     }
 
@@ -103,22 +99,19 @@ function formatShortDate(date) {
 
 // ── Actions ──
 
-async function handleSend() {
+function handleSend() {
   const text = input.value.trim()
-  if (!text || sending.value) return
+  if (!text) return
 
-  sending.value = true
-  try {
-    await sendGroupMessage(groupId.value, groupRelay.value, text, replyingTo.value?.id)
-    input.value = ''
-    replyingTo.value = null
-    resetTextareaHeight()
-  } catch {
-    toast.error(t('group.sendFailed'))
-  } finally {
-    sending.value = false
-    scrollToBottom()
-  }
+  const reply = replyingTo.value?.id
+  input.value = ''
+  replyingTo.value = null
+  resetTextareaHeight()
+  scrollToBottom()
+
+  sendGroupMessage(group.value, text, reply).catch(() => {
+    // Failed status shown on the bubble itself
+  })
 }
 
 async function handleRetry(msgId) {
@@ -203,20 +196,26 @@ watch(messageList, () => {
 <template>
   <div class="flex flex-col h-full">
     <!-- Header -->
-    <div class="flex items-center gap-2.5 px-3 py-2 border-b border-border shrink-0">
+    <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-border shrink-0">
       <button @click="emit('back')" class="p-1 rounded-full hover:bg-surface-elevated transition-all duration-200">
         <ArrowLeft class="w-5 h-5 text-text-secondary" />
       </button>
 
-      <div class="flex-1 min-w-0" @click="emit('info')">
-        <div class="text-[13px] font-semibold truncate cursor-pointer hover:text-brand transition-colors">
-          {{ group.name || group.id }}
+      <button class="flex-1 flex items-center gap-2.5 min-w-0 text-left rounded-lg py-0.5 hover:bg-surface-elevated/30 transition-colors" @click="emit('info')">
+        <!-- Type icon -->
+        <div class="w-8 h-8 rounded-full shrink-0 flex items-center justify-center"
+          :class="group.type === 'private' ? 'bg-brand/10' : group.type === 'channel' ? 'bg-success/10' : 'bg-info/10'">
+          <Lock v-if="group.type === 'private'" class="w-3.5 h-3.5 text-brand" />
+          <Globe v-else-if="group.type === 'channel'" class="w-3.5 h-3.5 text-success" />
+          <Users v-else class="w-3.5 h-3.5 text-info" />
         </div>
-        <div class="flex items-center gap-1 text-[10px] text-text-muted">
-          <Users class="w-2.5 h-2.5" />
-          <span>{{ t('group.title') }}</span>
+        <div class="min-w-0">
+          <div class="text-[13px] font-semibold truncate leading-tight">{{ group.name || group.id }}</div>
+          <div class="text-[10px] text-text-muted leading-tight">
+            {{ group.type === 'private' ? t('group.typePrivate') : group.type === 'channel' ? t('group.typeChannel') : t('group.typeCommunity') }}
+          </div>
         </div>
-      </div>
+      </button>
 
       <!-- Menu -->
       <div class="relative" ref="menuRef">
@@ -261,8 +260,14 @@ watch(messageList, () => {
 
       <!-- Empty state -->
       <div v-else class="flex flex-col items-center justify-center h-full text-center py-12 space-y-2">
-        <Lock class="w-5 h-5 text-text-muted" />
-        <p class="text-xs text-text-muted">{{ t('chat.emptyThreadTitle') }}</p>
+        <div class="w-10 h-10 rounded-full flex items-center justify-center"
+          :class="group.type === 'private' ? 'bg-brand/10' : group.type === 'channel' ? 'bg-success/10' : 'bg-info/10'">
+          <Lock v-if="group.type === 'private'" class="w-4 h-4 text-brand" />
+          <Globe v-else-if="group.type === 'channel'" class="w-4 h-4 text-success" />
+          <MessageSquare v-else class="w-4 h-4 text-info" />
+        </div>
+        <p class="text-xs font-medium">{{ t('chat.emptyThreadTitle') }}</p>
+        <p class="text-[10px] text-text-muted px-8">{{ t('chat.sendMessage') }}</p>
       </div>
     </div>
 
@@ -275,7 +280,7 @@ watch(messageList, () => {
     <!-- Reply bar -->
     <div v-if="replyingTo" class="flex items-center gap-2 px-3 py-1.5 border-t border-border bg-surface-elevated/50 text-xs">
       <div class="flex-1 min-w-0 truncate text-text-muted">
-        <span class="font-semibold text-brand">{{ t('group.replyTo', { name: getCachedProfile(replyingTo.sender)?.name || replyingTo.sender?.slice(0, 8) }) }}</span>
+        <span class="font-semibold text-brand">{{ t('group.replyTo', { name: getCachedProfile(replyingTo.sender)?.display_name || getCachedProfile(replyingTo.sender)?.name || truncateKey(nip19.npubEncode(replyingTo.sender), 8, 4) }) }}</span>
         <span class="ml-1">{{ replyingTo.content?.slice(0, 60) }}</span>
       </div>
       <button @click="cancelReply" class="p-0.5 rounded hover:bg-surface-elevated transition-colors">
@@ -296,11 +301,10 @@ watch(messageList, () => {
       />
       <button
         @click="handleSend"
-        :disabled="!input.trim() || sending"
+        :disabled="!input.trim()"
         class="p-2.5 rounded-full bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 shrink-0 btn-primary"
       >
-        <Loader2 v-if="sending" class="w-4 h-4 animate-spin" />
-        <Send v-else class="w-4 h-4" />
+        <Send class="w-4 h-4" />
       </button>
     </div>
   </div>

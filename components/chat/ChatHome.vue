@@ -12,14 +12,16 @@ import { useMuteList } from '../../composables/useMuteList.js'
 import ConversationItem from './ConversationItem.vue'
 import GroupConversationItem from './GroupConversationItem.vue'
 import GroupInvitationBanner from './GroupInvitationBanner.vue'
-import { MessageSquare, PenSquare, Search, ChevronDown, VolumeX, Users } from 'lucide-vue-next'
+import { MessageSquare, PenSquare, Search, ChevronDown, VolumeX, Users, AlertTriangle } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const emit = defineEmits(['open', 'open-group', 'new-chat', 'new-group'])
 
-const { conversations, init: initChat, initialized: chatInitialized, currentAccountPubkey } = useChat()
-const { groupConversations, init: initGroups, initialized: groupsInitialized } = useGroups()
+const { conversations, init: initChat, initialized: chatInitialized, error: chatError, currentAccountPubkey } = useChat()
+const { groupConversations, init: initGroups, initialized: groupsInitialized, error: groupError } = useGroups()
 const { getCachedProfile, fetchProfiles } = useContacts()
+
+const connectionError = computed(() => chatError.value || groupError.value)
 const { isMuted, load: loadMuteList } = useMuteList()
 
 const search = ref('')
@@ -73,6 +75,16 @@ const hasAnyContent = computed(() =>
   unified.value.length > 0 || mutedConversations.value.length > 0
 )
 
+const dmCount = computed(() => conversations.value.filter(c => !isMuted(c.pubkey)).length)
+const groupCount = computed(() => groupConversations.value.length)
+
+function tabLabel(f) {
+  const label = t(`chat.filter${f[0].toUpperCase() + f.slice(1)}`)
+  if (f === 'dms' && dmCount.value > 0) return `${label} (${dmCount.value})`
+  if (f === 'groups' && groupCount.value > 0) return `${label} (${groupCount.value})`
+  return label
+}
+
 function byRecency(a, b) {
   const aTs = a.lastMessage?.created_at || a.group?.joinedAt || 0
   const bTs = b.lastMessage?.created_at || b.group?.joinedAt || 0
@@ -115,12 +127,18 @@ onMounted(async () => {
           ? 'bg-brand/10 text-brand'
           : 'text-text-muted hover:text-text-secondary hover:bg-surface-elevated'"
       >
-        {{ t(`chat.filter${f[0].toUpperCase() + f.slice(1)}`) }}
+        {{ tabLabel(f) }}
       </button>
     </div>
 
     <!-- Invitation banner -->
     <GroupInvitationBanner />
+
+    <!-- Connection error banner -->
+    <div v-if="connectionError" class="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-2xl bg-warning/10 border border-warning/20 text-[11px] text-warning">
+      <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
+      <span>{{ t(connectionError) }}</span>
+    </div>
 
     <!-- Loading skeleton -->
     <div v-if="!initialized" class="px-3 space-y-1">

@@ -88,7 +88,7 @@ export function useLock() {
   function startAutoLock() {
     clearAutoLock()
     chrome.storage.local.get('autoLockMinutes').then(({ autoLockMinutes }) => {
-      const minutes = autoLockMinutes ?? 5
+      const minutes = autoLockMinutes ?? 0
       if (minutes <= 0) return // "never" option
       const totalMs = minutes * 60 * 1000
 

@@ -21,9 +21,11 @@
     "optional": "optional",
     "getStarted": "Los geht's",
     "copiedToClipboard": "In die Zwischenablage kopiert",
-    "pleaseWait": "Bitte warten"
+    "pleaseWait": "Bitte warten",
+    "showingOf": "Showing {shown} of {total}",
+    "showMore": "Show more",
+    "offline": "No internet connection"
   },
-
   "lock": {
     "createTitle": "Passwort erstellen",
     "unlockTitle": "Willkommen zurück",
@@ -43,12 +45,10 @@
     "strengthStrong": "Stark",
     "mismatch": "Passwörter stimmen nicht überein"
   },
-
   "tabs": {
     "account": "Konto",
     "wallet": "Wallet"
   },
-
   "settings": {
     "appearance": "Darstellung",
     "lightMode": "Helles Design",
@@ -66,7 +66,6 @@
     "relaySettingsDesc": "Verwalte deine Relay-Verbindungen",
     "version": "Buho Jump v{version}"
   },
-
   "relay": {
     "title": "Relay-Einstellungen",
     "warning": "Warnung: Änderungen an diesen Einstellungen können dein Nutzungserlebnis beeinflussen",
@@ -111,7 +110,6 @@
     "infoYes": "Ja",
     "infoNo": "Nein"
   },
-
   "account": {
     "activeDesc": "Aktives Konto — Apps verwenden dieses Profil",
     "appPermissions": "App-Berechtigungen",
@@ -131,19 +129,16 @@
     "external": "Extern",
     "local": "Lokal"
   },
-
   "wizard": {
     "addAccount": "Konto hinzufügen",
     "addAccountDesc": "Dein Konto ermöglicht es dir, dich bei Apps anzumelden, Beiträge zu veröffentlichen und Nachrichten zu senden — ganz ohne zentralen Server.",
     "recommended": "Empfohlen",
-
     "modeNewTitle": "Neues Konto erstellen",
     "modeNewDesc": "Starte neu — wir richten alles in Sekunden für dich ein.",
     "modeImportTitle": "Ich habe bereits ein Konto",
     "modeImportDesc": "Verwende dein bestehendes Konto, indem du deinen Sicherungsschlüssel eingibst.",
     "modeSignerTitle": "Externer Signer",
     "modeSignerDesc": "Verbinde dich mit einer Signer-App wie nsec.app, Amber oder Primal.",
-
     "stepSetup": "Einrichtung",
     "stepName": "Name",
     "stepImport": "Importieren",
@@ -151,14 +146,12 @@
     "stepBackup": "Sicherung",
     "stepProfile": "Profil",
     "stepDone": "Fertig",
-
     "chooseName": "Wähle einen Namen",
     "chooseNameDesc": "Wähle einen Namen, den andere sehen, wenn sie mit dir interagieren. Du kannst ihn jederzeit ändern.",
     "importAccount": "Konto importieren",
     "importAccountDesc": "Gib den Sicherungsschlüssel deines bestehenden Kontos ein, um es hier wiederherzustellen.",
     "connectSigner": "Signer verbinden",
     "connectSignerDesc": "Füge den Verbindungslink deiner Signer-App ein.",
-
     "displayName": "Anzeigename",
     "namePlaceholder": "z. B. satoshi, alice, dein_name",
     "nameHint": "So sehen dich andere. Verwende deinen echten Namen, einen Spitznamen oder was du möchtest.",
@@ -168,11 +161,9 @@
     "connectionLink": "Verbindungslink",
     "connectionPlaceholder": "bunker://... oder nostrconnect://...",
     "signerHint": "Du erhältst diesen von deiner Signer-App (nsec.app, Amber, Primal). Deine Schlüssel bleiben dort — wir sehen sie nie.",
-
     "createAccount": "Konto erstellen",
     "importAccountBtn": "Konto importieren",
     "connect": "Verbinden",
-
     "connectPreparing": "Wird vorbereitet...",
     "connectConnecting": "Verbindung mit deinem Signer wird hergestellt...",
     "connectFetchingProfile": "Profil wird geladen...",
@@ -181,7 +172,6 @@
     "progressSecureConnection": "Sichere Verbindung wird aufgebaut",
     "progressConnecting": "Verbindung mit deiner Signer-App",
     "progressLoadingProfile": "Profil wird geladen",
-
     "backupTitle": "Sicherungsschlüssel speichern",
     "backupDesc": "Dies ist die einzige Möglichkeit, dein Konto wiederherzustellen. Wenn du ihn verlierst, kann dir niemand helfen — auch wir nicht.",
     "backupWarning": "Teile diesen Schlüssel niemals mit anderen — behandle ihn wie ein Passwort",
@@ -190,7 +180,6 @@
     "downloadFile": "Datei herunterladen",
     "backupConfirm": "Ich habe meinen Sicherungsschlüssel sicher gespeichert",
     "backupConfirmHint": "Verwende einen Passwort-Manager, eine sichere Notiz oder schreibe ihn auf Papier und bewahre ihn sicher auf.",
-
     "profileTitle": "Dein Profil",
     "profileDesc": "Überprüfe deine Profilinformationen. Du kannst sie jederzeit ändern.",
     "completeProfile": "Profil vervollständigen",
@@ -199,19 +188,16 @@
     "aboutPlaceholder": "Erzähle der Welt etwas über dich...",
     "saveProfile": "Profil speichern",
     "saving": "Wird gespeichert...",
-
     "connectedTitle": "Verbunden",
     "connectedDesc": "Dein Signer ist verknüpft und einsatzbereit",
     "connectedBadge": "Aktiv",
     "signerExplainer": "Deine Schlüssel bleiben sicher in der Signer-App. Wenn eine App in deinem Namen handeln möchte, wird die Anfrage zur Genehmigung an deinen Signer gesendet.",
     "howItWorks": "So funktioniert es:",
-
     "doneTitle": "Alles bereit",
     "doneDesc": "Dein Konto ist eingerichtet. Apps können nun Zugriff anfragen — du wirst immer zuerst gefragt.",
     "profileSaved": "Profil erfolgreich gespeichert",
     "profileSyncLater": "Einige Server waren nicht erreichbar — dein Profil wird später synchronisiert"
   },
-
   "prompt": {
     "wantsAccess": "möchte auf dein Konto zugreifen",
     "yourAccount": "Dein Konto",
@@ -222,33 +208,26 @@
     "denyAlways": "Immer ablehnen",
     "moreOptions": "Weitere Optionen",
     "fewerOptions": "Weniger Optionen",
-
     "lockedTitle": "Buho Jump ist gesperrt",
     "lockedDesc": "Eine App benötigt Zugriff. Gib dein Passwort ein, um fortzufahren.",
-
     "permPublicLabel": "Öffentliches Profil anzeigen",
     "permPublicWhat": "Die App möchte wissen, wer du bist — z. B. um deine Profilkarte anzuzeigen.",
     "permPublicDetail": "Es werden nur öffentliche Informationen geteilt. Die App kann nicht in deinem Namen posten oder handeln.",
     "permPublicRisk": "Nur Lesen",
-
     "permSignLabel": "In deinem Namen posten oder handeln",
     "permSignWhat": "Die App möchte etwas mit deinem Konto veröffentlichen — z. B. einen Beitrag, eine Reaktion oder eine Aktion.",
-    "permSignDetail": "Das ist wie \u201ESenden\u201C drücken. Der Inhalt wird für andere sichtbar sein.",
+    "permSignDetail": "Das ist wie „Senden“ drücken. Der Inhalt wird für andere sichtbar sein.",
     "permSignRisk": "Schreibzugriff",
-
     "permEncryptLabel": "Nachricht verschlüsseln",
     "permEncryptWhat": "Die App möchte eine private Nachricht senden, die nur der Empfänger lesen kann.",
     "permEncryptDetail": "Die Nachricht wird vor dem Senden verschlüsselt.",
     "permEncryptRisk": "Nachrichten",
-
     "permDecryptLabel": "Private Nachricht lesen",
     "permDecryptWhat": "Die App möchte eine private Nachricht öffnen, die an dich gesendet wurde.",
     "permDecryptDetail": "Die entschlüsselte Nachricht wird für die App sichtbar.",
     "permDecryptRisk": "Nachrichten",
-
     "permDefaultWhat": "Diese App fordert Zugriff auf dein Konto an.",
     "permDefaultRisk": "Berechtigung",
-
     "kindProfile": "Profilmetadaten",
     "kindNote": "Kurze Textnotiz",
     "kindContacts": "Kontaktliste",
@@ -261,7 +240,6 @@
     "kindAppData": "App-Daten",
     "kindGeneric": "Ereignistyp {kind}"
   },
-
   "wallet": {
     "balance": "Guthaben",
     "refreshBalance": "Guthaben aktualisieren",
@@ -281,12 +259,10 @@
     "failedRefresh": "Aktualisierung fehlgeschlagen",
     "walletConnected": "Wallet verbunden",
     "connectFailed": "Wallet-Verbindung fehlgeschlagen",
-
     "noWallet": "Kein Wallet verbunden",
     "noWalletDesc": "Füge den Verbindungslink deiner Wallet-App ein, um Zahlungen zu ermöglichen.",
     "connectWallet": "Wallet verbinden",
     "connecting": "Verbindung wird hergestellt...",
-
     "sendTitle": "Zahlung senden",
     "sendResult": "Zahlungsergebnis",
     "invoiceLabel": "Rechnung oder Adresse",
@@ -306,7 +282,6 @@
     "paymentSuccess": "Deine Lightning-Zahlung war erfolgreich",
     "preimage": "Preimage",
     "sendAnother": "Weitere Zahlung senden",
-
     "receiveTitle": "Zahlung empfangen",
     "shareInvoice": "Rechnung teilen",
     "memo": "Verwendungszweck",
@@ -315,22 +290,18 @@
     "creating": "Wird erstellt...",
     "requesting": "Wird angefordert",
     "newInvoice": "Neue Rechnung",
-
     "historyTitle": "Transaktionsverlauf",
     "loadMore": "Mehr laden",
     "noResults": "Keine Transaktionen gefunden",
-
     "detailTitle": "Transaktionsdetails",
     "description": "Beschreibung",
     "date": "Datum",
     "fees": "Gebühren",
     "paymentHash": "Zahlungs-Hash",
-
     "statusPending": "Ausstehend",
     "statusExpired": "Abgelaufen",
     "statusReceived": "Empfangen",
     "statusSent": "Gesendet",
-
     "merchantPayment": "Ladenzahlung",
     "merchantDetected": "Laden-QR erkannt",
     "merchantPaying": "Zahlung bei",
@@ -346,7 +317,6 @@
     "merchantNotSupported": "{name} QR-Codes werden noch nicht unterstützt. Derzeit funktionieren nur EMVCo-Einzelhandels-QR-Codes (Pick n Pay, Checkers, Woolworths).",
     "merchantInsufficientBalance": "Unzureichendes Guthaben für diese Zahlung"
   },
-
   "toast": {
     "accountReady": "Konto bereit",
     "switchedTo": "Gewechselt zu {name}",
@@ -358,12 +328,49 @@
     "failedRevoke": "Zugriff konnte nicht entfernt werden",
     "failedPublish": "Profil konnte nicht gespeichert werden"
   },
-
   "qr": {
     "scanTitle": "QR-Code scannen",
     "startingCamera": "Kamera wird gestartet...",
     "uploadImage": "QR-Code-Bild hochladen",
     "orUpload": "Oder eine Bilddatei hochladen",
     "pointCamera": "Richte die Kamera auf einen QR-Code"
+  },
+  "errors": {
+    "PERMISSION_DENIED": "Permission denied",
+    "NO_SIGNER": "No signer available",
+    "NO_ACCOUNT": "No active account",
+    "NO_EVENT": "No event provided",
+    "NO_PUBKEY": "No public key available",
+    "LOCAL_ACCOUNT_REQUIRED": "This action requires a local account",
+    "LOCKED": "Extension is locked",
+    "WRONG_PASSWORD": "Incorrect password"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "desc": "Choose which browser notifications you'd like to receive. You can change these anytime.",
+    "categories": "Categories",
+    "dms": "Messages",
+    "dmsDesc": "New encrypted messages from contacts",
+    "groups": "Group Messages",
+    "groupsDesc": "New messages in your groups and channels",
+    "payments": "Payments",
+    "paymentsDesc": "Incoming Lightning payments to your wallet",
+    "schedule": "Schedule",
+    "dnd": "Do Not Disturb",
+    "dndDesc": "Silence all notifications until turned off",
+    "quietHours": "Quiet Hours",
+    "quietHoursDesc": "Automatically silence notifications during set hours",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "hint": "Notifications appear as browser alerts even when the popup is closed.",
+    "settingsLabel": "Notifications",
+    "settingsDesc": "Manage browser alerts"
+  },
+  "chat": {
+    "initFailed": "Could not connect to relays. Try reloading.",
+    "contactsLoadFailed": "Could not load contacts. Check your connection."
+  },
+  "group": {
+    "initFailed": "Could not connect to group relays. Try reloading."
   }
 }

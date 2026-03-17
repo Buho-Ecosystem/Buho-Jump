@@ -21,9 +21,11 @@
     "optional": "optioneel",
     "getStarted": "Aan de slag",
     "copiedToClipboard": "Naar klembord gekopieerd",
-    "pleaseWait": "Even geduld"
+    "pleaseWait": "Even geduld",
+    "showingOf": "Showing {shown} of {total}",
+    "showMore": "Show more",
+    "offline": "No internet connection"
   },
-
   "lock": {
     "createTitle": "Wachtwoord Aanmaken",
     "unlockTitle": "Welkom Terug",
@@ -43,12 +45,10 @@
     "strengthStrong": "Sterk",
     "mismatch": "Wachtwoorden komen niet overeen"
   },
-
   "tabs": {
     "account": "Account",
     "wallet": "Portemonnee"
   },
-
   "settings": {
     "appearance": "Weergave",
     "lightMode": "Lichte modus",
@@ -66,7 +66,6 @@
     "relaySettingsDesc": "Beheer je relay-verbindingen",
     "version": "Buho Jump v{version}"
   },
-
   "relay": {
     "title": "Relay-instellingen",
     "warning": "Waarschuwing: Het wijzigen van deze instellingen kan je kernervaring beïnvloeden",
@@ -111,7 +110,6 @@
     "infoYes": "Ja",
     "infoNo": "Nee"
   },
-
   "account": {
     "activeDesc": "Actief account — apps gebruiken dit profiel",
     "appPermissions": "App-machtigingen",
@@ -131,19 +129,16 @@
     "external": "Extern",
     "local": "Lokaal"
   },
-
   "wizard": {
     "addAccount": "Account Toevoegen",
     "addAccountDesc": "Met je account kun je inloggen bij apps, berichten plaatsen en versturen — alles zonder centrale server.",
     "recommended": "Aanbevolen",
-
     "modeNewTitle": "Nieuw Account Aanmaken",
     "modeNewDesc": "Begin helemaal opnieuw — we regelen alles voor je in een paar seconden.",
     "modeImportTitle": "Ik Heb Al een Account",
     "modeImportDesc": "Gebruik je bestaande account door je back-upsleutel in te voeren.",
     "modeSignerTitle": "Externe Ondertekenaar",
     "modeSignerDesc": "Verbind met een ondertekenaar-app zoals nsec.app, Amber of Primal.",
-
     "stepSetup": "Instellen",
     "stepName": "Naam",
     "stepImport": "Importeren",
@@ -151,14 +146,12 @@
     "stepBackup": "Back-up",
     "stepProfile": "Profiel",
     "stepDone": "Klaar",
-
     "chooseName": "Kies een Naam",
     "chooseNameDesc": "Kies een naam die anderen zien wanneer ze met je communiceren. Je kunt deze altijd wijzigen.",
     "importAccount": "Account Importeren",
     "importAccountDesc": "Voer de back-upsleutel van je bestaande account in om het hier te herstellen.",
     "connectSigner": "Ondertekenaar Verbinden",
     "connectSignerDesc": "Plak de verbindingslink van je ondertekenaar-app.",
-
     "displayName": "Weergavenaam",
     "namePlaceholder": "bijv. satoshi, alice, jouw_naam",
     "nameHint": "Zo zien anderen je. Gebruik je echte naam, een bijnaam, of wat je maar wilt.",
@@ -168,11 +161,9 @@
     "connectionLink": "Verbindingslink",
     "connectionPlaceholder": "bunker://... of nostrconnect://...",
     "signerHint": "Verkrijg dit via je ondertekenaar-app (nsec.app, Amber, Primal). Je sleutels blijven daar — wij zien ze nooit.",
-
     "createAccount": "Account Aanmaken",
     "importAccountBtn": "Account Importeren",
     "connect": "Verbinden",
-
     "connectPreparing": "Voorbereiden...",
     "connectConnecting": "Verbinden met je ondertekenaar...",
     "connectFetchingProfile": "Je profiel laden...",
@@ -181,7 +172,6 @@
     "progressSecureConnection": "Beveiligde verbinding opzetten",
     "progressConnecting": "Verbinden met je ondertekenaar-app",
     "progressLoadingProfile": "Je profiel laden",
-
     "backupTitle": "Sla Je Back-upsleutel Op",
     "backupDesc": "Dit is de enige manier om je account te herstellen. Als je deze kwijtraakt, kan niemand helpen — zelfs wij niet.",
     "backupWarning": "Deel dit nooit met iemand — behandel het als een wachtwoord",
@@ -190,7 +180,6 @@
     "downloadFile": "Bestand downloaden",
     "backupConfirm": "Ik heb mijn back-upsleutel veilig opgeslagen",
     "backupConfirmHint": "Gebruik een wachtwoordmanager, een beveiligde notitie, of schrijf het op papier en bewaar het veilig.",
-
     "profileTitle": "Je Profiel",
     "profileDesc": "Bekijk je profielgegevens. Je kunt dit altijd bijwerken.",
     "completeProfile": "Profiel Voltooien",
@@ -199,19 +188,16 @@
     "aboutPlaceholder": "Vertel de wereld over jezelf...",
     "saveProfile": "Profiel Opslaan",
     "saving": "Opslaan...",
-
     "connectedTitle": "Verbonden",
     "connectedDesc": "Je ondertekenaar is gekoppeld en klaar voor gebruik",
     "connectedBadge": "Actief",
     "signerExplainer": "Je sleutels blijven veilig in de ondertekenaar-app. Wanneer een app namens jou moet handelen, wordt het verzoek ter goedkeuring naar je ondertekenaar gestuurd.",
     "howItWorks": "Hoe het werkt:",
-
     "doneTitle": "Alles is Klaar",
     "doneDesc": "Je account is gereed. Apps kunnen nu vragen om het te gebruiken — je wordt altijd eerst gevraagd.",
     "profileSaved": "Profiel succesvol opgeslagen",
     "profileSyncLater": "Sommige servers konden niet worden bereikt — je profiel wordt later gesynchroniseerd"
   },
-
   "prompt": {
     "wantsAccess": "wil toegang tot je account",
     "yourAccount": "Je Account",
@@ -222,33 +208,26 @@
     "denyAlways": "Altijd weigeren",
     "moreOptions": "Meer opties",
     "fewerOptions": "Minder opties",
-
     "lockedTitle": "Buho Jump is vergrendeld",
     "lockedDesc": "Een app heeft toegang nodig. Voer je wachtwoord in om door te gaan.",
-
     "permPublicLabel": "Je openbare profiel bekijken",
     "permPublicWhat": "De app wil weten wie je bent — zoals het tonen van je profielkaart.",
     "permPublicDetail": "Dit deelt alleen je openbare informatie. Het kan niet posten of namens jou handelen.",
     "permPublicRisk": "Alleen lezen",
-
     "permSignLabel": "Posten of handelen namens jou",
     "permSignWhat": "De app wil iets publiceren met je account — zoals een bericht, reactie of actie.",
     "permSignDetail": "Dit is als op \"verzenden\" drukken. De inhoud wordt zichtbaar voor anderen.",
     "permSignRisk": "Schrijftoegang",
-
     "permEncryptLabel": "Een bericht versleutelen",
     "permEncryptWhat": "De app wil een privébericht versturen dat alleen de ontvanger kan lezen.",
     "permEncryptDetail": "Het bericht wordt versleuteld voordat het wordt verzonden.",
     "permEncryptRisk": "Berichten",
-
     "permDecryptLabel": "Een privébericht lezen",
     "permDecryptWhat": "De app wil een privébericht openen dat naar jou is gestuurd.",
     "permDecryptDetail": "Het ontsleutelde bericht wordt zichtbaar voor de app.",
     "permDecryptRisk": "Berichten",
-
     "permDefaultWhat": "Deze app vraagt toegang tot je account.",
     "permDefaultRisk": "Machtiging",
-
     "kindProfile": "Profielgegevens",
     "kindNote": "Kort tekstbericht",
     "kindContacts": "Contactenlijst",
@@ -261,7 +240,6 @@
     "kindAppData": "App-gegevens",
     "kindGeneric": "Eventtype {kind}"
   },
-
   "wallet": {
     "balance": "Saldo",
     "refreshBalance": "Saldo vernieuwen",
@@ -281,12 +259,10 @@
     "failedRefresh": "Vernieuwen mislukt",
     "walletConnected": "Portemonnee verbonden",
     "connectFailed": "Verbinding met portemonnee mislukt",
-
     "noWallet": "Geen portemonnee verbonden",
     "noWalletDesc": "Plak de verbindingslink van je portemonnee-app om betalingen in te schakelen.",
     "connectWallet": "Portemonnee Verbinden",
     "connecting": "Verbinden...",
-
     "sendTitle": "Betaling Versturen",
     "sendResult": "Betalingsresultaat",
     "invoiceLabel": "Factuur of adres",
@@ -306,7 +282,6 @@
     "paymentSuccess": "Je Lightning-betaling is geslaagd",
     "preimage": "Preimage",
     "sendAnother": "Nog een betaling versturen",
-
     "receiveTitle": "Betaling Ontvangen",
     "shareInvoice": "Factuur Delen",
     "memo": "Omschrijving",
@@ -315,22 +290,18 @@
     "creating": "Aanmaken...",
     "requesting": "Aanvragen",
     "newInvoice": "Nieuwe Factuur",
-
     "historyTitle": "Transactiegeschiedenis",
     "loadMore": "Meer laden",
     "noResults": "Geen transacties gevonden",
-
     "detailTitle": "Transactiedetails",
     "description": "Omschrijving",
     "date": "Datum",
     "fees": "Kosten",
     "paymentHash": "Betalingshash",
-
     "statusPending": "In behandeling",
     "statusExpired": "Verlopen",
     "statusReceived": "Ontvangen",
     "statusSent": "Verstuurd",
-
     "merchantPayment": "Winkelbetaling",
     "merchantDetected": "Winkel-QR gedetecteerd",
     "merchantPaying": "Betaling bij",
@@ -346,7 +317,6 @@
     "merchantNotSupported": "{name} QR-codes worden nog niet ondersteund. Momenteel werken alleen EMVCo retail QR-codes (Pick n Pay, Checkers, Woolworths).",
     "merchantInsufficientBalance": "Onvoldoende saldo voor deze betaling"
   },
-
   "toast": {
     "accountReady": "Account gereed",
     "switchedTo": "Gewisseld naar {name}",
@@ -358,12 +328,49 @@
     "failedRevoke": "Intrekken van toegang mislukt",
     "failedPublish": "Opslaan van profiel mislukt"
   },
-
   "qr": {
     "scanTitle": "QR-code Scannen",
     "startingCamera": "Camera starten...",
     "uploadImage": "QR-code afbeelding uploaden",
     "orUpload": "Of upload een afbeelding",
     "pointCamera": "Richt je camera op een QR-code"
+  },
+  "errors": {
+    "PERMISSION_DENIED": "Permission denied",
+    "NO_SIGNER": "No signer available",
+    "NO_ACCOUNT": "No active account",
+    "NO_EVENT": "No event provided",
+    "NO_PUBKEY": "No public key available",
+    "LOCAL_ACCOUNT_REQUIRED": "This action requires a local account",
+    "LOCKED": "Extension is locked",
+    "WRONG_PASSWORD": "Incorrect password"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "desc": "Choose which browser notifications you'd like to receive. You can change these anytime.",
+    "categories": "Categories",
+    "dms": "Messages",
+    "dmsDesc": "New encrypted messages from contacts",
+    "groups": "Group Messages",
+    "groupsDesc": "New messages in your groups and channels",
+    "payments": "Payments",
+    "paymentsDesc": "Incoming Lightning payments to your wallet",
+    "schedule": "Schedule",
+    "dnd": "Do Not Disturb",
+    "dndDesc": "Silence all notifications until turned off",
+    "quietHours": "Quiet Hours",
+    "quietHoursDesc": "Automatically silence notifications during set hours",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "hint": "Notifications appear as browser alerts even when the popup is closed.",
+    "settingsLabel": "Notifications",
+    "settingsDesc": "Manage browser alerts"
+  },
+  "chat": {
+    "initFailed": "Could not connect to relays. Try reloading.",
+    "contactsLoadFailed": "Could not load contacts. Check your connection."
+  },
+  "group": {
+    "initFailed": "Could not connect to group relays. Try reloading."
   }
 }

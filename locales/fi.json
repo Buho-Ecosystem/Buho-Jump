@@ -21,9 +21,11 @@
     "optional": "valinnainen",
     "getStarted": "Aloita",
     "copiedToClipboard": "Kopioitu leikepöydälle",
-    "pleaseWait": "Odota hetki"
+    "pleaseWait": "Odota hetki",
+    "showingOf": "Showing {shown} of {total}",
+    "showMore": "Show more",
+    "offline": "No internet connection"
   },
-
   "lock": {
     "createTitle": "Luo salasana",
     "unlockTitle": "Tervetuloa takaisin",
@@ -43,12 +45,10 @@
     "strengthStrong": "Vahva",
     "mismatch": "Salasanat eivät täsmää"
   },
-
   "tabs": {
     "account": "Tili",
     "wallet": "Lompakko"
   },
-
   "settings": {
     "appearance": "Ulkoasu",
     "lightMode": "Vaalea teema",
@@ -66,7 +66,6 @@
     "relaySettingsDesc": "Hallitse välityspalvelimia tilille, lompakolle ja chatille",
     "version": "Buho Jump v{version}"
   },
-
   "relay": {
     "title": "Välityspalvelinasetukset",
     "warning": "Varoitus: Näiden asetusten muuttaminen voi vaikuttaa peruskokemukseesi",
@@ -111,7 +110,6 @@
     "infoYes": "Kyllä",
     "infoNo": "Ei"
   },
-
   "account": {
     "activeDesc": "Aktiivinen tili — sovellukset käyttävät tätä profiilia",
     "appPermissions": "Sovellusten käyttöoikeudet",
@@ -131,19 +129,16 @@
     "external": "Ulkoinen",
     "local": "Paikallinen"
   },
-
   "wizard": {
     "addAccount": "Lisää tili",
     "addAccountDesc": "Tilisi avulla voit kirjautua sovelluksiin, julkaista sisältöä ja lähettää viestejä — ilman keskitettyä palvelinta.",
     "recommended": "Suositeltu",
-
     "modeNewTitle": "Luo uusi tili",
     "modeNewDesc": "Aloita alusta — asetamme kaiken valmiiksi hetkessä.",
     "modeImportTitle": "Minulla on jo tili",
     "modeImportDesc": "Käytä olemassa olevaa tiliäsi syöttämällä vara-avaimesi.",
     "modeSignerTitle": "Ulkoinen allekirjoittaja",
     "modeSignerDesc": "Yhdistä allekirjoitussovellukseen kuten nsec.app, Amber tai Primal.",
-
     "stepSetup": "Asennus",
     "stepName": "Nimi",
     "stepImport": "Tuonti",
@@ -151,14 +146,12 @@
     "stepBackup": "Varmuuskopio",
     "stepProfile": "Profiili",
     "stepDone": "Valmis",
-
     "chooseName": "Valitse nimi",
     "chooseNameDesc": "Valitse nimi, jonka muut näkevät ollessaan kanssasi vuorovaikutuksessa. Voit muuttaa sen milloin tahansa.",
     "importAccount": "Tuo tilisi",
     "importAccountDesc": "Syötä olemassa olevan tilisi vara-avain palauttaaksesi sen tänne.",
     "connectSigner": "Yhdistä allekirjoittajasi",
     "connectSignerDesc": "Liitä allekirjoitussovelluksesta saatu yhteyslinkki.",
-
     "displayName": "Näyttönimi",
     "namePlaceholder": "esim. satoshi, alice, nimesi",
     "nameHint": "Tämä on miten muut näkevät sinut. Käytä oikeaa nimeäsi, lempinimeä tai mitä tahansa.",
@@ -168,11 +161,9 @@
     "connectionLink": "Yhteyslinkki",
     "connectionPlaceholder": "bunker://... tai nostrconnect://...",
     "signerHint": "Saat tämän allekirjoitussovelluksestasi (nsec.app, Amber, Primal). Avaimesi pysyvät siellä — emme näe niitä koskaan.",
-
     "createAccount": "Luo tili",
     "importAccountBtn": "Tuo tili",
     "connect": "Yhdistä",
-
     "connectPreparing": "Valmistellaan...",
     "connectConnecting": "Yhdistetään allekirjoittajaasi...",
     "connectFetchingProfile": "Ladataan profiiliasi...",
@@ -181,7 +172,6 @@
     "progressSecureConnection": "Muodostetaan suojattua yhteyttä",
     "progressConnecting": "Yhdistetään allekirjoitussovellukseesi",
     "progressLoadingProfile": "Ladataan profiiliasi",
-
     "backupTitle": "Tallenna vara-avaimesi",
     "backupDesc": "Tämä on ainoa tapa palauttaa tilisi. Jos menetät sen, kukaan ei voi auttaa — ei edes me.",
     "backupWarning": "Älä koskaan jaa tätä kenellekään — käsittele sitä kuin salasanaa",
@@ -190,7 +180,6 @@
     "downloadFile": "Lataa tiedosto",
     "backupConfirm": "Olen tallentanut vara-avaimeni turvalliseen paikkaan",
     "backupConfirmHint": "Käytä salasananhallintaa, suojattua muistiinpanoa tai kirjoita se paperille ja säilytä turvallisesti.",
-
     "profileTitle": "Profiilisi",
     "profileDesc": "Tarkista profiilitietosi. Voit päivittää ne milloin tahansa.",
     "completeProfile": "Täydennä profiilisi",
@@ -199,19 +188,16 @@
     "aboutPlaceholder": "Kerro maailmalle itsestäsi...",
     "saveProfile": "Tallenna profiili",
     "saving": "Tallennetaan...",
-
     "connectedTitle": "Yhdistetty",
     "connectedDesc": "Allekirjoittajasi on linkitetty ja käyttövalmis",
     "connectedBadge": "Aktiivinen",
     "signerExplainer": "Avaimesi pysyvät turvallisesti allekirjoitussovelluksessa. Kun sovellus tarvitsee toimia puolestasi, pyyntö lähetetään allekirjoittajallesi hyväksyttäväksi.",
     "howItWorks": "Näin se toimii:",
-
     "doneTitle": "Kaikki on valmista",
     "doneDesc": "Tilisi on valmis. Sovellukset voivat nyt pyytää käyttöoikeutta — sinulta kysytään aina ensin.",
     "profileSaved": "Profiili tallennettu onnistuneesti",
     "profileSyncLater": "Joitakin palvelimia ei tavoitettu — profiilisi synkronoituu myöhemmin"
   },
-
   "prompt": {
     "wantsAccess": "haluaa käyttää tiliäsi",
     "yourAccount": "Tilisi",
@@ -222,33 +208,26 @@
     "denyAlways": "Estä aina",
     "moreOptions": "Lisää vaihtoehtoja",
     "fewerOptions": "Vähemmän vaihtoehtoja",
-
     "lockedTitle": "Buho Jump on lukittu",
     "lockedDesc": "Sovellus tarvitsee käyttöoikeuden. Syötä salasanasi jatkaaksesi.",
-
     "permPublicLabel": "Näe julkinen profiilisi",
     "permPublicWhat": "Sovellus haluaa tietää kuka olet — kuten profiilikorttisi näyttäminen.",
     "permPublicDetail": "Tämä jakaa vain julkiset tietosi. Se ei voi julkaista tai toimia puolestasi.",
     "permPublicRisk": "Vain luku",
-
     "permSignLabel": "Julkaise tai toimi puolestasi",
     "permSignWhat": "Sovellus haluaa julkaista jotain tililläsi — kuten julkaisun, reaktion tai toiminnon.",
     "permSignDetail": "Tämä on kuin painaisit \"Lähetä\". Sisältö tulee muiden nähtäville.",
     "permSignRisk": "Kirjoitusoikeus",
-
     "permEncryptLabel": "Salaa viesti",
     "permEncryptWhat": "Sovellus haluaa lähettää yksityisviestin, jonka vain vastaanottaja voi lukea.",
     "permEncryptDetail": "Viesti salataan ennen lähettämistä.",
     "permEncryptRisk": "Viestit",
-
     "permDecryptLabel": "Lue yksityisviesti",
     "permDecryptWhat": "Sovellus haluaa avata sinulle lähetetyn yksityisviestin.",
     "permDecryptDetail": "Purettu viesti tulee sovelluksen nähtäville.",
     "permDecryptRisk": "Viestit",
-
     "permDefaultWhat": "Tämä sovellus pyytää pääsyä tiliisi.",
     "permDefaultRisk": "Käyttöoikeus",
-
     "kindProfile": "Profiilitiedot",
     "kindNote": "Lyhyt tekstiviesti",
     "kindContacts": "Yhteystietoluettelo",
@@ -261,7 +240,6 @@
     "kindAppData": "Sovelluksen tiedot",
     "kindGeneric": "Tapahtumatyyppi {kind}"
   },
-
   "wallet": {
     "balance": "Saldo",
     "refreshBalance": "Päivitä saldo",
@@ -281,12 +259,10 @@
     "failedRefresh": "Päivitys epäonnistui",
     "walletConnected": "Lompakko yhdistetty",
     "connectFailed": "Lompakon yhdistäminen epäonnistui",
-
     "noWallet": "Lompakkoa ei ole yhdistetty",
     "noWalletDesc": "Liitä lompakkosovelluksesi yhteyslinkki ottaaksesi maksut käyttöön.",
     "connectWallet": "Yhdistä lompakko",
     "connecting": "Yhdistetään...",
-
     "sendTitle": "Lähetä maksu",
     "sendResult": "Maksun tulos",
     "invoiceLabel": "Lasku tai osoite",
@@ -306,7 +282,6 @@
     "paymentSuccess": "Lightning-maksusi onnistui",
     "preimage": "Esikuva",
     "sendAnother": "Lähetä toinen maksu",
-
     "receiveTitle": "Vastaanota maksu",
     "shareInvoice": "Jaa lasku",
     "memo": "Muistio",
@@ -315,22 +290,18 @@
     "creating": "Luodaan...",
     "requesting": "Pyydetään",
     "newInvoice": "Uusi lasku",
-
     "historyTitle": "Tapahtumahistoria",
     "loadMore": "Lataa lisää",
     "noResults": "Tapahtumia ei löytynyt",
-
     "detailTitle": "Tapahtuman tiedot",
     "description": "Kuvaus",
     "date": "Päivämäärä",
     "fees": "Maksut",
     "paymentHash": "Maksun tunniste",
-
     "statusPending": "Odottaa",
     "statusExpired": "Vanhentunut",
     "statusReceived": "Vastaanotettu",
     "statusSent": "Lähetetty",
-
     "merchantPayment": "Kauppamaksu",
     "merchantDetected": "Kaupan QR-koodi tunnistettu",
     "merchantPaying": "Maksetaan kohteessa",
@@ -346,7 +317,6 @@
     "merchantNotSupported": "{name} QR-koodeja ei vielä tueta. Tällä hetkellä vain EMVCo-vähittäiskaupan QR-koodit (Pick n Pay, Checkers, Woolworths) toimivat.",
     "merchantInsufficientBalance": "Riittämätön saldo tälle maksulle"
   },
-
   "toast": {
     "accountReady": "Tili on valmis",
     "switchedTo": "Vaihdettu tiliin {name}",
@@ -358,12 +328,49 @@
     "failedRevoke": "Käyttöoikeuden poisto epäonnistui",
     "failedPublish": "Profiilin tallennus epäonnistui"
   },
-
   "qr": {
     "scanTitle": "Skannaa QR-koodi",
     "startingCamera": "Käynnistetään kameraa...",
     "uploadImage": "Lataa QR-koodikuva",
     "orUpload": "Tai lataa kuvatiedosto",
     "pointCamera": "Osoita kamera QR-koodiin"
+  },
+  "errors": {
+    "PERMISSION_DENIED": "Permission denied",
+    "NO_SIGNER": "No signer available",
+    "NO_ACCOUNT": "No active account",
+    "NO_EVENT": "No event provided",
+    "NO_PUBKEY": "No public key available",
+    "LOCAL_ACCOUNT_REQUIRED": "This action requires a local account",
+    "LOCKED": "Extension is locked",
+    "WRONG_PASSWORD": "Incorrect password"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "desc": "Choose which browser notifications you'd like to receive. You can change these anytime.",
+    "categories": "Categories",
+    "dms": "Messages",
+    "dmsDesc": "New encrypted messages from contacts",
+    "groups": "Group Messages",
+    "groupsDesc": "New messages in your groups and channels",
+    "payments": "Payments",
+    "paymentsDesc": "Incoming Lightning payments to your wallet",
+    "schedule": "Schedule",
+    "dnd": "Do Not Disturb",
+    "dndDesc": "Silence all notifications until turned off",
+    "quietHours": "Quiet Hours",
+    "quietHoursDesc": "Automatically silence notifications during set hours",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "hint": "Notifications appear as browser alerts even when the popup is closed.",
+    "settingsLabel": "Notifications",
+    "settingsDesc": "Manage browser alerts"
+  },
+  "chat": {
+    "initFailed": "Could not connect to relays. Try reloading.",
+    "contactsLoadFailed": "Could not load contacts. Check your connection."
+  },
+  "group": {
+    "initFailed": "Could not connect to group relays. Try reloading."
   }
 }

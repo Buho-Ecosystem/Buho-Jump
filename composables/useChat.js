@@ -17,17 +17,37 @@ import {
   nip04, nip44, nip59, nip17, hexToBytes,
 } from 'nostr-core'
 import { useMessaging } from './useMessaging.js'
-import { getActiveAccount } from '../lib/accounts.js'
 import { getPool } from '../lib/relayPool.js'
+
+/**
+ * Get the active account from the background service worker.
+ * Accounts are encrypted at rest — only the background has the password.
+ */
+async function getActiveAccount() {
+  const response = await chrome.runtime.sendMessage({ type: 'GET_ACTIVE_ACCOUNT' })
+  return response?.result || null
+}
 import { getPoolRelays, getOutboxRelays, getInboxRelays, DEFAULT_CHAT_RELAYS } from '../lib/relays.js'
+import { cleanMessageContent } from '../lib/utils.js'
 
 // ── Singleton reactive state ──
 const messages = ref({})     // { [pubkey]: Message[] }
 const lastRead = ref({})     // { [pubkey]: timestamp }
 const initialized = ref(false)
+const error = ref(null)      // i18n key or null — set on init/subscribe failure
 const currentAccountPubkey = ref(null) // tracks which account owns the data
 
 let subscription = null
+
+// Performance: O(1) dedup, dirty tracking, timestamp cache
+const messageIdSets = {}   // { [pubkey]: Set<id> } — for O(1) dedup
+const dirtyKeys = new Set() // pubkeys with unsaved changes
+let latestTimestamp = 0     // cached latest message timestamp across all conversations
+
+// EOSE sync token — scoped per subscription to prevent race conditions.
+// When subscribe() is called, a new token replaces the old one. Old subscription
+// callbacks still reference their captured (abandoned) token, harmlessly.
+let currentSyncToken = { complete: false }
 
 // Message shape:
 // { id, sender: 'me'|pubkey, content, created_at, protocol: 'nip17'|'nip04', type?: 'zap', status?: 'sending'|'sent'|'failed' }
@@ -74,6 +94,17 @@ export function useChat() {
       const data = await chrome.storage.local.get([keys.messages, keys.lastRead])
       messages.value = data[keys.messages] || {}
       lastRead.value = data[keys.lastRead] || {}
+
+      // Rebuild ID sets and timestamp cache from loaded data
+      latestTimestamp = 0
+      for (const [pk, msgs] of Object.entries(messages.value)) {
+        const idSet = new Set()
+        for (const m of msgs) {
+          idSet.add(m.id)
+          if (m.created_at > latestTimestamp) latestTimestamp = m.created_at
+        }
+        messageIdSets[pk] = idSet
+      }
     } catch { /* storage error */ }
   }
 
@@ -81,13 +112,29 @@ export function useChat() {
   function persistMessages() {
     if (persistTimer) clearTimeout(persistTimer)
     persistTimer = setTimeout(async () => {
-      if (!currentAccountPubkey.value) return
+      if (!currentAccountPubkey.value || dirtyKeys.size === 0) return
       try {
         const keys = storageKeys(currentAccountPubkey.value)
-        await chrome.storage.local.set({
-          [keys.messages]: JSON.parse(JSON.stringify(messages.value)),
-          [keys.lastRead]: JSON.parse(JSON.stringify(lastRead.value)),
-        })
+        const toSet = {}
+
+        // Only serialize dirty conversations, merge with stored data
+        if (dirtyKeys.has('__lastRead__')) {
+          toSet[keys.lastRead] = JSON.parse(JSON.stringify(lastRead.value))
+        }
+
+        // Check if any message keys are dirty (not just __lastRead__)
+        const dirtyPubkeys = [...dirtyKeys].filter(k => k !== '__lastRead__')
+        if (dirtyPubkeys.length > 0) {
+          const stored = await chrome.storage.local.get(keys.messages)
+          const existing = stored[keys.messages] || {}
+          for (const pk of dirtyPubkeys) {
+            existing[pk] = JSON.parse(JSON.stringify(messages.value[pk]))
+          }
+          toSet[keys.messages] = existing
+        }
+
+        await chrome.storage.local.set(toSet)
+        dirtyKeys.clear()
       } catch { /* storage error */ }
     }, 500)
   }
@@ -96,13 +143,18 @@ export function useChat() {
     if (!messages.value[pubkey]) {
       messages.value[pubkey] = []
     }
-    // Deduplicate by event/rumor ID
-    if (messages.value[pubkey].some(m => m.id === msg.id)) return
+    // O(1) dedup via ID set
+    if (!messageIdSets[pubkey]) messageIdSets[pubkey] = new Set(messages.value[pubkey].map(m => m.id))
+    if (messageIdSets[pubkey].has(msg.id)) return
+    messageIdSets[pubkey].add(msg.id)
+
     messages.value[pubkey] = [...messages.value[pubkey], msg]
+    dirtyKeys.add(pubkey)
+    if (msg.created_at > latestTimestamp) latestTimestamp = msg.created_at
     persistMessages()
 
-    // Trigger browser notification for incoming messages (not from us)
-    if (msg.sender !== 'me' && msg.type !== 'zap') {
+    // Trigger browser notification only for real-time messages (after initial sync)
+    if (currentSyncToken.complete && msg.sender !== 'me' && msg.type !== 'zap') {
       const preview = msg.content?.slice(0, 120) || ''
       chrome.runtime.sendMessage({
         type: 'NOTIFY_DM',
@@ -202,12 +254,20 @@ export function useChat() {
     const idx = msgs.findIndex(m => m.id === msgId)
     if (idx === -1) return
     const updated = { ...msgs[idx], status }
-    if (newId) updated.id = newId
+    if (newId) {
+      updated.id = newId
+      // Update ID set: remove old, add new
+      if (messageIdSets[pubkey]) {
+        messageIdSets[pubkey].delete(msgId)
+        messageIdSets[pubkey].add(newId)
+      }
+    }
     messages.value[pubkey] = [
       ...msgs.slice(0, idx),
       updated,
       ...msgs.slice(idx + 1),
     ]
+    dirtyKeys.add(pubkey)
     persistMessages()
   }
 
@@ -219,6 +279,8 @@ export function useChat() {
 
     // Remove the failed message
     messages.value[recipientPubkey] = msgs.filter(m => m.id !== msgId)
+    if (messageIdSets[recipientPubkey]) messageIdSets[recipientPubkey].delete(msgId)
+    dirtyKeys.add(recipientPubkey)
     persistMessages()
 
     // Re-send
@@ -228,15 +290,29 @@ export function useChat() {
   /**
    * Record a zap sent to a contact (special message type).
    */
+  /**
+   * Record a zap sent to a contact (special message type).
+   * Returns the message ID so the caller can update status on success/failure.
+   */
   function addZapMessage(recipientPubkey, amountSats) {
+    const id = `zap-${Date.now()}-${Math.random().toString(36).slice(2)}`
     addMessage(recipientPubkey, {
-      id: `zap-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id,
       sender: 'me',
       content: `${amountSats.toLocaleString()} sats`,
       created_at: Math.floor(Date.now() / 1000),
       protocol: 'zap',
       type: 'zap',
+      status: 'sending',
     })
+    return id
+  }
+
+  /**
+   * Mark a zap message as sent or failed.
+   */
+  function updateZapStatus(recipientPubkey, zapId, status) {
+    updateMessageStatus(recipientPubkey, zapId, status)
   }
 
   // ── Subscriptions ──
@@ -257,14 +333,9 @@ export function useChat() {
     const isLocal = !!secretKey
     const { send } = !isLocal ? useMessaging() : {}
 
-    // Determine "since" — last known message or 30 days ago
+    // Determine "since" — use cached latest timestamp or 30 days ago
     const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 86400 * 30
-    let latest = thirtyDaysAgo
-    for (const msgs of Object.values(messages.value)) {
-      for (const m of msgs) {
-        if (m.created_at > latest) latest = m.created_at
-      }
-    }
+    const latest = Math.max(latestTimestamp, thirtyDaysAgo)
     // Go back 1 hour from latest to catch any we missed
     const since = Math.max(latest - 3600, thirtyDaysAgo)
 
@@ -276,6 +347,18 @@ export function useChat() {
 
     const subs = []
 
+    // Create a new sync token scoped to THIS subscription cycle.
+    // Old tokens from previous subscribe() calls are abandoned — their
+    // EOSE callbacks write to a stale object that addMessage no longer checks.
+    const syncToken = { complete: false }
+    currentSyncToken = syncToken
+    let eoseCount = 0
+    const expectedEose = isLocal ? 3 : 2
+    function onEose() {
+      eoseCount++
+      if (eoseCount >= expectedEose) syncToken.complete = true
+    }
+
     // ── NIP-17: Gift wraps addressed to us (kind 1059) ──
     // Only for local accounts — unwrap requires the secret key
     if (isLocal) {
@@ -284,6 +367,7 @@ export function useChat() {
         '#p': [myPubkey],
         since,
       }, {
+        oneose: onEose,
         onevent(event) {
           try {
             const dm = nip17.unwrapDirectMessage(event, secretKey)
@@ -295,7 +379,7 @@ export function useChat() {
               addMessage(pTag[1], {
                 id: dm.id,
                 sender: 'me',
-                content: dm.content,
+                content: cleanMessageContent(dm.content),
                 created_at: dm.created_at,
                 protocol: 'nip17',
               })
@@ -304,7 +388,7 @@ export function useChat() {
               addMessage(dm.sender, {
                 id: dm.id,
                 sender: dm.sender,
-                content: dm.content,
+                content: cleanMessageContent(dm.content),
                 created_at: dm.created_at,
                 protocol: 'nip17',
               })
@@ -320,6 +404,7 @@ export function useChat() {
       '#p': [myPubkey],
       since,
     }, {
+      oneose: onEose,
       async onevent(event) {
         try {
           let content
@@ -341,7 +426,7 @@ export function useChat() {
           addMessage(event.pubkey, {
             id: event.id,
             sender: event.pubkey,
-            content,
+            content: cleanMessageContent(content),
             created_at: event.created_at,
             protocol: 'nip04',
           })
@@ -355,6 +440,7 @@ export function useChat() {
       authors: [myPubkey],
       since,
     }, {
+      oneose: onEose,
       async onevent(event) {
         const pTag = event.tags.find(t => t[0] === 'p')
         if (!pTag) return
@@ -379,7 +465,7 @@ export function useChat() {
           addMessage(recipientPubkey, {
             id: event.id,
             sender: 'me',
-            content,
+            content: cleanMessageContent(content),
             created_at: event.created_at,
             protocol: 'nip04',
           })
@@ -396,6 +482,7 @@ export function useChat() {
 
   function markRead(pubkey) {
     lastRead.value = { ...lastRead.value, [pubkey]: Math.floor(Date.now() / 1000) }
+    dirtyKeys.add('__lastRead__')
     persistMessages()
   }
 
@@ -412,6 +499,7 @@ export function useChat() {
    */
   async function init() {
     try {
+      error.value = null
       const account = await getActiveAccount()
       const pubkey = account?.pubkey || null
 
@@ -434,6 +522,7 @@ export function useChat() {
       await subscribe()
     } catch (err) {
       console.warn('[chat] init failed:', err)
+      error.value = 'chat.initFailed'
     } finally {
       initialized.value = true
     }
@@ -453,6 +542,11 @@ export function useChat() {
   }
 
   function cleanup() {
+    currentSyncToken = { complete: false }
+    // Clear performance caches
+    for (const k of Object.keys(messageIdSets)) delete messageIdSets[k]
+    dirtyKeys.clear()
+    latestTimestamp = 0
     if (persistTimer) {
       clearTimeout(persistTimer)
       persistTimer = null
@@ -468,6 +562,7 @@ export function useChat() {
     unreadTotal,
     messages,
     initialized,
+    error,
     currentAccountPubkey,
     init,
     switchAccount,
@@ -475,6 +570,7 @@ export function useChat() {
     sendMessage,
     retryMessage,
     addZapMessage,
+    updateZapStatus,
     subscribe,
     markRead,
     getMessages,

@@ -23,6 +23,7 @@ import {
   updateAccount,
   removeAccount,
   getAccountSummaries,
+  reEncryptAccounts,
 } from '../lib/accounts.js'
 import {
   checkPermission,
@@ -59,8 +60,10 @@ import {
 import { getPool, setAuthHandler } from '../lib/relayPool.js'
 import { connectBunker, createNostrConnectURI, awaitNostrConnect, parseConnectionURI } from '../lib/nip46-bridge.js'
 import { openPromptWindow, supportsWindowsApi } from '../lib/browser/capabilities.js'
-import { notifyDm, notifyPayment, setupNotificationClickHandler } from '../lib/notifications.js'
+import { notifyDm, notifyPayment, notifyGroup, setupNotificationClickHandler } from '../lib/notifications.js'
+import { startNotificationPoller } from '../lib/notificationPoller.js'
 import { saveSession, getSession, clearSession } from '../lib/session.js'
+import { performAccountSwitch } from '../lib/accountSwitch.js'
 
 // ── In-memory state ──────────────────────────────────────────────
 let nwcClient = null
@@ -82,7 +85,7 @@ async function ensureSessionLoaded() {
     if (!session) return
     // Check auto-lock expiry
     const { autoLockMinutes } = await chrome.storage.local.get('autoLockMinutes')
-    const minutes = autoLockMinutes ?? 5
+    const minutes = autoLockMinutes ?? 0
     if (minutes > 0) {
       const elapsed = (Date.now() - session.unlockedAt) / 1000 / 60
       if (elapsed >= minutes) {
@@ -162,7 +165,7 @@ async function requestPermission(host, method, kind, eventData, meta) {
 async function ensureRemoteSigner() {
   if (remoteSigner?.connected) return remoteSigner
 
-  const account = await getActiveAccount()
+  const account = await getActiveAccount(_cachedPassword)
   if (!account || account.mode !== 'nip46') return null
   if (!account.nip46Session?.bunkerUri || !account.nip46ClientSecretHex) return null
 
@@ -185,7 +188,7 @@ async function ensureRemoteSigner() {
  * Both return the same nostr-core Signer interface.
  */
 async function getSigner() {
-  const account = await getActiveAccount()
+  const account = await getActiveAccount(_cachedPassword)
   if (!account) return null
 
   if (account.mode === 'local' && account.secretHex) {
@@ -260,10 +263,10 @@ async function handleGetPublicKey(sender) {
   const host = new URL(sender.url).hostname
   await requireUnlocked(host)
   const allowed = await requestPermission(host, 'getPublicKey', null, null, getSiteMeta(sender))
-  if (!allowed) return { error: 'Permission denied' }
+  if (!allowed) return { error: 'PERMISSION_DENIED' }
 
   const signer = await getSigner()
-  if (!signer) return { error: 'No signer available' }
+  if (!signer) return { error: 'NO_SIGNER' }
   return { result: await signer.getPublicKey() }
 }
 
@@ -271,12 +274,12 @@ async function handleSignEvent(params, sender) {
   const host = new URL(sender.url).hostname
   await requireUnlocked(host)
   const event = params[0]
-  if (!event) return { error: 'No event provided' }
+  if (!event) return { error: 'NO_EVENT' }
   const allowed = await requestPermission(host, 'signEvent', event.kind, event, getSiteMeta(sender))
-  if (!allowed) return { error: 'Permission denied' }
+  if (!allowed) return { error: 'PERMISSION_DENIED' }
 
   const signer = await getSigner()
-  if (!signer) return { error: 'No signer available' }
+  if (!signer) return { error: 'NO_SIGNER' }
   return { result: await signer.signEvent(event) }
 }
 
@@ -287,7 +290,7 @@ async function handleGetRelays() {
   }
 
   // Fallback: return stored account relays as NIP-07 relay map
-  const account = await getActiveAccount()
+  const account = await getActiveAccount(_cachedPassword)
   if (account?.pubkey) {
     const relays = await getPoolRelays(account.pubkey, 'account')
     const map = {}
@@ -306,10 +309,10 @@ async function handleEncryptDecrypt(type, params, sender) {
   const [pubkey, text] = params
   const method = type.toLowerCase()
   const allowed = await requestPermission(host, method, null, null, getSiteMeta(sender))
-  if (!allowed) return { error: 'Permission denied' }
+  if (!allowed) return { error: 'PERMISSION_DENIED' }
 
   const signer = await getSigner()
-  if (!signer) return { error: 'No signer available' }
+  if (!signer) return { error: 'NO_SIGNER' }
 
   if (type === 'NIP04_ENCRYPT' || type === 'NIP04_DECRYPT') {
     if (!signer.nip04) return { error: 'Signer does not support NIP-04 encryption' }
@@ -354,6 +357,27 @@ async function ensureNWC() {
 }
 
 /**
+ * Execute an NWC operation with automatic reconnect on connection failure.
+ * If the first attempt fails with a connection error, reconnects and retries once.
+ */
+async function withNwcRetry(operation) {
+  try {
+    const nwc = await ensureNWC()
+    return await operation(nwc)
+  } catch (err) {
+    // If it looks like a connection/network error, reconnect and retry once
+    const msg = err?.message?.toLowerCase() || ''
+    if (msg.includes('closed') || msg.includes('disconnect') || msg.includes('timeout') || msg.includes('not connected')) {
+      // Force reconnect
+      if (nwcClient) { try { nwcClient.close() } catch {} nwcClient = null }
+      const nwc = await ensureNWC()
+      return await operation(nwc)
+    }
+    throw err
+  }
+}
+
+/**
  * Subscribe to NIP-47 wallet notifications (payment_received, payment_sent).
  * Triggers browser notifications via lib/notifications.js.
  */
@@ -385,7 +409,7 @@ async function handleWeblnEnable(sender) {
   const host = new URL(sender.url).hostname
   await requireUnlocked(host)
   const allowed = await requestPermission(host, 'weblnEnable', null, null, getSiteMeta(sender))
-  if (!allowed) return { error: 'Permission denied' }
+  if (!allowed) return { error: 'PERMISSION_DENIED' }
   try { await ensureNWC(); return { result: { enabled: true } } }
   catch (err) { return { error: err.message } }
 }
@@ -407,8 +431,7 @@ async function handleWeblnSendPayment(params, sender) {
   if (amountSats && await checkBudget(host, amountSats)) {
     // Auto-approve: within budget
     try {
-      const nwc = await ensureNWC()
-      const result = await nwc.payInvoice(invoice)
+      const result = await withNwcRetry(nwc => nwc.payInvoice(invoice))
       await recordSpend(host, amountSats)
       return { result: { preimage: result.preimage } }
     } catch (err) { return { error: err.message } }
@@ -418,10 +441,9 @@ async function handleWeblnSendPayment(params, sender) {
   const allowance = await getAllowance(host)
   const paymentMeta = { amountSats, budgetSats: allowance?.budget || null, spentSats: allowance?.spent || 0 }
   const allowed = await requestPermission(host, 'weblnSendPayment', null, paymentMeta, getSiteMeta(sender))
-  if (!allowed) return { error: 'Permission denied' }
+  if (!allowed) return { error: 'PERMISSION_DENIED' }
   try {
-    const nwc = await ensureNWC()
-    const result = await nwc.payInvoice(invoice)
+    const result = await withNwcRetry(nwc => nwc.payInvoice(invoice))
     if (amountSats) await recordSpend(host, amountSats)
     return { result: { preimage: result.preimage } }
   } catch (err) { return { error: err.message } }
@@ -483,7 +505,7 @@ let nip46Reconnecting = false
 async function proactiveReconnect() {
   await ensureSessionLoaded()
   if (!isUnlocked()) return
-  const account = await getActiveAccount()
+  const account = await getActiveAccount(_cachedPassword)
   if (!account || account.mode !== 'nip46') return
   if (!account.nip46Session?.bunkerUri || !account.nip46ClientSecretHex) return
   if (remoteSigner?.connected) return
@@ -505,10 +527,13 @@ export default defineBackground(() => {
   // Set up notification click handler (opens popup to relevant tab)
   setupNotificationClickHandler()
 
+  // Start background polling for new messages (fires notifications when popup is closed)
+  startNotificationPoller(() => _cachedPassword)
+
   // NIP-42: auto-sign relay auth challenges with active account's key
   setAuthHandler(async (relay, challenge) => {
     try {
-      const account = await getActiveAccount()
+      const account = await getActiveAccount(_cachedPassword)
       if (!account?.secretHex) return
       const authEvent = nip42.createAuthEvent(
         { relay: relay.url, challenge },
@@ -612,8 +637,15 @@ export default defineBackground(() => {
             return { result: { ok: true } }
           case 'CHANGE_PASSWORD': {
             const [oldPw, newPw] = params || []
-            await changePassword(oldPw, newPw)
+            // Verify old password first
+            const valid = await verifyPassword(oldPw)
+            if (!valid) return { error: 'WRONG_PASSWORD' }
+            // Re-encrypt data BEFORE updating the password hash.
+            // If re-encryption fails, data stays accessible with the old password.
+            await reEncryptAccounts(oldPw, newPw)
             await reEncryptWallets(oldPw, newPw)
+            // Now safe to update the hash — data already uses new password
+            await changePassword(oldPw, newPw)
             _cachedPassword = newPw
             await saveSession({ password: newPw, unlockedAt: Date.now() })
             return { result: { ok: true } }
@@ -640,10 +672,10 @@ export default defineBackground(() => {
           // ── Settings ──
           case 'GET_SETTINGS': {
             const data = await chrome.storage.local.get(['autoLockMinutes', 'theme', 'mode'])
-            return { result: { autoLockMinutes: data.autoLockMinutes ?? 5, theme: data.theme, mode: data.mode } }
+            return { result: { autoLockMinutes: data.autoLockMinutes ?? 0, theme: data.theme, mode: data.mode } }
           }
           case 'SET_AUTO_LOCK': {
-            await chrome.storage.local.set({ autoLockMinutes: params?.[0] ?? 5 })
+            await chrome.storage.local.set({ autoLockMinutes: params?.[0] ?? 0 })
             // Refresh session timestamp so new timeout applies from now
             if (isUnlocked()) {
               await saveSession({ password: _cachedPassword, unlockedAt: Date.now() })
@@ -665,28 +697,35 @@ export default defineBackground(() => {
             } }
 
           // ── Account management ──
+          case 'GET_ACTIVE_ACCOUNT':
+            return { result: await getActiveAccount(_cachedPassword) }
           case 'GET_ACCOUNTS':
-            return { result: await getAccountSummaries() }
+            return { result: await getAccountSummaries(_cachedPassword) }
           case 'CREATE_ACCOUNT':
-            return { result: await createLocalAccount(params?.[0]) }
+            return { result: await createLocalAccount(_cachedPassword, params?.[0]) }
           case 'CREATE_ACCOUNT_MNEMONIC':
-            return { result: await createAccountWithMnemonic(params?.[0]) }
+            return { result: await createAccountWithMnemonic(_cachedPassword, params?.[0]) }
           case 'IMPORT_ACCOUNT':
-            return { result: await importAccount(params?.[0], params?.[1]) }
+            return { result: await importAccount(_cachedPassword, params?.[0], params?.[1]) }
           case 'IMPORT_FROM_MNEMONIC':
-            return { result: await importFromMnemonic(params?.[0], params?.[1]) }
+            return { result: await importFromMnemonic(_cachedPassword, params?.[0], params?.[1]) }
           case 'CREATE_NIP46_ACCOUNT':
-            return { result: await createNip46Account(params?.[0]) }
-          case 'SWITCH_ACCOUNT':
-            await setActiveAccount(params?.[0])
-            if (remoteSigner) { remoteSigner.close(); remoteSigner = null }
+            return { result: await createNip46Account(_cachedPassword, params?.[0]) }
+          case 'SWITCH_ACCOUNT': {
+            const cleaned = await performAccountSwitch(params?.[0], {
+              nwcClient, nwcNotifUnsub, remoteSigner,
+            })
+            nwcClient = cleaned.nwcClient
+            nwcNotifUnsub = cleaned.nwcNotifUnsub
+            remoteSigner = cleaned.remoteSigner
             return { result: { switched: true } }
+          }
           case 'REMOVE_ACCOUNT':
-            await removeAccount(params?.[0])
+            await removeAccount(_cachedPassword, params?.[0])
             if (remoteSigner) { await remoteSigner.disconnect(); remoteSigner = null }
             return { result: { removed: true } }
           case 'EXPORT_NSEC': {
-            const acct = await getActiveAccount()
+            const acct = await getActiveAccount(_cachedPassword)
             if (!acct || acct.mode !== 'local' || !acct.secretHex) {
               return { error: 'No local key to export' }
             }
@@ -700,7 +739,7 @@ export default defineBackground(() => {
               // Gracefully disconnect any existing remote signer before connecting
               if (remoteSigner) { try { await remoteSigner.disconnect() } catch {} remoteSigner = null }
               const parsed = parseConnectionURI(bunkerUri)
-              const clientSecret = (await getAccounts())[accountId]?.nip46ClientSecretHex
+              const clientSecret = (await getAccounts(_cachedPassword))[accountId]?.nip46ClientSecretHex
               if (!clientSecret) return { error: 'Account missing client secret key' }
               const signer = await connectBunker(bunkerUri, clientSecret)
               remoteSigner = signer
@@ -720,13 +759,13 @@ export default defineBackground(() => {
                   updates.name = profile.display_name || profile.name
                 }
               } catch { /* non-critical */ }
-              await updateAccount(accountId, updates)
+              await updateAccount(_cachedPassword, accountId, updates)
               // Always activate the newly connected NIP-46 account
               await setActiveAccount(accountId)
               return { result: { pubkey, connected: true } }
             } catch (err) {
               // Clean up the failed account so it doesn't linger
-              try { await removeAccount(accountId) } catch {}
+              try { await removeAccount(_cachedPassword, accountId) } catch {}
               const msg = err.message || ''
               if (/already.connect/i.test(msg)) {
                 return { error: 'Session already active on signer. Please generate a new bunker URI from your signer app.' }
@@ -743,7 +782,7 @@ export default defineBackground(() => {
           case 'START_NOSTR_CONNECT': {
             const [accountId, relayUrl] = params
             try {
-              const account = (await getAccounts())[accountId]
+              const account = (await getAccounts(_cachedPassword))[accountId]
               if (!account?.nip46ClientSecretHex) return { error: 'Account not found' }
               const clientPubkey = getPublicKey(hexToBytes(account.nip46ClientSecretHex))
               const secret = bytesToHex(randomBytes(16))
@@ -779,7 +818,7 @@ export default defineBackground(() => {
                   const profile = await fetchProfile(pubkey)
                   if (profile?.display_name || profile?.name) updates.name = profile.display_name || profile.name
                 } catch {}
-                await updateAccount(accountId, updates)
+                await updateAccount(_cachedPassword, accountId, updates)
                 await setActiveAccount(accountId)
               }).catch(() => {
                 _nostrConnectAbort = null
@@ -800,12 +839,12 @@ export default defineBackground(() => {
           // ── Profile ──
           case 'PUBLISH_PROFILE': {
             const [profileData] = params
-            const account = await getActiveAccount()
+            const account = await getActiveAccount(_cachedPassword)
             if (!account || account.mode !== 'local') return { error: 'Local account required to publish profile' }
             const relays = account.pubkey ? await getPoolRelays(account.pubkey, 'account') : undefined
             const result = await publishProfile(profileData, account.secretHex, relays)
             if (profileData.name) {
-              await updateAccount(account.id, { name: profileData.name })
+              await updateAccount(_cachedPassword, account.id, { name: profileData.name })
             }
             return { result }
           }
@@ -896,8 +935,9 @@ export default defineBackground(() => {
           }
           case 'WALLET_PAY_INVOICE': {
             const [invoice, amountSats] = params || []
-            const nwc = await ensureNWC()
-            const payResult = await nwc.payInvoice(invoice, amountSats ? amountSats * 1000 : undefined)
+            const payResult = await withNwcRetry(nwc =>
+              nwc.payInvoice(invoice, amountSats ? amountSats * 1000 : undefined)
+            )
             return { result: payResult }
           }
           case 'WALLET_MAKE_INVOICE': {
@@ -936,7 +976,7 @@ export default defineBackground(() => {
             const { recipientPubkey, amountSats, lightningAddress, content } = params?.[0] || {}
             if (!lightningAddress || !amountSats) return { error: 'Missing zap parameters' }
             const nwc = await ensureNWC()
-            const account = await getActiveAccount()
+            const account = await getActiveAccount(_cachedPassword)
             const amountMsats = amountSats * 1000
 
             // Try NIP-57 for local accounts
@@ -1009,7 +1049,7 @@ export default defineBackground(() => {
           case 'CHAT_ENCRYPT': {
             const [pubkey, text, method] = params || []
             const signer = await getSigner()
-            if (!signer) return { error: 'No signer available' }
+            if (!signer) return { error: 'NO_SIGNER' }
             if (method === 'nip44') {
               if (!signer.nip44) return { error: 'Signer does not support NIP-44' }
               return { result: await signer.nip44.encrypt(pubkey, text) }
@@ -1020,7 +1060,7 @@ export default defineBackground(() => {
           case 'CHAT_DECRYPT': {
             const [pubkey, ciphertext, method] = params || []
             const signer = await getSigner()
-            if (!signer) return { error: 'No signer available' }
+            if (!signer) return { error: 'NO_SIGNER' }
             if (method === 'nip44') {
               if (!signer.nip44) return { error: 'Signer does not support NIP-44' }
               return { result: await signer.nip44.decrypt(pubkey, ciphertext) }
@@ -1031,59 +1071,59 @@ export default defineBackground(() => {
           case 'CHAT_SIGN': {
             const [eventTemplate] = params || []
             const signer = await getSigner()
-            if (!signer) return { error: 'No signer available' }
+            if (!signer) return { error: 'NO_SIGNER' }
             return { result: await signer.signEvent(eventTemplate) }
           }
 
           // ── Relay management ──
           case 'GET_RELAY_CONFIG': {
-            const account = await getActiveAccount()
-            if (!account?.pubkey) return { error: 'No active account' }
+            const account = await getActiveAccount(_cachedPassword)
+            if (!account?.pubkey) return { error: 'NO_ACCOUNT' }
             return { result: await getRelayConfig(account.pubkey) }
           }
           case 'SET_RELAY_CONFIG': {
             const [pool, urls] = params || []
             if (!['account', 'wallet', 'chat'].includes(pool)) return { error: 'Invalid pool' }
             if (!Array.isArray(urls)) return { error: 'URLs must be an array' }
-            const account = await getActiveAccount()
-            if (!account?.pubkey) return { error: 'No active account' }
+            const account = await getActiveAccount(_cachedPassword)
+            if (!account?.pubkey) return { error: 'NO_ACCOUNT' }
             await setPoolRelays(account.pubkey, pool, urls)
             return { result: { ok: true } }
           }
           case 'ADD_RELAY': {
             const [pool, url] = params || []
-            const account = await getActiveAccount()
-            if (!account?.pubkey) return { error: 'No active account' }
+            const account = await getActiveAccount(_cachedPassword)
+            if (!account?.pubkey) return { error: 'NO_ACCOUNT' }
             const config = await addRelayToPool(account.pubkey, pool, url)
             return { result: config }
           }
           case 'REMOVE_RELAY': {
             const [pool, url] = params || []
-            const account = await getActiveAccount()
-            if (!account?.pubkey) return { error: 'No active account' }
+            const account = await getActiveAccount(_cachedPassword)
+            if (!account?.pubkey) return { error: 'NO_ACCOUNT' }
             const config = await removeRelayFromPool(account.pubkey, pool, url)
             return { result: config }
           }
           case 'RESET_RELAYS': {
             const [pool] = params || []
-            const account = await getActiveAccount()
-            if (!account?.pubkey) return { error: 'No active account' }
+            const account = await getActiveAccount(_cachedPassword)
+            if (!account?.pubkey) return { error: 'NO_ACCOUNT' }
             const config = await resetPoolToDefaults(account.pubkey, pool)
             return { result: config }
           }
           case 'FETCH_NIP65': {
             const [pubkey] = params || []
-            const account = await getActiveAccount()
+            const account = await getActiveAccount(_cachedPassword)
             const pk = pubkey || account?.pubkey
-            if (!pk) return { error: 'No pubkey' }
+            if (!pk) return { error: 'NO_PUBKEY' }
             const relays = await getPoolRelays(pk, 'account').catch(() => DEFAULT_ACCOUNT_RELAYS)
             const result = await fetchNip65(pk, relays)
             return { result }
           }
           case 'PUBLISH_NIP65': {
             const [relayList] = params || []
-            const account = await getActiveAccount()
-            if (!account || account.mode !== 'local') return { error: 'Local account required' }
+            const account = await getActiveAccount(_cachedPassword)
+            if (!account || account.mode !== 'local') return { error: 'LOCAL_ACCOUNT_REQUIRED' }
             const template = createNip65Event(relayList)
             const secretKey = hexToBytes(account.secretHex)
             const event = finalizeEvent(template, secretKey)
@@ -1111,6 +1151,11 @@ export default defineBackground(() => {
           case 'NOTIFY_DM': {
             const { senderName, preview, messageId } = params?.[0] || {}
             await notifyDm(senderName, preview, messageId)
+            return { result: { ok: true } }
+          }
+          case 'NOTIFY_GROUP': {
+            const { groupName, senderName, preview, messageId } = params?.[0] || {}
+            await notifyGroup(groupName, senderName, preview, messageId)
             return { result: { ok: true } }
           }
           case 'NOTIFY_PAYMENT': {

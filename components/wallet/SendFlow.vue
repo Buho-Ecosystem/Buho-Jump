@@ -177,14 +177,23 @@ function toggleInputMode() {
 function startCountdown() {
   stopCountdown()
   countdown.value = 90
-  countdownTimer = setInterval(() => {
+  merchantRateStale.value = false
+  countdownTimer = setInterval(async () => {
     countdown.value--
     if (countdown.value <= 0) {
       stopCountdown()
     }
-    // Mark rate as potentially stale after 60 seconds
-    if (countdown.value <= 30) {
+    // After 60 seconds, refresh the exchange rate and recalculate sats
+    if (countdown.value === 30 && merchantZAR.value) {
       merchantRateStale.value = true
+      try {
+        await loadRate()
+        const refreshedSats = await fiatToSats(merchantZAR.value)
+        if (refreshedSats > 0) {
+          merchantSats.value = refreshedSats
+          merchantRateStale.value = false
+        }
+      } catch { /* rate refresh failed — keep stale warning visible */ }
     }
   }, 1000)
 }

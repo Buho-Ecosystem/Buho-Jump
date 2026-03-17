@@ -21,9 +21,11 @@
     "optional": "可选",
     "getStarted": "开始使用",
     "copiedToClipboard": "已复制到剪贴板",
-    "pleaseWait": "请稍候"
+    "pleaseWait": "请稍候",
+    "showingOf": "Showing {shown} of {total}",
+    "showMore": "Show more",
+    "offline": "No internet connection"
   },
-
   "lock": {
     "createTitle": "创建密码",
     "unlockTitle": "欢迎回来",
@@ -43,12 +45,10 @@
     "strengthStrong": "强",
     "mismatch": "两次密码不一致"
   },
-
   "tabs": {
     "account": "账户",
     "wallet": "钱包"
   },
-
   "settings": {
     "appearance": "外观",
     "lightMode": "浅色模式",
@@ -66,7 +66,6 @@
     "relaySettingsDesc": "管理账户、钱包和聊天的中继",
     "version": "Buho Jump v{version}"
   },
-
   "relay": {
     "title": "中继设置",
     "warning": "警告：更改这些设置可能会影响你的核心体验",
@@ -111,7 +110,6 @@
     "infoYes": "是",
     "infoNo": "否"
   },
-
   "account": {
     "activeDesc": "当前活跃账户——应用将使用此身份",
     "appPermissions": "应用权限",
@@ -131,19 +129,16 @@
     "external": "外部",
     "local": "本地"
   },
-
   "wizard": {
     "addAccount": "添加账户",
     "addAccountDesc": "你的账户可以让你登录应用、发布内容和发送消息——无需中心化服务器。",
     "recommended": "推荐",
-
     "modeNewTitle": "创建新账户",
     "modeNewDesc": "从零开始——几秒钟内为你完成所有设置。",
     "modeImportTitle": "我已有账户",
     "modeImportDesc": "输入你的备份密钥来使用已有账户。",
     "modeSignerTitle": "外部签名器",
     "modeSignerDesc": "连接到签名应用，如 nsec.app、Amber 或 Primal。",
-
     "stepSetup": "设置",
     "stepName": "名称",
     "stepImport": "导入",
@@ -151,14 +146,12 @@
     "stepBackup": "备份",
     "stepProfile": "个人资料",
     "stepDone": "完成",
-
     "chooseName": "选择一个名字",
     "chooseNameDesc": "选择一个别人与你互动时能看到的名字。你随时可以更改。",
     "importAccount": "导入你的账户",
     "importAccountDesc": "输入已有账户的备份密钥以在此恢复。",
     "connectSigner": "连接你的签名器",
     "connectSignerDesc": "粘贴签名应用提供的连接链接。",
-
     "displayName": "显示名称",
     "namePlaceholder": "例如 satoshi、alice、你的名字",
     "nameHint": "这是别人看到你时显示的名字。可以用真名、昵称或任何你喜欢的。",
@@ -168,11 +161,9 @@
     "connectionLink": "连接链接",
     "connectionPlaceholder": "bunker://... 或 nostrconnect://...",
     "signerHint": "从你的签名应用（nsec.app、Amber、Primal）获取此链接。你的密钥留在那里——我们永远看不到。",
-
     "createAccount": "创建账户",
     "importAccountBtn": "导入账户",
     "connect": "连接",
-
     "connectPreparing": "准备中...",
     "connectConnecting": "正在连接签名器...",
     "connectFetchingProfile": "正在加载个人资料...",
@@ -181,7 +172,6 @@
     "progressSecureConnection": "正在建立安全连接",
     "progressConnecting": "正在连接签名应用",
     "progressLoadingProfile": "正在加载你的个人资料",
-
     "backupTitle": "保存你的备份密钥",
     "backupDesc": "这是恢复账户的唯一方式。如果丢失，没有人能帮你——包括我们。",
     "backupWarning": "切勿与任何人分享——请像对待密码一样保管好它",
@@ -190,7 +180,6 @@
     "downloadFile": "下载文件",
     "backupConfirm": "我已将备份密钥保存在安全的地方",
     "backupConfirmHint": "使用密码管理器、安全笔记，或写在纸上并妥善保管。",
-
     "profileTitle": "你的个人资料",
     "profileDesc": "查看你的资料信息。你随时可以更新。",
     "completeProfile": "完善个人资料",
@@ -199,19 +188,16 @@
     "aboutPlaceholder": "向世界介绍你自己...",
     "saveProfile": "保存资料",
     "saving": "保存中...",
-
     "connectedTitle": "已连接",
     "connectedDesc": "你的签名器已关联并可以使用",
     "connectedBadge": "在线",
     "signerExplainer": "你的密钥安全地保存在签名应用中。当应用需要以你的身份操作时，请求会发送到签名器等待你的批准。",
     "howItWorks": "工作原理：",
-
     "doneTitle": "一切就绪",
     "doneDesc": "你的账户已准备好。应用现在可以请求使用它——我们会先征求你的同意。",
     "profileSaved": "个人资料保存成功",
     "profileSyncLater": "部分服务器无法连接——你的资料稍后将自动同步"
   },
-
   "prompt": {
     "wantsAccess": "请求访问你的账户",
     "yourAccount": "你的账户",
@@ -222,33 +208,26 @@
     "denyAlways": "永久拒绝",
     "moreOptions": "更多选项",
     "fewerOptions": "收起选项",
-
     "lockedTitle": "Buho Jump 已锁定",
     "lockedDesc": "有应用需要访问权限。请输入密码以继续。",
-
     "permPublicLabel": "查看你的公开资料",
     "permPublicWhat": "应用想要知道你是谁——比如显示你的资料卡片。",
     "permPublicDetail": "这只会分享你的公开信息，不能发布内容或代表你操作。",
     "permPublicRisk": "只读",
-
     "permSignLabel": "以你的身份发布或操作",
     "permSignWhat": "应用想要用你的账户发布内容——比如帖子、反应或操作。",
     "permSignDetail": "这就像点击发送按钮。内容将对他人可见。",
     "permSignRisk": "写入权限",
-
     "permEncryptLabel": "加密消息",
     "permEncryptWhat": "应用想要发送一条只有接收者能读取的私信。",
     "permEncryptDetail": "消息将在发送前加密。",
     "permEncryptRisk": "消息",
-
     "permDecryptLabel": "读取私信",
     "permDecryptWhat": "应用想要打开一条发送给你的私信。",
     "permDecryptDetail": "解密后的消息将对应用可见。",
     "permDecryptRisk": "消息",
-
     "permDefaultWhat": "此应用正在请求访问你的账户。",
     "permDefaultRisk": "权限",
-
     "kindProfile": "个人资料",
     "kindNote": "短文本",
     "kindContacts": "联系人列表",
@@ -261,7 +240,6 @@
     "kindAppData": "应用数据",
     "kindGeneric": "事件类型 {kind}"
   },
-
   "wallet": {
     "balance": "余额",
     "refreshBalance": "刷新余额",
@@ -281,12 +259,10 @@
     "failedRefresh": "刷新失败",
     "walletConnected": "钱包已连接",
     "connectFailed": "连接钱包失败",
-
     "noWallet": "未连接钱包",
     "noWalletDesc": "粘贴钱包应用的连接链接以启用支付功能。",
     "connectWallet": "连接钱包",
     "connecting": "连接中...",
-
     "sendTitle": "发送付款",
     "sendResult": "付款结果",
     "invoiceLabel": "发票或地址",
@@ -306,7 +282,6 @@
     "paymentSuccess": "你的闪电支付已成功",
     "preimage": "原像",
     "sendAnother": "再发送一笔",
-
     "receiveTitle": "接收付款",
     "shareInvoice": "分享发票",
     "memo": "备注",
@@ -315,22 +290,18 @@
     "creating": "创建中...",
     "requesting": "请求中",
     "newInvoice": "新建发票",
-
     "historyTitle": "交易记录",
     "loadMore": "加载更多",
     "noResults": "未找到交易记录",
-
     "detailTitle": "交易详情",
     "description": "描述",
     "date": "日期",
     "fees": "手续费",
     "paymentHash": "支付哈希",
-
     "statusPending": "待处理",
     "statusExpired": "已过期",
     "statusReceived": "已收到",
     "statusSent": "已发送",
-
     "merchantPayment": "商户支付",
     "merchantDetected": "检测到商户二维码",
     "merchantPaying": "正在支付",
@@ -346,7 +317,6 @@
     "merchantNotSupported": "{name} 二维码尚不支持。目前仅支持 EMVCo 零售二维码（Pick n Pay、Checkers、Woolworths）。",
     "merchantInsufficientBalance": "余额不足，无法完成此付款"
   },
-
   "toast": {
     "accountReady": "账户已就绪",
     "switchedTo": "已切换到 {name}",
@@ -358,12 +328,49 @@
     "failedRevoke": "移除访问权限失败",
     "failedPublish": "保存个人资料失败"
   },
-
   "qr": {
     "scanTitle": "扫描二维码",
     "startingCamera": "正在启动摄像头...",
     "uploadImage": "上传二维码图片",
     "orUpload": "或上传图片文件",
     "pointCamera": "将摄像头对准二维码"
+  },
+  "errors": {
+    "PERMISSION_DENIED": "Permission denied",
+    "NO_SIGNER": "No signer available",
+    "NO_ACCOUNT": "No active account",
+    "NO_EVENT": "No event provided",
+    "NO_PUBKEY": "No public key available",
+    "LOCAL_ACCOUNT_REQUIRED": "This action requires a local account",
+    "LOCKED": "Extension is locked",
+    "WRONG_PASSWORD": "Incorrect password"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "desc": "Choose which browser notifications you'd like to receive. You can change these anytime.",
+    "categories": "Categories",
+    "dms": "Messages",
+    "dmsDesc": "New encrypted messages from contacts",
+    "groups": "Group Messages",
+    "groupsDesc": "New messages in your groups and channels",
+    "payments": "Payments",
+    "paymentsDesc": "Incoming Lightning payments to your wallet",
+    "schedule": "Schedule",
+    "dnd": "Do Not Disturb",
+    "dndDesc": "Silence all notifications until turned off",
+    "quietHours": "Quiet Hours",
+    "quietHoursDesc": "Automatically silence notifications during set hours",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "hint": "Notifications appear as browser alerts even when the popup is closed.",
+    "settingsLabel": "Notifications",
+    "settingsDesc": "Manage browser alerts"
+  },
+  "chat": {
+    "initFailed": "Could not connect to relays. Try reloading.",
+    "contactsLoadFailed": "Could not load contacts. Check your connection."
+  },
+  "group": {
+    "initFailed": "Could not connect to group relays. Try reloading."
   }
 }

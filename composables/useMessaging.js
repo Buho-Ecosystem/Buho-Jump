@@ -1,12 +1,21 @@
 /**
  * Messaging composable — clean wrapper for chrome.runtime.sendMessage.
  * All popup ↔ background communication goes through here.
+ *
+ * Error codes from background.js are translated to i18n keys before
+ * throwing, so UI callers display localized messages automatically.
  */
 
 // Longer timeout for operations that involve relay connections
 const SLOW_OPS = new Set(['CONNECT_NIP46', 'PUBLISH_PROFILE', 'PUBLISH_NIP65', 'FETCH_PROFILE', 'FETCH_NIP65', 'CONNECT_WALLET', 'SWITCH_WALLET'])
 const DEFAULT_TIMEOUT = 15000 // 15s for CRUD / storage ops
 const SLOW_TIMEOUT = 45000   // 45s for relay / network ops
+
+// Known error codes from background.js → i18n key prefix: "errors."
+const ERROR_CODES = new Set([
+  'PERMISSION_DENIED', 'NO_SIGNER', 'NO_ACCOUNT', 'NO_EVENT',
+  'NO_PUBKEY', 'LOCAL_ACCOUNT_REQUIRED', 'LOCKED', 'WRONG_PASSWORD',
+])
 
 export function useMessaging() {
   /**
@@ -24,7 +33,14 @@ export function useMessaging() {
         timer = setTimeout(() => reject(new Error('Request timed out')), ms)
       }),
     ]).finally(() => clearTimeout(timer))
-    if (response?.error) throw new Error(response.error)
+
+    if (response?.error) {
+      // If the error is a known code, prefix with errors. so i18n can translate it.
+      // UI components using useI18n can call t(err.message) or check te(err.message).
+      const code = response.error
+      const message = ERROR_CODES.has(code) ? `errors.${code}` : code
+      throw new Error(message)
+    }
     return response?.result
   }
 

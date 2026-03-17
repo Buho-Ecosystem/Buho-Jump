@@ -168,11 +168,16 @@ body {
   border-radius: 2px;
 }
 
-/* Focus ring */
+/* Focus ring — buttons and interactive elements only, not text inputs */
 *:focus-visible {
   outline: 2px solid var(--brand-primary);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
 }
 
 /* ── Animations ── */

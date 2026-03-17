@@ -13,15 +13,19 @@ import { useLock } from '../../composables/useLock.js'
 import { useToast } from '../../composables/useToast.js'
 import LanguagePicker from '../LanguagePicker.vue'
 import {
-  Sun, Moon, Check, Languages, Coins, Bell, MessageSquare,
-  Wallet, Lock, Clock, Eye, EyeOff, Loader2, KeyRound,
+  Sun, Moon, Check, Languages, Coins, Bell, MessageSquare, Users,
+  Wallet, Lock, Clock, Eye, EyeOff, Loader2, KeyRound, MoonStar,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { currentTheme, currentMode, themes, themeIds, setTheme, toggleMode } = useTheme()
 const { locale, locales, switchLocale } = useLocale()
 const { currency: fiatCurrency, setCurrency: setFiatCurrency } = useFiat()
-const { settings: notifSettings, loaded: notifLoaded, load: loadNotif, toggleDms, togglePayments } = useNotifications()
+const {
+  settings: notifSettings, loaded: notifLoaded, load: loadNotif,
+  toggleDms, toggleGroups, togglePayments,
+  toggleDnd, toggleQuietHours, setQuietStart, setQuietEnd,
+} = useNotifications()
 const { lock, changePassword } = useLock()
 const toast = useToast()
 
@@ -29,7 +33,7 @@ const showLanguagePicker = ref(false)
 const showCurrencyPicker = ref(false)
 
 // Auto-lock
-const autoLockMinutes = ref(5)
+const autoLockMinutes = ref(0)
 const autoLockOptions = [1, 5, 15, 30, 0] // 0 = never
 
 // Password change
@@ -45,7 +49,7 @@ onMounted(async () => {
   loadNotif()
   try {
     const data = await chrome.storage.local.get('autoLockMinutes')
-    autoLockMinutes.value = data.autoLockMinutes ?? 5
+    autoLockMinutes.value = data.autoLockMinutes ?? 0
   } catch {}
 })
 
@@ -188,47 +192,135 @@ function handleLock() {
       <h2 class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('notifications.title') }}</h2>
       <p class="text-[10px] text-text-muted px-1">{{ t('notifications.desc') }}</p>
 
-      <div v-if="notifLoaded" class="space-y-1.5">
-        <!-- DMs -->
-        <div class="flex items-center justify-between px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center">
-              <MessageSquare class="w-4 h-4 text-text-muted" />
+      <div v-if="notifLoaded" class="space-y-4">
+        <!-- Categories -->
+        <div class="space-y-1.5">
+          <h3 class="text-[9px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('notifications.categories') }}</h3>
+
+          <!-- DMs -->
+          <div class="flex items-center justify-between px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center">
+                <MessageSquare class="w-4 h-4 text-text-muted" />
+              </div>
+              <div>
+                <span class="text-sm font-medium block">{{ t('notifications.dms') }}</span>
+                <span class="text-[10px] text-text-muted">{{ t('notifications.dmsDesc') }}</span>
+              </div>
             </div>
-            <div>
-              <span class="text-sm font-medium block">{{ t('notifications.dms') }}</span>
-              <span class="text-[10px] text-text-muted">{{ t('notifications.dmsDesc') }}</span>
-            </div>
+            <button @click="toggleDms" role="switch" :aria-checked="notifSettings.dms"
+              class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0"
+              :class="notifSettings.dms ? 'bg-brand' : 'bg-surface-elevated border border-border'">
+              <span class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+                :class="notifSettings.dms ? 'translate-x-4' : 'translate-x-0.5'" />
+            </button>
           </div>
-          <button @click="toggleDms" role="switch" :aria-checked="notifSettings.dms"
-            class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0"
-            :class="notifSettings.dms ? 'bg-brand' : 'bg-surface-elevated border border-border'">
-            <span class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
-              :class="notifSettings.dms ? 'translate-x-4' : 'translate-x-0.5'" />
-          </button>
+
+          <!-- Groups -->
+          <div class="flex items-center justify-between px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center">
+                <Users class="w-4 h-4 text-text-muted" />
+              </div>
+              <div>
+                <span class="text-sm font-medium block">{{ t('notifications.groups') }}</span>
+                <span class="text-[10px] text-text-muted">{{ t('notifications.groupsDesc') }}</span>
+              </div>
+            </div>
+            <button @click="toggleGroups" role="switch" :aria-checked="notifSettings.groups"
+              class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0"
+              :class="notifSettings.groups ? 'bg-brand' : 'bg-surface-elevated border border-border'">
+              <span class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+                :class="notifSettings.groups ? 'translate-x-4' : 'translate-x-0.5'" />
+            </button>
+          </div>
+
+          <!-- Payments -->
+          <div class="flex items-center justify-between px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center">
+                <Wallet class="w-4 h-4 text-text-muted" />
+              </div>
+              <div>
+                <span class="text-sm font-medium block">{{ t('notifications.payments') }}</span>
+                <span class="text-[10px] text-text-muted">{{ t('notifications.paymentsDesc') }}</span>
+              </div>
+            </div>
+            <button @click="togglePayments" role="switch" :aria-checked="notifSettings.payments"
+              class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0"
+              :class="notifSettings.payments ? 'bg-brand' : 'bg-surface-elevated border border-border'">
+              <span class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+                :class="notifSettings.payments ? 'translate-x-4' : 'translate-x-0.5'" />
+            </button>
+          </div>
         </div>
 
-        <!-- Payments -->
-        <div class="flex items-center justify-between px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center">
-              <Wallet class="w-4 h-4 text-text-muted" />
+        <!-- Schedule -->
+        <div class="space-y-1.5">
+          <h3 class="text-[9px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('notifications.schedule') }}</h3>
+
+          <!-- DND -->
+          <div class="flex items-center justify-between px-4 py-3 bg-surface-card rounded-3xl border shadow-sm"
+            :class="notifSettings.dnd ? 'border-warning/30 bg-warning/5' : 'border-border'">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-[10px] flex items-center justify-center"
+                :class="notifSettings.dnd ? 'bg-warning/15' : 'bg-surface-elevated border border-border'">
+                <MoonStar class="w-4 h-4" :class="notifSettings.dnd ? 'text-warning' : 'text-text-muted'" />
+              </div>
+              <div>
+                <span class="text-sm font-medium block">{{ t('notifications.dnd') }}</span>
+                <span class="text-[10px] text-text-muted">{{ t('notifications.dndDesc') }}</span>
+              </div>
             </div>
-            <div>
-              <span class="text-sm font-medium block">{{ t('notifications.payments') }}</span>
-              <span class="text-[10px] text-text-muted">{{ t('notifications.paymentsDesc') }}</span>
+            <button @click="toggleDnd" role="switch" :aria-checked="notifSettings.dnd"
+              class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0"
+              :class="notifSettings.dnd ? 'bg-warning' : 'bg-surface-elevated border border-border'">
+              <span class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+                :class="notifSettings.dnd ? 'translate-x-4' : 'translate-x-0.5'" />
+            </button>
+          </div>
+
+          <!-- Quiet hours -->
+          <div class="bg-surface-card rounded-3xl border border-border shadow-sm overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-3">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center">
+                  <Clock class="w-4 h-4 text-text-muted" />
+                </div>
+                <div>
+                  <span class="text-sm font-medium block">{{ t('notifications.quietHours') }}</span>
+                  <span class="text-[10px] text-text-muted">{{ t('notifications.quietHoursDesc') }}</span>
+                </div>
+              </div>
+              <button @click="toggleQuietHours" role="switch" :aria-checked="notifSettings.quietHours"
+                class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0"
+                :class="notifSettings.quietHours ? 'bg-brand' : 'bg-surface-elevated border border-border'">
+                <span class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+                  :class="notifSettings.quietHours ? 'translate-x-4' : 'translate-x-0.5'" />
+              </button>
+            </div>
+
+            <div v-if="notifSettings.quietHours" class="px-4 pb-3 pt-1 border-t border-border/50">
+              <div class="flex items-center gap-3 pl-[52px]">
+                <div class="flex-1 space-y-0.5">
+                  <label class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('notifications.quietStart') }}</label>
+                  <input type="time" :value="notifSettings.quietStart" @change="setQuietStart($event.target.value)"
+                    class="w-full bg-surface-elevated border border-border rounded-lg px-2.5 py-2 text-sm outline-none focus:border-brand transition-colors font-mono" />
+                </div>
+                <span class="text-text-muted text-sm mt-4">—</span>
+                <div class="flex-1 space-y-0.5">
+                  <label class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('notifications.quietEnd') }}</label>
+                  <input type="time" :value="notifSettings.quietEnd" @change="setQuietEnd($event.target.value)"
+                    class="w-full bg-surface-elevated border border-border rounded-lg px-2.5 py-2 text-sm outline-none focus:border-brand transition-colors font-mono" />
+                </div>
+              </div>
             </div>
           </div>
-          <button @click="togglePayments" role="switch" :aria-checked="notifSettings.payments"
-            class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0"
-            :class="notifSettings.payments ? 'bg-brand' : 'bg-surface-elevated border border-border'">
-            <span class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
-              :class="notifSettings.payments ? 'translate-x-4' : 'translate-x-0.5'" />
-          </button>
         </div>
       </div>
 
       <div v-else class="space-y-1.5">
+        <div class="skeleton-shimmer h-14 rounded-3xl" />
         <div class="skeleton-shimmer h-14 rounded-3xl" />
         <div class="skeleton-shimmer h-14 rounded-3xl" />
       </div>

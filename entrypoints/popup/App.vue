@@ -30,6 +30,7 @@ import GroupThread from '../../components/chat/GroupThread.vue'
 import GroupCreate from '../../components/chat/GroupCreate.vue'
 import GroupInfo from '../../components/chat/GroupInfo.vue'
 import { useChat } from '../../composables/useChat.js'
+import { useOnline } from '../../composables/useOnline.js'
 import { useGroups } from '../../composables/useGroups.js'
 import { useContacts } from '../../composables/useContacts.js'
 import { useRelays } from '../../composables/useRelays.js'
@@ -50,7 +51,7 @@ import {
   Copy, Check, Trash2, User, Zap, Sun, Moon, Palette,
   Lock, ShieldCheck, ChevronDown, AlertTriangle, AtSign, ExternalLink,
   Settings, X, Loader2, CheckCircle, Languages, Radio, Bell,
-  QrCode, Maximize2,
+  QrCode, Maximize2, WifiOff,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -156,6 +157,7 @@ const { switchAccount: switchChatAccount, unreadTotal: chatUnreadTotal } = useCh
 const { switchAccount: switchGroupAccount, unreadTotal: groupUnreadTotal } = useGroups()
 const { resetContacts } = useContacts()
 const { relayConfig, loadRelays } = useRelays()
+const { online } = useOnline()
 const showCurrencyPicker = ref(false)
 const showRelaySettings = ref(false)
 const showNotificationSettings = ref(false)
@@ -232,7 +234,12 @@ watch(() => activeAccount.value?.pubkey, (newPubkey, oldPubkey) => {
 
 // Display name: profile.display_name > profile.name > account.name
 const displayName = computed(() => {
-  return profileData.value?.display_name || profileData.value?.name || activeAccount.value?.name || '?'
+  if (profileData.value?.display_name) return profileData.value.display_name
+  if (profileData.value?.name) return profileData.value.name
+  if (activeAccount.value?.name) return activeAccount.value.name
+  // While profile loads, show truncated npub instead of jargon
+  if (activeAccount.value?.npub) return truncateKey(activeAccount.value.npub, 8, 4)
+  return ''
 })
 
 // Close settings on click outside
@@ -491,6 +498,12 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
   <div class="popup-container bg-surface-base text-text-primary">
     <ToastContainer />
 
+    <!-- Offline banner -->
+    <div v-if="!online" class="flex items-center justify-center gap-2 px-3 py-1.5 bg-error/10 border-b border-error/20 text-[11px] text-error font-medium">
+      <WifiOff class="w-3.5 h-3.5 shrink-0" />
+      <span>{{ t('common.offline') }}</span>
+    </div>
+
     <!-- Loading state -->
     <div v-if="lockLoading" class="flex-1 flex items-center justify-center">
       <div class="text-center space-y-3 animate-fade-in">
@@ -580,7 +593,8 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
           </div>
           <!-- Name + mode badge -->
           <div class="min-w-0">
-            <div class="text-[12px] font-extrabold truncate leading-tight max-w-[90px]">{{ displayName }}</div>
+            <div v-if="profileLoading && !profileData && !displayName" class="skeleton-shimmer h-3.5 w-16 rounded" />
+            <div v-else class="text-[12px] font-extrabold truncate leading-tight max-w-[90px]">{{ displayName }}</div>
             <div class="flex items-center gap-1">
               <span v-if="activeAccount.mode === 'nip46' && nip46Status.reconnecting"
                 class="flex items-center gap-0.5 text-[7px] font-semibold px-1 py-px rounded-full shrink-0 bg-info/10 text-info">
@@ -783,7 +797,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             <!-- Open full settings -->
             <div class="px-4 py-2 flex items-center justify-between">
               <OpenInBrowserButton page="preferences" />
-              <span class="text-[9px] text-text-muted">{{ t('settings.version', { version: '0.1.0' }) }}</span>
+              <span class="text-[9px] text-text-muted">{{ t('settings.version', { version: '1.0.0' }) }}</span>
             </div>
           </div>
         </div>

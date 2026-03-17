@@ -21,9 +21,11 @@
     "optional": "valfritt",
     "getStarted": "Kom igång",
     "copiedToClipboard": "Kopierat till urklipp",
-    "pleaseWait": "Vänta"
+    "pleaseWait": "Vänta",
+    "showingOf": "Showing {shown} of {total}",
+    "showMore": "Show more",
+    "offline": "No internet connection"
   },
-
   "lock": {
     "createTitle": "Skapa ett Lösenord",
     "unlockTitle": "Välkommen Tillbaka",
@@ -43,12 +45,10 @@
     "strengthStrong": "Starkt",
     "mismatch": "Lösenorden matchar inte"
   },
-
   "tabs": {
     "account": "Konto",
     "wallet": "Plånbok"
   },
-
   "settings": {
     "appearance": "Utseende",
     "lightMode": "Ljust läge",
@@ -66,7 +66,6 @@
     "relaySettingsDesc": "Hantera reläer för konto, plånbok och chatt",
     "version": "Buho Jump v{version}"
   },
-
   "relay": {
     "title": "Reläinställningar",
     "warning": "Varning: Att ändra dessa inställningar kan påverka din grundläggande upplevelse",
@@ -111,7 +110,6 @@
     "infoYes": "Ja",
     "infoNo": "Nej"
   },
-
   "account": {
     "activeDesc": "Aktivt konto — appar kommer använda den här profilen",
     "appPermissions": "Appbehörigheter",
@@ -131,19 +129,16 @@
     "external": "Extern",
     "local": "Lokal"
   },
-
   "wizard": {
     "addAccount": "Lägg till ett Konto",
     "addAccountDesc": "Med ditt konto kan du logga in i appar, posta och skicka meddelanden — allt utan en central server.",
     "recommended": "Rekommenderat",
-
     "modeNewTitle": "Skapa Nytt Konto",
     "modeNewDesc": "Börja från början — vi fixar allt åt dig på några sekunder.",
     "modeImportTitle": "Jag Har Redan ett Konto",
     "modeImportDesc": "Använd ditt befintliga konto genom att ange din säkerhetsnyckel.",
     "modeSignerTitle": "Extern Signerare",
     "modeSignerDesc": "Anslut till en signeringsapp som nsec.app, Amber eller Primal.",
-
     "stepSetup": "Inställning",
     "stepName": "Namn",
     "stepImport": "Importera",
@@ -151,14 +146,12 @@
     "stepBackup": "Säkerhetskopia",
     "stepProfile": "Profil",
     "stepDone": "Klar",
-
     "chooseName": "Välj ett Namn",
     "chooseNameDesc": "Välj ett namn som andra ser när de interagerar med dig. Du kan ändra det när som helst.",
     "importAccount": "Importera Ditt Konto",
     "importAccountDesc": "Ange säkerhetsnyckeln från ditt befintliga konto för att återställa det här.",
     "connectSigner": "Anslut Din Signerare",
     "connectSignerDesc": "Klistra in anslutningslänken från din signeringsapp.",
-
     "displayName": "Visningsnamn",
     "namePlaceholder": "t.ex. satoshi, alice, ditt_namn",
     "nameHint": "Så här ser andra dig. Använd ditt riktiga namn, ett smeknamn, eller vad du vill.",
@@ -168,11 +161,9 @@
     "connectionLink": "Anslutningslänk",
     "connectionPlaceholder": "bunker://... eller nostrconnect://...",
     "signerHint": "Hämta detta från din signeringsapp (nsec.app, Amber, Primal). Dina nycklar stannar där — vi ser dem aldrig.",
-
     "createAccount": "Skapa Konto",
     "importAccountBtn": "Importera Konto",
     "connect": "Anslut",
-
     "connectPreparing": "Förbereder...",
     "connectConnecting": "Ansluter till din signerare...",
     "connectFetchingProfile": "Laddar din profil...",
@@ -181,7 +172,6 @@
     "progressSecureConnection": "Upprättar säker anslutning",
     "progressConnecting": "Ansluter till din signeringsapp",
     "progressLoadingProfile": "Laddar din profil",
-
     "backupTitle": "Spara Din Säkerhetsnyckel",
     "backupDesc": "Det här är det enda sättet att återställa ditt konto. Om du förlorar den kan ingen hjälpa — inte ens vi.",
     "backupWarning": "Dela aldrig detta med någon — behandla det som ett lösenord",
@@ -190,7 +180,6 @@
     "downloadFile": "Ladda ner fil",
     "backupConfirm": "Jag har sparat min säkerhetsnyckel på ett säkert ställe",
     "backupConfirmHint": "Använd en lösenordshanterare, en säker anteckning, eller skriv ner det på papper och förvara det säkert.",
-
     "profileTitle": "Din Profil",
     "profileDesc": "Granska din profilinformation. Du kan uppdatera den när som helst.",
     "completeProfile": "Fyll i Din Profil",
@@ -199,19 +188,16 @@
     "aboutPlaceholder": "Berätta om dig själv...",
     "saveProfile": "Spara Profil",
     "saving": "Sparar...",
-
     "connectedTitle": "Ansluten",
     "connectedDesc": "Din signerare är kopplad och redo att användas",
     "connectedBadge": "Aktiv",
     "signerExplainer": "Dina nycklar förvaras säkert i signeringsappen. När en app behöver agera som dig skickas förfrågan till din signerare för godkännande.",
     "howItWorks": "Så fungerar det:",
-
     "doneTitle": "Allt är Klart",
     "doneDesc": "Ditt konto är redo. Appar kan nu begära att använda det — du blir alltid tillfrågad först.",
     "profileSaved": "Profilen sparades",
     "profileSyncLater": "Vissa servrar kunde inte nås — din profil synkroniseras senare"
   },
-
   "prompt": {
     "wantsAccess": "vill komma åt ditt konto",
     "yourAccount": "Ditt Konto",
@@ -222,33 +208,26 @@
     "denyAlways": "Neka alltid",
     "moreOptions": "Fler alternativ",
     "fewerOptions": "Färre alternativ",
-
     "lockedTitle": "Buho Jump är låst",
     "lockedDesc": "En app behöver åtkomst. Ange ditt lösenord för att fortsätta.",
-
     "permPublicLabel": "Se din offentliga profil",
     "permPublicWhat": "Appen vill veta vem du är — som att visa ditt profilkort.",
     "permPublicDetail": "Detta delar bara din offentliga information. Den kan inte posta eller agera i ditt namn.",
     "permPublicRisk": "Skrivskyddad",
-
     "permSignLabel": "Posta eller agera som dig",
     "permSignWhat": "Appen vill publicera något med ditt konto — som ett inlägg, en reaktion eller en åtgärd.",
     "permSignDetail": "Det här är som att trycka på \"skicka\". Innehållet blir synligt för andra.",
     "permSignRisk": "Skrivåtkomst",
-
     "permEncryptLabel": "Kryptera ett meddelande",
     "permEncryptWhat": "Appen vill skicka ett privat meddelande som bara mottagaren kan läsa.",
     "permEncryptDetail": "Meddelandet krypteras innan det skickas.",
     "permEncryptRisk": "Meddelanden",
-
     "permDecryptLabel": "Läsa ett privat meddelande",
     "permDecryptWhat": "Appen vill öppna ett privat meddelande som skickats till dig.",
     "permDecryptDetail": "Det dekrypterade meddelandet blir synligt för appen.",
     "permDecryptRisk": "Meddelanden",
-
     "permDefaultWhat": "Den här appen begär åtkomst till ditt konto.",
     "permDefaultRisk": "Behörighet",
-
     "kindProfile": "Profiluppgifter",
     "kindNote": "Kort textanteckning",
     "kindContacts": "Kontaktlista",
@@ -261,7 +240,6 @@
     "kindAppData": "Appdata",
     "kindGeneric": "Händelsetyp {kind}"
   },
-
   "wallet": {
     "balance": "Saldo",
     "refreshBalance": "Uppdatera saldo",
@@ -281,12 +259,10 @@
     "failedRefresh": "Uppdatering misslyckades",
     "walletConnected": "Plånbok ansluten",
     "connectFailed": "Kunde inte ansluta plånbok",
-
     "noWallet": "Ingen plånbok ansluten",
     "noWalletDesc": "Klistra in anslutningslänken från din plånboksapp för att aktivera betalningar.",
     "connectWallet": "Anslut Plånbok",
     "connecting": "Ansluter...",
-
     "sendTitle": "Skicka Betalning",
     "sendResult": "Betalningsresultat",
     "invoiceLabel": "Faktura eller adress",
@@ -306,7 +282,6 @@
     "paymentSuccess": "Din Lightning-betalning lyckades",
     "preimage": "Preimage",
     "sendAnother": "Skicka en till betalning",
-
     "receiveTitle": "Ta Emot Betalning",
     "shareInvoice": "Dela Faktura",
     "memo": "Meddelande",
@@ -315,22 +290,18 @@
     "creating": "Skapar...",
     "requesting": "Begär",
     "newInvoice": "Ny Faktura",
-
     "historyTitle": "Transaktionshistorik",
     "loadMore": "Ladda fler",
     "noResults": "Inga transaktioner hittades",
-
     "detailTitle": "Transaktionsdetaljer",
     "description": "Beskrivning",
     "date": "Datum",
     "fees": "Avgifter",
     "paymentHash": "Betalningshash",
-
     "statusPending": "Väntande",
     "statusExpired": "Utgången",
     "statusReceived": "Mottagen",
     "statusSent": "Skickad",
-
     "merchantPayment": "Butiksbetalning",
     "merchantDetected": "Butiks-QR upptäckt",
     "merchantPaying": "Betalar hos",
@@ -346,7 +317,6 @@
     "merchantNotSupported": "{name} QR-koder stöds inte ännu. Endast EMVCo detaljhandels-QR-koder (Pick n Pay, Checkers, Woolworths) fungerar för närvarande.",
     "merchantInsufficientBalance": "Otillräckligt saldo för denna betalning"
   },
-
   "toast": {
     "accountReady": "Kontot är redo",
     "switchedTo": "Bytte till {name}",
@@ -358,12 +328,49 @@
     "failedRevoke": "Kunde inte ta bort åtkomst",
     "failedPublish": "Kunde inte spara profilen"
   },
-
   "qr": {
     "scanTitle": "Skanna QR-kod",
     "startingCamera": "Startar kameran...",
     "uploadImage": "Ladda upp en QR-kodbild",
     "orUpload": "Eller ladda upp en bildfil",
     "pointCamera": "Rikta kameran mot en QR-kod"
+  },
+  "errors": {
+    "PERMISSION_DENIED": "Permission denied",
+    "NO_SIGNER": "No signer available",
+    "NO_ACCOUNT": "No active account",
+    "NO_EVENT": "No event provided",
+    "NO_PUBKEY": "No public key available",
+    "LOCAL_ACCOUNT_REQUIRED": "This action requires a local account",
+    "LOCKED": "Extension is locked",
+    "WRONG_PASSWORD": "Incorrect password"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "desc": "Choose which browser notifications you'd like to receive. You can change these anytime.",
+    "categories": "Categories",
+    "dms": "Messages",
+    "dmsDesc": "New encrypted messages from contacts",
+    "groups": "Group Messages",
+    "groupsDesc": "New messages in your groups and channels",
+    "payments": "Payments",
+    "paymentsDesc": "Incoming Lightning payments to your wallet",
+    "schedule": "Schedule",
+    "dnd": "Do Not Disturb",
+    "dndDesc": "Silence all notifications until turned off",
+    "quietHours": "Quiet Hours",
+    "quietHoursDesc": "Automatically silence notifications during set hours",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "hint": "Notifications appear as browser alerts even when the popup is closed.",
+    "settingsLabel": "Notifications",
+    "settingsDesc": "Manage browser alerts"
+  },
+  "chat": {
+    "initFailed": "Could not connect to relays. Try reloading.",
+    "contactsLoadFailed": "Could not load contacts. Check your connection."
+  },
+  "group": {
+    "initFailed": "Could not connect to group relays. Try reloading."
   }
 }

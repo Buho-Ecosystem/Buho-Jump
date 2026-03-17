@@ -27,7 +27,7 @@ const props = defineProps({
 const emit = defineEmits(['back'])
 
 const { t } = useI18n()
-const { getMessages, sendMessage, retryMessage, markRead, addZapMessage, currentAccountPubkey } = useChat()
+const { getMessages, sendMessage, retryMessage, markRead, addZapMessage, updateZapStatus, currentAccountPubkey } = useChat()
 const { fetchProfile, getCachedProfile } = useContacts()
 const { status: walletStatus, sendZap } = useWallet()
 const { isMuted, mute, unmute } = useMuteList()
@@ -40,7 +40,6 @@ let mountedAccountPubkey = null
 // ── State ──
 const profile = ref(getCachedProfile(props.pubkey))
 const input = ref('')
-const sending = ref(false)
 const scrollRef = ref(null)
 const textareaRef = ref(null)
 const copied = ref(false)
@@ -131,9 +130,9 @@ function truncateNpub(pubkey) {
 
 // ── Actions ──
 
-async function handleSend() {
+function handleSend() {
   const text = input.value.trim()
-  if (!text || sending.value) return
+  if (!text) return
 
   if (mountedAccountPubkey && currentAccountPubkey.value !== mountedAccountPubkey) {
     toast.error(t('chat.sendFailed'))
@@ -141,17 +140,15 @@ async function handleSend() {
     return
   }
 
-  sending.value = true
-  try {
-    await sendMessage(props.pubkey, text)
-    input.value = ''
-    resetTextareaHeight()
-  } catch {
-    // Failed status is shown on the message bubble itself
-  } finally {
-    sending.value = false
-    scrollToBottom()
-  }
+  // Clear input immediately — message appears instantly with "sending" tick
+  input.value = ''
+  resetTextareaHeight()
+  scrollToBottom()
+
+  // Send in background — status updates via optimistic message ticks
+  sendMessage(props.pubkey, text).catch(() => {
+    // Failed status shown on the bubble itself (tap to retry)
+  })
 }
 
 async function handleZap(amount) {
@@ -160,18 +157,20 @@ async function handleZap(amount) {
   if (!sats || sats <= 0 || !Number.isFinite(sats)) return
 
   zapping.value = true
+  const zapId = addZapMessage(props.pubkey, sats)
+  scrollToBottom()
   try {
     await sendZap({
       recipientPubkey: props.pubkey,
       amountSats: sats,
       lightningAddress: lightningAddress.value,
     })
-    addZapMessage(props.pubkey, sats)
+    updateZapStatus(props.pubkey, zapId, 'sent')
     showZapPicker.value = false
     customZapAmount.value = ''
-    scrollToBottom()
     toast.success(t('chat.zapSent', { amount: formatSats(sats) }))
   } catch (err) {
+    updateZapStatus(props.pubkey, zapId, 'failed')
     toast.error(err.message || t('chat.zapFailed'))
   } finally {
     zapping.value = false
@@ -458,13 +457,12 @@ watch(messageList, () => {
       <!-- Send button (circular, brand-colored when active) -->
       <button
         @click="handleSend"
-        :disabled="!input.trim() || sending"
+        :disabled="!input.trim()"
         class="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all disabled:opacity-30"
         :class="input.trim() ? 'bg-brand text-surface-base' : 'bg-surface-elevated text-text-muted'"
         :aria-label="t('chat.sendMessage')"
       >
-        <Loader2 v-if="sending" class="w-4 h-4 animate-spin" />
-        <Send v-else class="w-4 h-4" />
+        <Send class="w-4 h-4" />
       </button>
     </div>
   </div>

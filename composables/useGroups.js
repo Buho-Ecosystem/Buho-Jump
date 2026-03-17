@@ -1,48 +1,91 @@
 /**
- * Groups composable — NIP-29 relay-based group chat.
+ * Groups composable — three group types following the 0xchat model:
  *
- * Each group lives on a specific relay. Messages are kind 9 (plaintext,
- * not encrypted). Admin actions use kinds 9000-9005. Group metadata,
- * members, and admins are kinds 39000-39002 (replaceable, managed by relay).
+ * 1. PRIVATE GROUP (NIP-17 gift-wrap)
+ *    - E2E encrypted, each message gift-wrapped to every member
+ *    - Uses nip59.createRumor + createSeal + createWrap per member
+ *    - Best for < 100 members (small trusted circles)
+ *    - Managed locally — member list stored in extension
  *
- * All data is scoped per-account — switching accounts triggers a
- * full reset: close subscriptions, load the new account's data,
- * and re-subscribe to group relays.
+ * 2. RELAY GROUP (NIP-29)
+ *    - Relay-enforced access, messages NOT encrypted
+ *    - Open groups: anyone can join; Closed: admin approval needed
+ *    - Admin actions via kinds 9000-9005
+ *    - Scales to large groups
+ *
+ * 3. OPEN CHANNEL (NIP-28)
+ *    - Public, anyone can read and write
+ *    - Kind 40 (create), 41 (metadata), 42 (message)
+ *    - Best for open communities
+ *
+ * All data is scoped per-account. Switching accounts triggers a full reset.
  */
 
 import { ref, computed } from 'vue'
-import { nip29, finalizeEvent, hexToBytes } from 'nostr-core'
+import {
+  nip28, nip29, nip59,
+  finalizeEvent, hexToBytes, getPublicKey,
+} from 'nostr-core'
 import { useMessaging } from './useMessaging.js'
-import { getActiveAccount } from '../lib/accounts.js'
 import { getPool } from '../lib/relayPool.js'
-import { getPoolRelays, DEFAULT_CHAT_RELAYS } from '../lib/relays.js'
+
+/**
+ * Get the active account from the background service worker.
+ * Accounts are encrypted at rest — only the background has the password.
+ */
+async function getActiveAccount() {
+  const response = await chrome.runtime.sendMessage({ type: 'GET_ACTIVE_ACCOUNT' })
+  return response?.result || null
+}
+import { getPoolRelays, getOutboxRelays, getInboxRelays, DEFAULT_CHAT_RELAYS } from '../lib/relays.js'
 
 // ── Singleton reactive state ──
 
-const groups = ref([])            // joined groups: [{ id, relay, name, about, picture, isOpen, isPublic, joinedAt }]
-const messages = ref({})          // { ["groupId:relay"]: GroupMessage[] }
-const lastRead = ref({})          // { ["groupId:relay"]: timestamp }
-const invitations = ref([])       // [{ groupId, relay, inviterPubkey, timestamp }]
+const groups = ref([])
+// Group shape: { id, type: 'private'|'relay'|'channel', relay?, name, about, picture,
+//   isOpen?, isPublic?, members?: string[], joinedAt }
+
+const messages = ref({})          // { [groupKey]: Message[] }
+const lastRead = ref({})          // { [groupKey]: timestamp }
+const invitations = ref([])       // { groupId, relay, inviterPubkey, type, timestamp }
 const initialized = ref(false)
+const error = ref(null)      // i18n key or null — set on init/subscribe failure
 const currentAccountPubkey = ref(null)
 
-let subscriptions = []            // one sub per group + one for invitations
+let subscriptions = []
 
-// Group message shape:
-// { id, sender: pubkey, content, created_at, replyTo?, groupId }
+// Performance: O(1) dedup, dirty tracking, per-group timestamp cache
+const groupIdSets = {}          // { [groupKey]: Set<id> } — for O(1) dedup
+const dirtyGroupKeys = new Set() // group keys with unsaved changes
+let dirtyMeta = false            // tracks changes to groups list or invitations
+const groupLatestTs = {}         // { [groupKey]: number } — cached latest timestamp
 
-// ── Helpers ──
+// EOSE sync token — scoped per subscription cycle (same pattern as useChat.js)
+let currentGroupSyncToken = { complete: false }
 
-function groupKey(groupId, relay) {
-  return `${groupId}:${relay}`
+// Message shape (all group types):
+// { id, sender, content, created_at, groupId, replyTo?, status? }
+
+// ── Key helpers ──
+
+function gkey(group) {
+  if (group.type === 'private') return `priv||${group.id}`
+  if (group.type === 'channel') return `chan||${group.id}`
+  return `relay||${group.id}||${group.relay}`
 }
 
-function storageKeys(accountPubkey) {
+function gkeyFromParts(type, id, relay) {
+  if (type === 'private') return `priv||${id}`
+  if (type === 'channel') return `chan||${id}`
+  return `relay||${id}||${relay}`
+}
+
+function storageKeys(pubkey) {
   return {
-    groups: `groupList_${accountPubkey}`,
-    messages: `groupMessages_${accountPubkey}`,
-    lastRead: `groupLastRead_${accountPubkey}`,
-    invitations: `groupInvitations_${accountPubkey}`,
+    groups: `groupList_${pubkey}`,
+    messages: `groupMessages_${pubkey}`,
+    lastRead: `groupLastRead_${pubkey}`,
+    invitations: `groupInvitations_${pubkey}`,
   }
 }
 
@@ -53,17 +96,16 @@ export function useGroups() {
   const groupConversations = computed(() => {
     const list = []
     for (const group of groups.value) {
-      const key = groupKey(group.id, group.relay)
+      const key = gkey(group)
       const msgs = messages.value[key] || []
-      if (msgs.length === 0) {
-        // Show group even with no messages
-        list.push({ groupKey: key, group, lastMessage: null, unread: 0, type: 'group' })
-        continue
-      }
-      const sorted = [...msgs].sort((a, b) => b.created_at - a.created_at)
-      const lastMsg = sorted[0]
+      const sorted = msgs.length > 0
+        ? [...msgs].sort((a, b) => b.created_at - a.created_at)
+        : []
+      const lastMsg = sorted[0] || null
       const lastReadTs = lastRead.value[key] || 0
-      const unread = sorted.filter(m => m.sender !== currentAccountPubkey.value && m.created_at > lastReadTs).length
+      const unread = sorted.filter(m =>
+        m.sender !== currentAccountPubkey.value && m.created_at > lastReadTs
+      ).length
       list.push({ groupKey: key, group, lastMessage: lastMsg, unread, type: 'group' })
     }
     return list.sort((a, b) => {
@@ -81,10 +123,7 @@ export function useGroups() {
 
   async function loadData() {
     if (!currentAccountPubkey.value) {
-      groups.value = []
-      messages.value = {}
-      lastRead.value = {}
-      invitations.value = []
+      groups.value = []; messages.value = {}; lastRead.value = {}; invitations.value = []
       return
     }
     try {
@@ -94,7 +133,25 @@ export function useGroups() {
       messages.value = data[keys.messages] || {}
       lastRead.value = data[keys.lastRead] || {}
       invitations.value = data[keys.invitations] || []
+
+      // Rebuild ID sets and timestamp caches
+      for (const [key, msgs] of Object.entries(messages.value)) {
+        const idSet = new Set()
+        let latest = 0
+        for (const m of msgs) {
+          idSet.add(m.id)
+          if (m.created_at > latest) latest = m.created_at
+        }
+        groupIdSets[key] = idSet
+        groupLatestTs[key] = latest
+      }
     } catch { /* storage error */ }
+  }
+
+  /** Mark metadata (groups list, lastRead, invitations) as needing persistence. */
+  function persistMeta() {
+    dirtyMeta = true
+    persist()
   }
 
   let persistTimer = null
@@ -102,173 +159,391 @@ export function useGroups() {
     if (persistTimer) clearTimeout(persistTimer)
     persistTimer = setTimeout(async () => {
       if (!currentAccountPubkey.value) return
+      if (dirtyGroupKeys.size === 0 && !dirtyMeta) return
       try {
         const keys = storageKeys(currentAccountPubkey.value)
-        await chrome.storage.local.set({
-          [keys.groups]: JSON.parse(JSON.stringify(groups.value)),
-          [keys.messages]: JSON.parse(JSON.stringify(messages.value)),
-          [keys.lastRead]: JSON.parse(JSON.stringify(lastRead.value)),
-          [keys.invitations]: JSON.parse(JSON.stringify(invitations.value)),
-        })
+        const toSet = {}
+
+        // Always persist metadata if dirty (groups list, invitations, lastRead)
+        if (dirtyMeta) {
+          toSet[keys.groups] = JSON.parse(JSON.stringify(groups.value))
+          toSet[keys.lastRead] = JSON.parse(JSON.stringify(lastRead.value))
+          toSet[keys.invitations] = JSON.parse(JSON.stringify(invitations.value))
+        }
+
+        // Only serialize dirty group message arrays
+        if (dirtyGroupKeys.size > 0) {
+          const stored = await chrome.storage.local.get(keys.messages)
+          const existing = stored[keys.messages] || {}
+          for (const gk of dirtyGroupKeys) {
+            existing[gk] = JSON.parse(JSON.stringify(messages.value[gk]))
+          }
+          toSet[keys.messages] = existing
+        }
+
+        await chrome.storage.local.set(toSet)
+        dirtyGroupKeys.clear()
+        dirtyMeta = false
       } catch { /* storage error */ }
     }, 500)
   }
 
   // ── Message handling ──
 
-  function addMessage(gKey, msg) {
-    if (!messages.value[gKey]) {
-      messages.value[gKey] = []
+  function addMessage(key, msg) {
+    if (!messages.value[key]) messages.value[key] = []
+    // O(1) dedup via ID set
+    if (!groupIdSets[key]) groupIdSets[key] = new Set(messages.value[key].map(m => m.id))
+    if (groupIdSets[key].has(msg.id)) return
+    groupIdSets[key].add(msg.id)
+
+    messages.value[key] = [...messages.value[key], msg]
+    // Cap at 500 per group
+    if (messages.value[key].length > 500) {
+      messages.value[key] = messages.value[key]
+        .sort((a, b) => b.created_at - a.created_at).slice(0, 500)
+      // Rebuild ID set after pruning
+      groupIdSets[key] = new Set(messages.value[key].map(m => m.id))
     }
-    if (messages.value[gKey].some(m => m.id === msg.id)) return
-    messages.value[gKey] = [...messages.value[gKey], msg]
-    // Cap at 500 messages per group to limit storage
-    if (messages.value[gKey].length > 500) {
-      messages.value[gKey] = messages.value[gKey]
-        .sort((a, b) => b.created_at - a.created_at)
-        .slice(0, 500)
-    }
+    dirtyGroupKeys.add(key)
+    if (msg.created_at > (groupLatestTs[key] || 0)) groupLatestTs[key] = msg.created_at
     persist()
+
+    // Trigger browser notification only for real-time messages (after initial sync)
+    if (currentGroupSyncToken.complete && msg.sender && msg.sender !== currentAccountPubkey.value) {
+      const group = groups.value.find(g => gkey(g) === key)
+      const groupName = group?.name || group?.id || 'Group'
+      const senderShort = msg.sender.slice(0, 12) + '...'
+      const preview = msg.content?.slice(0, 120) || ''
+      chrome.runtime.sendMessage({
+        type: 'NOTIFY_GROUP',
+        params: [{ groupName, senderName: senderShort, preview, messageId: msg.id }],
+      }).catch(() => { /* background not ready */ })
+    }
   }
 
-  function getMessages(gKey) {
+  function getMessages(key) {
     return computed(() => {
-      const msgs = messages.value[gKey] || []
+      const msgs = messages.value[key] || []
       return [...msgs].sort((a, b) => a.created_at - b.created_at)
     })
   }
 
-  function markRead(gKey) {
-    lastRead.value = { ...lastRead.value, [gKey]: Math.floor(Date.now() / 1000) }
+  function markRead(key) {
+    lastRead.value = { ...lastRead.value, [key]: Math.floor(Date.now() / 1000) }
+    persistMeta()
+  }
+
+  function updateMessageStatus(key, msgId, status, newId) {
+    const msgs = messages.value[key]
+    if (!msgs) return
+    const idx = msgs.findIndex(m => m.id === msgId)
+    if (idx === -1) return
+    const updated = { ...msgs[idx], status }
+    if (newId) {
+      updated.id = newId
+      if (groupIdSets[key]) {
+        groupIdSets[key].delete(msgId)
+        groupIdSets[key].add(newId)
+      }
+    }
+    messages.value[key] = [...msgs.slice(0, idx), updated, ...msgs.slice(idx + 1)]
+    dirtyGroupKeys.add(key)
     persist()
   }
 
-  // ── Send ──
+  // ══════════════════════════════════════════════
+  // ══ SEND — dispatches by group type
+  // ══════════════════════════════════════════════
 
-  async function sendGroupMessage(groupId, relay, content, replyTo) {
+  async function sendGroupMessage(group, content, replyTo) {
+    if (group.type === 'private') return sendPrivateGroupMessage(group, content, replyTo)
+    if (group.type === 'relay') return sendRelayGroupMessage(group, content, replyTo)
+    if (group.type === 'channel') return sendChannelMessage(group, content, replyTo)
+    throw new Error('Unknown group type')
+  }
+
+  // ── Private group (NIP-17 gift-wrap to all members) ──
+
+  async function sendPrivateGroupMessage(group, content, replyTo) {
+    const account = await getActiveAccount()
+    if (!account?.secretHex) throw new Error('Private groups require a local account')
+
+    const pool = getPool()
+    const secretKey = hexToBytes(account.secretHex)
+    const senderPubkey = account.pubkey
+    const now = Math.floor(Date.now() / 1000)
+    const key = gkey(group)
+    const tempId = `gpend-${now}-${Math.random().toString(36).slice(2, 8)}`
+
+    addMessage(key, {
+      id: tempId, sender: senderPubkey, content, created_at: now,
+      groupId: group.id, replyTo, status: 'sending',
+    })
+
+    try {
+      // Build p-tags for all members
+      const memberTags = (group.members || []).map(pk => ['p', pk])
+      const tags = [...memberTags, ['subject', group.name || group.id]]
+      if (replyTo) tags.push(['e', replyTo, '', 'reply'])
+
+      const rumor = nip59.createRumor({
+        kind: 14,
+        content,
+        tags,
+        created_at: now,
+      }, senderPubkey)
+
+      // Gift-wrap to every member (including self for self-copy)
+      const allRecipients = [...new Set([...(group.members || []), senderPubkey])]
+      const chatRelays = await getPoolRelays(senderPubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
+
+      const wraps = allRecipients.map(recipientPubkey => {
+        const seal = nip59.createSeal(rumor, secretKey, recipientPubkey)
+        return nip59.createWrap(seal, recipientPubkey)
+      })
+
+      await Promise.all(wraps.map(wrap => pool.publish(chatRelays, wrap)))
+      updateMessageStatus(key, tempId, 'sent', rumor.id)
+    } catch (err) {
+      updateMessageStatus(key, tempId, 'failed')
+      throw err
+    }
+  }
+
+  // ── Relay group (NIP-29 kind 9) ──
+
+  async function sendRelayGroupMessage(group, content, replyTo) {
     const account = await getActiveAccount()
     if (!account) throw new Error('No active account')
 
     const pool = getPool()
-    const gKey = groupKey(groupId, relay)
     const now = Math.floor(Date.now() / 1000)
-    const tempId = `gpending-${now}-${Math.random().toString(36).slice(2, 8)}`
+    const key = gkey(group)
+    const tempId = `gpend-${now}-${Math.random().toString(36).slice(2, 8)}`
 
-    // Optimistic message
-    addMessage(gKey, {
-      id: tempId,
-      sender: account.pubkey,
-      content,
-      created_at: now,
-      groupId,
-      replyTo: replyTo || undefined,
-      status: 'sending',
+    addMessage(key, {
+      id: tempId, sender: account.pubkey, content, created_at: now,
+      groupId: group.id, replyTo, status: 'sending',
     })
 
     try {
-      const template = nip29.createGroupChatTemplate(groupId, content, replyTo || undefined)
+      const template = nip29.createGroupChatTemplate(group.id, content, replyTo || undefined)
       let signed
-
       if (account.secretHex) {
         signed = finalizeEvent(template, hexToBytes(account.secretHex))
       } else {
         const { send } = useMessaging()
         signed = await send('CHAT_SIGN', template)
       }
-
-      await pool.publish([relay], signed)
-      updateMessageStatus(gKey, tempId, 'sent', signed.id)
+      await pool.publish([group.relay], signed)
+      updateMessageStatus(key, tempId, 'sent', signed.id)
     } catch (err) {
-      updateMessageStatus(gKey, tempId, 'failed')
+      updateMessageStatus(key, tempId, 'failed')
       throw err
     }
   }
 
-  function updateMessageStatus(gKey, msgId, status, newId) {
-    const msgs = messages.value[gKey]
-    if (!msgs) return
-    const idx = msgs.findIndex(m => m.id === msgId)
-    if (idx === -1) return
-    const updated = { ...msgs[idx], status }
-    if (newId) updated.id = newId
-    messages.value[gKey] = [...msgs.slice(0, idx), updated, ...msgs.slice(idx + 1)]
-    persist()
+  // ── Open channel (NIP-28 kind 42) ──
+
+  async function sendChannelMessage(group, content, replyTo) {
+    const account = await getActiveAccount()
+    if (!account) throw new Error('No active account')
+
+    const pool = getPool()
+    const now = Math.floor(Date.now() / 1000)
+    const key = gkey(group)
+    const tempId = `gpend-${now}-${Math.random().toString(36).slice(2, 8)}`
+
+    addMessage(key, {
+      id: tempId, sender: account.pubkey, content, created_at: now,
+      groupId: group.id, replyTo, status: 'sending',
+    })
+
+    try {
+      const template = nip28.createChannelMessageEventTemplate(
+        group.id, content, group.relay || undefined, replyTo || undefined
+      )
+      let signed
+      if (account.secretHex) {
+        signed = finalizeEvent(template, hexToBytes(account.secretHex))
+      } else {
+        const { send } = useMessaging()
+        signed = await send('CHAT_SIGN', template)
+      }
+      const relays = group.relay
+        ? [group.relay]
+        : await getPoolRelays(account.pubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
+      await pool.publish(relays, signed)
+      updateMessageStatus(key, tempId, 'sent', signed.id)
+    } catch (err) {
+      updateMessageStatus(key, tempId, 'failed')
+      throw err
+    }
   }
 
-  async function retryMessage(gKey, msgId) {
-    const msgs = messages.value[gKey]
+  // ── Retry failed message ──
+
+  async function retryMessage(key, msgId) {
+    const msgs = messages.value[key]
     if (!msgs) return
     const msg = msgs.find(m => m.id === msgId && m.status === 'failed')
     if (!msg) return
-    const group = groups.value.find(g => groupKey(g.id, g.relay) === gKey)
+    const group = groups.value.find(g => gkey(g) === key)
     if (!group) return
 
-    messages.value[gKey] = msgs.filter(m => m.id !== msgId)
+    messages.value[key] = msgs.filter(m => m.id !== msgId)
+    if (groupIdSets[key]) groupIdSets[key].delete(msgId)
+    dirtyGroupKeys.add(key)
     persist()
-    await sendGroupMessage(group.id, group.relay, msg.content, msg.replyTo)
+    await sendGroupMessage(group, msg.content, msg.replyTo)
   }
 
-  // ── Group management ──
+  // ══════════════════════════════════════════════
+  // ══ GROUP MANAGEMENT
+  // ══════════════════════════════════════════════
 
-  async function fetchGroupInfo(groupId, relay) {
+  // ── Create private group (local, no relay involved for creation) ──
+
+  function createPrivateGroup(name, about, memberPubkeys) {
+    const id = `priv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const group = {
+      id, type: 'private', name, about: about || '',
+      picture: '', members: memberPubkeys,
+      joinedAt: Math.floor(Date.now() / 1000),
+    }
+    groups.value = [...groups.value, group]
+    persistMeta()
+    subscribePrivateGroup(group)
+    return group
+  }
+
+  function addMemberToPrivateGroup(groupId, pubkey) {
+    const idx = groups.value.findIndex(g => g.id === groupId && g.type === 'private')
+    if (idx === -1) return
+    const group = groups.value[idx]
+    if (group.members?.includes(pubkey)) return
+    groups.value = groups.value.map((g, i) =>
+      i === idx ? { ...g, members: [...(g.members || []), pubkey] } : g
+    )
+    persistMeta()
+  }
+
+  function removeMemberFromPrivateGroup(groupId, pubkey) {
+    const idx = groups.value.findIndex(g => g.id === groupId && g.type === 'private')
+    if (idx === -1) return
+    groups.value = groups.value.map((g, i) =>
+      i === idx ? { ...g, members: (g.members || []).filter(pk => pk !== pubkey) } : g
+    )
+    persistMeta()
+  }
+
+  // ── Join relay group (NIP-29) ──
+
+  async function joinRelayGroup(groupId, relay) {
+    const key = gkeyFromParts('relay', groupId, relay)
+    if (groups.value.some(g => gkey(g) === key)) return
+
+    const { metadata } = await fetchRelayGroupInfo(groupId, relay)
+    const group = {
+      id: groupId, type: 'relay', relay, name: metadata?.name || groupId,
+      about: metadata?.about || '', picture: metadata?.picture || '',
+      isOpen: metadata?.isOpen ?? true, isPublic: metadata?.isPublic ?? true,
+      joinedAt: Math.floor(Date.now() / 1000),
+    }
+    groups.value = [...groups.value, group]
+    persistMeta()
+    subscribeRelayGroup(group)
+  }
+
+  // ── Join open channel (NIP-28) ──
+
+  async function joinChannel(channelId, relay) {
+    const key = gkeyFromParts('channel', channelId, relay)
+    if (groups.value.some(g => gkey(g) === key)) return
+
+    // Fetch channel metadata (kind 40)
+    const pool = getPool()
+    const relays = relay ? [relay] : DEFAULT_CHAT_RELAYS
+    const events = await pool.querySync(relays, {
+      ids: [channelId],
+      kinds: [40],
+    }, { maxWait: 6000 })
+
+    let meta = { name: channelId }
+    if (events.length > 0) {
+      meta = nip28.parseChannelMetadata(events[0])
+    }
+
+    const group = {
+      id: channelId, type: 'channel', relay: relay || '',
+      name: meta.name || channelId, about: meta.about || '',
+      picture: meta.picture || '',
+      joinedAt: Math.floor(Date.now() / 1000),
+    }
+    groups.value = [...groups.value, group]
+    persistMeta()
+    subscribeChannel(group)
+  }
+
+  // ── Create open channel (NIP-28 kind 40) ──
+
+  async function createChannel(name, about, relay) {
+    const account = await getActiveAccount()
+    if (!account) throw new Error('No active account')
+
+    const pool = getPool()
+    const template = nip28.createChannelEventTemplate({ name, about: about || '' })
+    let signed
+    if (account.secretHex) {
+      signed = finalizeEvent(template, hexToBytes(account.secretHex))
+    } else {
+      const { send } = useMessaging()
+      signed = await send('CHAT_SIGN', template)
+    }
+
+    const relays = relay ? [relay] : await getPoolRelays(account.pubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
+    await pool.publish(relays, signed)
+
+    // The channel ID is the event ID of the kind 40
+    await joinChannel(signed.id, relay || relays[0])
+    return signed.id
+  }
+
+  // ── Leave any group ──
+
+  function leaveGroup(groupId, type, relay) {
+    const key = gkeyFromParts(type, groupId, relay)
+    groups.value = groups.value.filter(g => gkey(g) !== key)
+    delete messages.value[key]
+    delete lastRead.value[key]
+    delete groupIdSets[key]
+    delete groupLatestTs[key]
+    persistMeta()
+    // Resubscribe to rebuild without this group
+    closeSubscriptions()
+    subscribe()
+  }
+
+  // ── Fetch relay group info (NIP-29 kinds 39000/39001/39002) ──
+
+  async function fetchRelayGroupInfo(groupId, relay) {
     const pool = getPool()
     const events = await pool.querySync([relay], {
       kinds: [39000, 39001, 39002],
       '#d': [groupId],
     }, { maxWait: 8000 })
 
-    let metadata = null
-    let members = []
-    let admins = []
-
+    let metadata = null, members = [], admins = []
     for (const event of events) {
       if (event.kind === 39000) metadata = nip29.parseGroupMetadata(event)
       else if (event.kind === 39002) members = nip29.parseGroupMembers(event)
       else if (event.kind === 39001) admins = nip29.parseGroupAdmins(event)
     }
-
     return { metadata, members, admins }
   }
 
-  async function joinGroup(groupId, relay) {
-    const gKey = groupKey(groupId, relay)
-    // Already joined?
-    if (groups.value.some(g => groupKey(g.id, g.relay) === gKey)) return
-
-    // Fetch metadata
-    const { metadata, members, admins } = await fetchGroupInfo(groupId, relay)
-
-    const group = {
-      id: groupId,
-      relay,
-      name: metadata?.name || groupId,
-      about: metadata?.about || '',
-      picture: metadata?.picture || '',
-      isOpen: metadata?.isOpen ?? true,
-      isPublic: metadata?.isPublic ?? true,
-      joinedAt: Math.floor(Date.now() / 1000),
-    }
-
-    groups.value = [...groups.value, group]
-    persist()
-
-    // Subscribe to this group
-    subscribeGroup(group)
-  }
-
-  async function leaveGroup(groupId, relay) {
-    const gKey = groupKey(groupId, relay)
-    groups.value = groups.value.filter(g => groupKey(g.id, g.relay) !== gKey)
-    delete messages.value[gKey]
-    delete lastRead.value[gKey]
-    persist()
-    // Subscriptions will be rebuilt on next init or can close individually
-    // For simplicity, just cleanup and resubscribe all
-    closeSubscriptions()
-    await subscribe()
-  }
-
-  // ── Admin actions ──
+  // ── Admin actions (NIP-29) ──
 
   async function adminAction(groupId, relay, action) {
     const account = await getActiveAccount()
@@ -277,65 +552,103 @@ export function useGroups() {
     const pool = getPool()
     const template = nip29.createGroupAdminTemplate(groupId, action)
     let signed
-
     if (account.secretHex) {
       signed = finalizeEvent(template, hexToBytes(account.secretHex))
     } else {
       const { send } = useMessaging()
       signed = await send('CHAT_SIGN', template)
     }
-
     await pool.publish([relay], signed)
   }
 
   // ── Invitations ──
 
-  function addInvitation(groupId, relay, inviterPubkey) {
-    const exists = invitations.value.some(
-      inv => inv.groupId === groupId && inv.relay === relay
-    )
-    if (exists) return
+  function addInvitation(groupId, relay, inviterPubkey, type) {
+    if (invitations.value.some(inv => inv.groupId === groupId && inv.relay === relay)) return
     invitations.value = [...invitations.value, {
-      groupId,
-      relay,
-      inviterPubkey,
+      groupId, relay, inviterPubkey, type: type || 'relay',
       timestamp: Math.floor(Date.now() / 1000),
     }]
-    persist()
+    persistMeta()
   }
 
-  async function acceptInvitation(groupId, relay) {
+  async function acceptInvitation(inv) {
     invitations.value = invitations.value.filter(
-      inv => !(inv.groupId === groupId && inv.relay === relay)
+      i => !(i.groupId === inv.groupId && i.relay === inv.relay)
     )
-    await joinGroup(groupId, relay)
+    if (inv.type === 'relay') await joinRelayGroup(inv.groupId, inv.relay)
+    else if (inv.type === 'channel') await joinChannel(inv.groupId, inv.relay)
+    persistMeta()
   }
 
-  function declineInvitation(groupId, relay) {
+  function declineInvitation(inv) {
     invitations.value = invitations.value.filter(
-      inv => !(inv.groupId === groupId && inv.relay === relay)
+      i => !(i.groupId === inv.groupId && i.relay === inv.relay)
     )
-    persist()
+    persistMeta()
   }
 
   async function inviteUser(groupId, relay, pubkey) {
     await adminAction(groupId, relay, { type: 'add-user', pubkey })
   }
 
-  // ── Subscriptions ──
+  // ══════════════════════════════════════════════
+  // ══ SUBSCRIPTIONS — one per group type
+  // ══════════════════════════════════════════════
 
-  function subscribeGroup(group) {
+  // onGroupEose is set per subscribe() call — see subscribe() below
+  let onGroupEose = () => {}
+
+  function subscribePrivateGroup(group) {
+    const account = getActiveAccountSync()
+    if (!account?.secretHex) return
+
     const pool = getPool()
-    const gKey = groupKey(group.id, group.relay)
+    const secretKey = hexToBytes(account.secretHex)
+    const myPubkey = account.pubkey
+    const key = gkey(group)
+    const chatRelays = getChatRelaysSync()
 
-    // Determine "since" — latest message or 30 days ago
-    const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 86400 * 30
-    const msgs = messages.value[gKey] || []
-    let latest = thirtyDaysAgo
-    for (const m of msgs) {
-      if (m.created_at > latest) latest = m.created_at
-    }
-    const since = Math.max(latest - 3600, thirtyDaysAgo)
+    const since = getGroupSince(key)
+
+    // Listen for gift wraps addressed to us
+    const sub = pool.subscribe(chatRelays, {
+      kinds: [1059],
+      '#p': [myPubkey],
+      since,
+    }, {
+      oneose: onGroupEose,
+      onevent(event) {
+        try {
+          const rumor = nip59.unwrap(event, secretKey)
+          // Check if this message belongs to this private group
+          // Private group messages have a 'subject' tag matching the group name/id
+          const subjectTag = rumor.tags?.find(t => t[0] === 'subject')
+          if (!subjectTag || (subjectTag[1] !== group.name && subjectTag[1] !== group.id)) return
+
+          const pTags = rumor.tags?.filter(t => t[0] === 'p').map(t => t[1]) || []
+          // Verify this is a group message (multiple p-tags = group, single p-tag = DM)
+          if (pTags.length <= 1) return
+
+          const replyTag = rumor.tags?.find(t => t[0] === 'e' && t[3] === 'reply')
+          addMessage(key, {
+            id: rumor.id,
+            sender: rumor.pubkey,
+            content: rumor.content,
+            created_at: rumor.created_at,
+            groupId: group.id,
+            replyTo: replyTag?.[1],
+          })
+        } catch { /* not for us or decrypt failed */ }
+      },
+    })
+    subscriptions.push(sub)
+  }
+
+  function subscribeRelayGroup(group) {
+    const pool = getPool()
+    const key = gkey(group)
+    const since = getGroupSince(key)
 
     // Kind 9 — group chat messages
     const chatSub = pool.subscribe([group.relay], {
@@ -343,16 +656,13 @@ export function useGroups() {
       '#h': [group.id],
       since,
     }, {
+      oneose: onGroupEose,
       onevent(event) {
-        // Skip our own messages that we already have (optimistic)
         const replyTag = event.tags.find(t => t[0] === 'e' && t[3] === 'reply')
-        addMessage(gKey, {
-          id: event.id,
-          sender: event.pubkey,
-          content: event.content,
-          created_at: event.created_at,
-          groupId: group.id,
-          replyTo: replyTag?.[1] || undefined,
+        addMessage(key, {
+          id: event.id, sender: event.pubkey, content: event.content,
+          created_at: event.created_at, groupId: group.id,
+          replyTo: replyTag?.[1],
         })
       },
     })
@@ -363,22 +673,48 @@ export function useGroups() {
       '#d': [group.id],
     }, {
       onevent(event) {
-        const idx = groups.value.findIndex(g => g.id === group.id && g.relay === group.relay)
-        if (idx === -1) return
-
         if (event.kind === 39000) {
           const meta = nip29.parseGroupMetadata(event)
-          groups.value = groups.value.map((g, i) =>
-            i === idx ? { ...g, name: meta.name || g.name, about: meta.about || g.about, picture: meta.picture || g.picture, isOpen: meta.isOpen, isPublic: meta.isPublic } : g
+          groups.value = groups.value.map(g =>
+            g.id === group.id && g.relay === group.relay
+              ? { ...g, name: meta.name || g.name, about: meta.about || g.about, picture: meta.picture || g.picture, isOpen: meta.isOpen, isPublic: meta.isPublic }
+              : g
           )
-          persist()
+          persistMeta()
         }
-        // Members and admins updates could be tracked too but we fetch on-demand via GroupInfo
       },
     })
 
     subscriptions.push(chatSub, metaSub)
   }
+
+  function subscribeChannel(group) {
+    const pool = getPool()
+    const key = gkey(group)
+    const since = getGroupSince(key)
+    const relays = group.relay ? [group.relay] : getChatRelaysSync()
+
+    // Kind 42 — channel messages
+    const sub = pool.subscribe(relays, {
+      kinds: [42],
+      '#e': [group.id],
+      since,
+    }, {
+      oneose: onGroupEose,
+      onevent(event) {
+        const parsed = nip28.parseChannelMessage(event)
+        if (parsed.channelId !== group.id) return
+        addMessage(key, {
+          id: event.id, sender: event.pubkey, content: parsed.content,
+          created_at: event.created_at, groupId: group.id,
+          replyTo: parsed.replyTo,
+        })
+      },
+    })
+    subscriptions.push(sub)
+  }
+
+  // ── Subscribe all ──
 
   async function subscribe() {
     const account = await getActiveAccount()
@@ -386,33 +722,58 @@ export function useGroups() {
 
     closeSubscriptions()
 
-    const pool = getPool()
-    const myPubkey = account.pubkey
-
-    // Subscribe to each joined group
-    for (const group of groups.value) {
-      subscribeGroup(group)
+    // Create a new sync token scoped to THIS subscription cycle
+    const syncToken = { complete: false }
+    currentGroupSyncToken = syncToken
+    let eoseCount = 0
+    const eoseExpected = (groups.value.length || 0) + 1 // 1 per group chat sub + 1 invitation sub
+    onGroupEose = () => {
+      eoseCount++
+      if (eoseCount >= eoseExpected) syncToken.complete = true
     }
 
-    // Subscribe for invitations — kind 9000 (add-user) addressed to us
-    const chatRelays = await getPoolRelays(myPubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
+    for (const group of groups.value) {
+      if (group.type === 'private') subscribePrivateGroup(group)
+      else if (group.type === 'relay') subscribeRelayGroup(group)
+      else if (group.type === 'channel') subscribeChannel(group)
+    }
+
+    // Subscribe for NIP-29 invitations (kind 9000 add-user addressed to us)
+    const pool = getPool()
+    const chatRelays = await getPoolRelays(account.pubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
     const invSub = pool.subscribe(chatRelays, {
       kinds: [9000],
-      '#p': [myPubkey],
+      '#p': [account.pubkey],
       since: Math.floor(Date.now() / 1000) - 86400 * 30,
     }, {
+      oneose: onGroupEose,
       onevent(event) {
         const hTag = event.tags.find(t => t[0] === 'h')
         if (!hTag) return
-        // The relay the invitation came from is the group's relay
-        // We can infer it, but the event doesn't carry it explicitly.
-        // Use a default: the relay URL this event came from.
-        // For now, store with relay = event source or first chat relay.
-        const relay = chatRelays[0] || ''
-        addInvitation(hTag[1], relay, event.pubkey)
+        // Infer relay from chat relays (best effort)
+        addInvitation(hTag[1], chatRelays[0] || '', event.pubkey, 'relay')
       },
     })
     subscriptions.push(invSub)
+  }
+
+  // ── Helpers ──
+
+  function getGroupSince(key) {
+    const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 86400 * 30
+    const latest = Math.max(groupLatestTs[key] || 0, thirtyDaysAgo)
+    return Math.max(latest - 3600, thirtyDaysAgo)
+  }
+
+  let _cachedAccount = null
+  let _cachedChatRelays = null
+
+  function getActiveAccountSync() {
+    return _cachedAccount
+  }
+
+  function getChatRelaysSync() {
+    return _cachedChatRelays || DEFAULT_CHAT_RELAYS
   }
 
   function closeSubscriptions() {
@@ -426,6 +787,7 @@ export function useGroups() {
 
   async function init() {
     try {
+      error.value = null
       const account = await getActiveAccount()
       const pubkey = account?.pubkey || null
 
@@ -433,21 +795,21 @@ export function useGroups() {
 
       cleanup()
       currentAccountPubkey.value = pubkey
+      _cachedAccount = account
       initialized.value = false
 
       if (!pubkey) {
-        groups.value = []
-        messages.value = {}
-        lastRead.value = {}
-        invitations.value = []
+        groups.value = []; messages.value = {}; lastRead.value = {}; invitations.value = []
         initialized.value = true
         return
       }
 
+      _cachedChatRelays = await getPoolRelays(pubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
       await loadData()
       await subscribe()
     } catch (err) {
       console.warn('[groups] init failed:', err)
+      error.value = 'group.initFailed'
     } finally {
       initialized.value = true
     }
@@ -456,42 +818,58 @@ export function useGroups() {
   async function switchAccount() {
     initialized.value = false
     currentAccountPubkey.value = null
+    _cachedAccount = null
+    _cachedChatRelays = null
     cleanup()
-    groups.value = []
-    messages.value = {}
-    lastRead.value = {}
-    invitations.value = []
+    groups.value = []; messages.value = {}; lastRead.value = {}; invitations.value = []
     await init()
   }
 
   function cleanup() {
-    if (persistTimer) {
-      clearTimeout(persistTimer)
-      persistTimer = null
-    }
+    currentGroupSyncToken = { complete: false }
+    onGroupEose = () => {}
+    // Clear performance caches
+    for (const k of Object.keys(groupIdSets)) delete groupIdSets[k]
+    for (const k of Object.keys(groupLatestTs)) delete groupLatestTs[k]
+    dirtyGroupKeys.clear()
+    dirtyMeta = false
+    if (persistTimer) { clearTimeout(persistTimer); persistTimer = null }
     closeSubscriptions()
   }
 
   return {
+    // State
     groups,
     invitations,
     groupConversations,
     unreadGroupTotal,
     initialized,
+    error,
     currentAccountPubkey,
+    // Lifecycle
     init,
     switchAccount,
     cleanup,
+    // Messaging
     sendGroupMessage,
     retryMessage,
     getMessages,
     markRead,
-    joinGroup,
+    // Group management
+    createPrivateGroup,
+    addMemberToPrivateGroup,
+    removeMemberFromPrivateGroup,
+    joinRelayGroup,
+    joinChannel,
+    createChannel,
     leaveGroup,
-    fetchGroupInfo,
+    fetchRelayGroupInfo,
     adminAction,
     inviteUser,
+    // Invitations
     acceptInvitation,
     declineInvitation,
+    // Helpers
+    gkey,
   }
 }

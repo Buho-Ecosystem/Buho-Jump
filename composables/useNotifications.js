@@ -1,10 +1,22 @@
 /**
  * Notification settings composable — reactive toggle state for the popup UI.
+ *
+ * Supports: DMs, groups, payments, DND, quiet hours.
  */
 
 import { ref } from 'vue'
 
-const settings = ref({ dms: true, payments: true })
+const DEFAULTS = {
+  dms: true,
+  groups: true,
+  payments: true,
+  dnd: false,
+  quietHours: false,
+  quietStart: '22:00',
+  quietEnd: '08:00',
+}
+
+const settings = ref({ ...DEFAULTS })
 const loaded = ref(false)
 
 export function useNotifications() {
@@ -12,7 +24,7 @@ export function useNotifications() {
     if (loaded.value) return
     try {
       const data = await chrome.storage.local.get('notificationSettings')
-      settings.value = { dms: true, payments: true, ...data.notificationSettings }
+      settings.value = { ...DEFAULTS, ...data.notificationSettings }
     } catch { /* storage error */ }
     loaded.value = true
   }
@@ -23,14 +35,25 @@ export function useNotifications() {
     })
   }
 
-  async function toggleDms() {
-    settings.value = { ...settings.value, dms: !settings.value.dms }
-    await persist()
+  function toggle(key) {
+    settings.value = { ...settings.value, [key]: !settings.value[key] }
+    return persist()
   }
 
-  async function togglePayments() {
-    settings.value = { ...settings.value, payments: !settings.value.payments }
-    await persist()
+  async function toggleDms() { return toggle('dms') }
+  async function toggleGroups() { return toggle('groups') }
+  async function togglePayments() { return toggle('payments') }
+  async function toggleDnd() { return toggle('dnd') }
+  async function toggleQuietHours() { return toggle('quietHours') }
+
+  async function setQuietStart(time) {
+    settings.value = { ...settings.value, quietStart: time }
+    return persist()
+  }
+
+  async function setQuietEnd(time) {
+    settings.value = { ...settings.value, quietEnd: time }
+    return persist()
   }
 
   return {
@@ -38,6 +61,11 @@ export function useNotifications() {
     loaded,
     load,
     toggleDms,
+    toggleGroups,
     togglePayments,
+    toggleDnd,
+    toggleQuietHours,
+    setQuietStart,
+    setQuietEnd,
   }
 }

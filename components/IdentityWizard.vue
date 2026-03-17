@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAccounts } from '../composables/useAccounts.js'
 import { truncateKey } from '../lib/utils.js'
+import { nip06 } from 'nostr-core'
 import {
   KeyRound, Download, Link2, ArrowRight, ArrowLeft, Eye, EyeOff,
   Copy, Check, AlertTriangle, Globe, UserRound, Shield, ScanLine,
@@ -14,7 +15,7 @@ import QrScanner from './QrScanner.vue'
 const emit = defineEmits(['complete', 'cancel'])
 const { t } = useI18n()
 
-const { create, createWithMnemonic, importKey, importMnemonic, createRemote, connectRemote, startNostrConnect, cancelNostrConnect, loadNip46Status, nip46Status: nip46GlobalStatus, publishProfile, fetchProfile, load: loadAccounts } = useAccounts()
+const { create, createWithMnemonic, importKey, importMnemonic, createRemote, connectRemote, startNostrConnect, cancelNostrConnect, loadNip46Status, nip46Status: nip46GlobalStatus, publishProfile, fetchProfile, load: loadAccounts, remove: removeAccount } = useAccounts()
 
 // ── Wizard state ──
 const step = ref(1)
@@ -45,6 +46,42 @@ const nostrConnectUri = ref('')
 const nostrConnectQr = ref('')
 const nostrConnectAccountId = ref(null)
 let nostrConnectPollTimer = null
+let nostrConnectStarted = false
+
+// Auto-generate QR when user selects "Show QR" on step 2
+watch(nip46Method, async (method) => {
+  if (method !== 'nostrconnect' || step.value !== 2 || nostrConnectStarted) return
+  nostrConnectStarted = true
+  try {
+    nip46Status.value = 'creating'
+    const account = await createRemote('Remote Signer')
+    nostrConnectAccountId.value = account.id
+
+    nip46Status.value = 'waiting'
+    const result = await startNostrConnect(account.id)
+    if (result?.error) { nip46Status.value = ''; nostrConnectStarted = false; return }
+
+    nostrConnectUri.value = result.uri
+    const QRCode = (await import('qrcode')).default
+    nostrConnectQr.value = await QRCode.toDataURL(result.uri, {
+      width: 220, margin: 2, color: { dark: '#000', light: '#fff' },
+    })
+
+    nostrConnectPollTimer = setInterval(async () => {
+      await loadNip46Status()
+      if (nip46GlobalStatus.value.connected) {
+        clearInterval(nostrConnectPollTimer)
+        nostrConnectPollTimer = null
+        await loadAccounts()
+        nip46Status.value = 'done'
+        step.value = 3
+      }
+    }, 1500)
+  } catch {
+    nip46Status.value = ''
+    nostrConnectStarted = false
+  }
+})
 
 // ── Created account data ──
 const createdAccount = ref(null)
@@ -83,7 +120,10 @@ const modes = computed(() => [
 
 const canProceedStep2 = computed(() => {
   if (mode.value === 'new') return displayName.value.trim().length > 0
-  if (mode.value === 'recover') return mnemonicWords.value.trim().split(/\s+/).filter(Boolean).length >= 12
+  if (mode.value === 'recover') {
+    const words = mnemonicWords.value.trim()
+    return words.split(/\s+/).filter(Boolean).length >= 12 && nip06.validateMnemonic(words.toLowerCase())
+  }
   if (mode.value === 'import') return importNsec.value.trim().length > 0
   if (mode.value === 'nip46') return nip46Method.value === 'nostrconnect' || bunkerUri.value.trim().length > 0
   return false
@@ -91,14 +131,14 @@ const canProceedStep2 = computed(() => {
 
 const totalSteps = computed(() => {
   if (mode.value === 'nip46') return 3
-  if (mode.value === 'import') return 4
+  if (mode.value === 'import') return 3
   if (mode.value === 'recover') return 4
   return 5 // new: choose → name → backup → profile → done
 })
 
 const stepLabels = computed(() => {
   if (mode.value === 'nip46') return [t('wizard.stepSetup'), t('wizard.stepConnect'), t('wizard.stepDone')]
-  if (mode.value === 'import') return [t('wizard.stepSetup'), t('wizard.stepImport'), t('wizard.stepProfile'), t('wizard.stepDone')]
+  if (mode.value === 'import') return [t('wizard.stepSetup'), t('wizard.stepImport'), t('wizard.stepDone')]
   if (mode.value === 'recover') return [t('wizard.stepSetup'), t('wizard.stepRecover'), t('wizard.stepProfile'), t('wizard.stepDone')]
   return [t('wizard.stepSetup'), t('wizard.stepName'), t('wizard.stepBackup'), t('wizard.stepProfile'), t('wizard.stepDone')]
 })
@@ -121,10 +161,11 @@ function goBack() {
     nip46Status.value = ''
     nostrConnectUri.value = ''
     nostrConnectQr.value = ''
+    nostrConnectStarted = false
   } else if (step.value === 3 && mode.value === 'new') {
     // Backup step — allow going back to name input
     step.value = 2
-  } else if (step.value === 3 && (mode.value === 'import' || mode.value === 'recover')) {
+  } else if (step.value === 3 && mode.value === 'recover') {
     // Profile step — allow going back to input
     step.value = 2
   } else if (step.value === 4 && mode.value === 'new') {
@@ -160,52 +201,23 @@ async function handleStep2() {
           .catch(() => {})
       }
     } else if (mode.value === 'import') {
-      const account = await importKey(displayName.value.trim() || undefined, importNsec.value.trim())
+      const account = await importKey(undefined, importNsec.value.trim())
       if (!account) throw new Error('Import returned no data')
       createdAccount.value = account
-      // Advance to profile step immediately — don't block on relay fetch
-      step.value = 3
-      // Fetch existing profile in the background to pre-fill name/about
+      // Fetch profile from relays before going to done screen
       if (account.pubkey) {
-        fetchProfile(account.pubkey)
-          .then((existing) => {
-            if (existing) {
-              displayName.value = existing.display_name || existing.name || displayName.value
-              aboutMe.value = existing.about || ''
-            }
-          })
-          .catch(() => { /* relay fetch failed — user can fill in manually */ })
+        try {
+          const existing = await fetchProfile(account.pubkey)
+          if (existing) {
+            displayName.value = existing.display_name || existing.name || ''
+            aboutMe.value = existing.about || ''
+          }
+        } catch { /* relay fetch failed — continue anyway */ }
       }
+      step.value = 3
     } else if (mode.value === 'nip46') {
       if (nip46Method.value === 'nostrconnect') {
-        // Nostr Connect flow — generate QR, wait for signer
-        nip46Status.value = 'creating'
-        const account = await createRemote('Remote Signer')
-        nostrConnectAccountId.value = account.id
-
-        nip46Status.value = 'waiting'
-        const result = await startNostrConnect(account.id)
-        if (result?.error) throw new Error(result.error)
-
-        nostrConnectUri.value = result.uri
-        // Generate QR
-        const QRCode = (await import('qrcode')).default
-        nostrConnectQr.value = await QRCode.toDataURL(result.uri, {
-          width: 220, margin: 2, color: { dark: '#000', light: '#fff' },
-        })
-
-        // Poll for connection completion
-        loading.value = false
-        nostrConnectPollTimer = setInterval(async () => {
-          await loadNip46Status()
-          if (nip46GlobalStatus.value.connected) {
-            clearInterval(nostrConnectPollTimer)
-            nostrConnectPollTimer = null
-            await loadAccounts()
-            nip46Status.value = 'done'
-            step.value = 3
-          }
-        }, 1500)
+        // QR is already generated by the watcher — nothing to do here
         return
       }
 
@@ -213,30 +225,36 @@ async function handleStep2() {
       nip46Status.value = 'creating'
       const account = await createRemote('Remote Signer')
 
-      nip46Status.value = 'connecting'
-      const result = await connectRemote(bunkerUri.value.trim(), account.id)
-
-      if (!result?.pubkey) {
-        throw new Error('Connection failed — no public key returned from signer')
-      }
-
-      nip46Status.value = 'fetching-profile'
-      createdAccount.value = { ...account, pubkey: result.pubkey, npub: null }
-
       try {
-        const existing = await fetchProfile(result.pubkey)
-        if (existing) {
-          nip46Profile.value = existing
-          displayName.value = existing.display_name || existing.name || ''
-          aboutMe.value = existing.about || ''
-        }
-      } catch {
-        // Non-critical — profile fetch from relays can fail
-      }
+        nip46Status.value = 'connecting'
+        const result = await connectRemote(bunkerUri.value.trim(), account.id)
 
-      nip46Status.value = 'done'
-      step.value = 3
-      return
+        if (!result?.pubkey) {
+          throw new Error('Connection failed — no public key returned from signer')
+        }
+
+        nip46Status.value = 'fetching-profile'
+        createdAccount.value = { ...account, pubkey: result.pubkey, npub: null }
+
+        try {
+          const existing = await fetchProfile(result.pubkey)
+          if (existing) {
+            nip46Profile.value = existing
+            displayName.value = existing.display_name || existing.name || ''
+            aboutMe.value = existing.about || ''
+          }
+        } catch {
+          // Non-critical — profile fetch from relays can fail
+        }
+
+        nip46Status.value = 'done'
+        step.value = 3
+        return
+      } catch (err) {
+        // Clean up the orphaned account on connection failure
+        try { await removeAccount(account.id) } catch { /* best effort */ }
+        throw err
+      }
     }
   } catch (err) {
     error.value = err.message || 'Something went wrong'
@@ -263,7 +281,7 @@ async function handlePublishProfile() {
       ...(aboutMe.value.trim() && { about: aboutMe.value.trim() }),
     }
     publishResult.value = await publishProfile(profileData)
-    step.value = (mode.value === 'import' || mode.value === 'recover') ? 4 : 5
+    step.value = mode.value === 'recover' ? 4 : 5
   } catch (err) {
     error.value = err.message || 'Failed to publish profile'
   } finally {
@@ -272,7 +290,7 @@ async function handlePublishProfile() {
 }
 
 function skipPublish() {
-  step.value = (mode.value === 'import' || mode.value === 'recover') ? 4 : 5
+  step.value = mode.value === 'recover' ? 4 : 5
 }
 
 function finish() {
@@ -285,6 +303,15 @@ function copyMnemonic() {
   copied.value = true
   setTimeout(() => (copied.value = false), 2500)
 }
+
+// Clean up NIP-46 polling timer on unmount to prevent memory leaks
+onBeforeUnmount(() => {
+  if (nostrConnectPollTimer) {
+    clearInterval(nostrConnectPollTimer)
+    nostrConnectPollTimer = null
+  }
+  cancelNostrConnect()
+})
 </script>
 
 <template>
@@ -404,16 +431,8 @@ function copyMnemonic() {
         </p>
       </div>
 
-      <!-- ── Import: Name + Key input ── -->
+      <!-- ── Import: Key input only ── -->
       <template v-if="mode === 'import'">
-        <div class="space-y-2">
-          <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold block px-0.5">
-            {{ t('wizard.displayName') }} <span class="normal-case tracking-normal text-text-muted/60">{{ t('common.optional') }}</span>
-          </label>
-          <input v-model="displayName" placeholder="satoshi"
-            class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50" />
-        </div>
-
         <div class="space-y-2">
           <div class="flex items-center justify-between px-0.5">
             <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">{{ t('wizard.backupKey') }}</label>
@@ -604,7 +623,7 @@ function copyMnemonic() {
       </div>
 
       <!-- Action button -->
-      <button v-if="!(mode === 'nip46' && loading)" @click="handleStep2" :disabled="!canProceedStep2 || loading"
+      <button v-if="!(mode === 'nip46' && loading) && !(mode === 'nip46' && nip46Method === 'nostrconnect' && (nostrConnectQr || nip46Status === 'creating' || nip46Status === 'waiting'))" @click="handleStep2" :disabled="!canProceedStep2 || loading"
         class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all font-bold btn-primary flex items-center justify-center gap-2">
         <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
         <template v-else>
@@ -695,9 +714,9 @@ function copyMnemonic() {
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
-    <!-- Step 3 (import/recover): Profile editing   -->
+    <!-- Step 3 (recover): Profile editing            -->
     <!-- ═══════════════════════════════════════════ -->
-    <div v-if="step === 3 && (mode === 'import' || mode === 'recover')" class="space-y-4 animate-fade-in-up">
+    <div v-if="step === 3 && mode === 'recover'" class="space-y-4 animate-fade-in-up">
 
       <!-- Back button -->
       <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
@@ -875,7 +894,7 @@ function copyMnemonic() {
     <!-- ═══════════════════════════════════════════ -->
     <!-- Final step: Done                          -->
     <!-- ═══════════════════════════════════════════ -->
-    <div v-if="(step === 5 && mode === 'new') || (step === 4 && (mode === 'import' || mode === 'recover'))" class="space-y-4 animate-fade-in-up">
+    <div v-if="(step === 5 && mode === 'new') || (step === 3 && mode === 'import') || (step === 4 && mode === 'recover')" class="space-y-4 animate-fade-in-up">
       <div class="text-center space-y-2 pt-4">
         <div class="w-14 h-14 rounded-full bg-success/12 flex items-center justify-center mx-auto">
           <Check class="w-7 h-7 text-success" />

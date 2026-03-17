@@ -21,9 +21,11 @@
     "optional": "необязательно",
     "getStarted": "Начать",
     "copiedToClipboard": "Скопировано в буфер обмена",
-    "pleaseWait": "Подождите"
+    "pleaseWait": "Подождите",
+    "showingOf": "Showing {shown} of {total}",
+    "showMore": "Show more",
+    "offline": "No internet connection"
   },
-
   "lock": {
     "createTitle": "Создайте пароль",
     "unlockTitle": "С возвращением",
@@ -43,12 +45,10 @@
     "strengthStrong": "Надёжный",
     "mismatch": "Пароли не совпадают"
   },
-
   "tabs": {
     "account": "Аккаунт",
     "wallet": "Кошелёк"
   },
-
   "settings": {
     "appearance": "Оформление",
     "lightMode": "Светлая тема",
@@ -66,7 +66,6 @@
     "relaySettingsDesc": "Управление реле для аккаунта, кошелька и чата",
     "version": "Buho Jump v{version}"
   },
-
   "relay": {
     "title": "Настройки реле",
     "warning": "Внимание: Изменение этих настроек может повлиять на вашу основную работу",
@@ -111,7 +110,6 @@
     "infoYes": "Да",
     "infoNo": "Нет"
   },
-
   "account": {
     "activeDesc": "Активный аккаунт — приложения будут использовать этот профиль",
     "appPermissions": "Разрешения приложений",
@@ -131,19 +129,16 @@
     "external": "Внешний",
     "local": "Локальный"
   },
-
   "wizard": {
     "addAccount": "Добавить аккаунт",
     "addAccountDesc": "Аккаунт позволяет входить в приложения, публиковать записи и отправлять сообщения — без центрального сервера.",
     "recommended": "Рекомендуется",
-
     "modeNewTitle": "Создать новый аккаунт",
     "modeNewDesc": "Начните с нуля — мы всё настроим за несколько секунд.",
     "modeImportTitle": "У меня уже есть аккаунт",
     "modeImportDesc": "Используйте существующий аккаунт, введя резервный ключ.",
     "modeSignerTitle": "Внешний подписант",
     "modeSignerDesc": "Подключитесь к приложению-подписанту, такому как nsec.app, Amber или Primal.",
-
     "stepSetup": "Настройка",
     "stepName": "Имя",
     "stepImport": "Импорт",
@@ -151,14 +146,12 @@
     "stepBackup": "Резервная копия",
     "stepProfile": "Профиль",
     "stepDone": "Готово",
-
     "chooseName": "Выберите имя",
     "chooseNameDesc": "Выберите имя, которое люди увидят при взаимодействии с вами. Его можно изменить в любой момент.",
     "importAccount": "Импортируйте аккаунт",
     "importAccountDesc": "Введите резервный ключ существующего аккаунта, чтобы восстановить его здесь.",
     "connectSigner": "Подключите подписант",
     "connectSignerDesc": "Вставьте ссылку для подключения из приложения-подписанта.",
-
     "displayName": "Отображаемое имя",
     "namePlaceholder": "напр. satoshi, alice, ваше_имя",
     "nameHint": "Так вас будут видеть другие. Используйте настоящее имя, псевдоним или что угодно.",
@@ -168,11 +161,9 @@
     "connectionLink": "Ссылка для подключения",
     "connectionPlaceholder": "bunker://... или nostrconnect://...",
     "signerHint": "Получите это в приложении-подписанте (nsec.app, Amber, Primal). Ваши ключи остаются там — мы их никогда не видим.",
-
     "createAccount": "Создать аккаунт",
     "importAccountBtn": "Импортировать аккаунт",
     "connect": "Подключить",
-
     "connectPreparing": "Подготовка...",
     "connectConnecting": "Подключение к подписанту...",
     "connectFetchingProfile": "Загрузка профиля...",
@@ -181,7 +172,6 @@
     "progressSecureConnection": "Установка защищённого соединения",
     "progressConnecting": "Подключение к приложению-подписанту",
     "progressLoadingProfile": "Загрузка вашего профиля",
-
     "backupTitle": "Сохраните резервный ключ",
     "backupDesc": "Это единственный способ восстановить аккаунт. Если вы его потеряете, никто не сможет помочь — даже мы.",
     "backupWarning": "Никому не показывайте — обращайтесь с ним как с паролем",
@@ -190,7 +180,6 @@
     "downloadFile": "Скачать файл",
     "backupConfirm": "Я сохранил резервный ключ в надёжном месте",
     "backupConfirmHint": "Используйте менеджер паролей, защищённую заметку или запишите на бумагу и храните в безопасности.",
-
     "profileTitle": "Ваш профиль",
     "profileDesc": "Проверьте данные профиля. Их можно обновить в любой момент.",
     "completeProfile": "Заполните профиль",
@@ -199,19 +188,16 @@
     "aboutPlaceholder": "Расскажите о себе...",
     "saveProfile": "Сохранить профиль",
     "saving": "Сохранение...",
-
     "connectedTitle": "Подключено",
     "connectedDesc": "Подписант привязан и готов к работе",
     "connectedBadge": "Активно",
     "signerExplainer": "Ваши ключи надёжно хранятся в приложении-подписанте. Когда приложению нужно действовать от вашего имени, запрос отправляется подписанту на одобрение.",
     "howItWorks": "Как это работает:",
-
     "doneTitle": "Всё готово",
     "doneDesc": "Ваш аккаунт настроен. Приложения теперь могут запрашивать доступ — вас всегда спросят первым.",
     "profileSaved": "Профиль успешно сохранён",
     "profileSyncLater": "Не удалось связаться с некоторыми серверами — профиль синхронизируется позже"
   },
-
   "prompt": {
     "wantsAccess": "запрашивает доступ к вашему аккаунту",
     "yourAccount": "Ваш аккаунт",
@@ -222,33 +208,26 @@
     "denyAlways": "Запретить навсегда",
     "moreOptions": "Больше вариантов",
     "fewerOptions": "Меньше вариантов",
-
     "lockedTitle": "Buho Jump заблокирован",
     "lockedDesc": "Приложению нужен доступ. Введите пароль, чтобы продолжить.",
-
     "permPublicLabel": "Просмотр публичного профиля",
     "permPublicWhat": "Приложение хочет узнать, кто вы — например, показать вашу карточку профиля.",
     "permPublicDetail": "Передаётся только публичная информация. Приложение не сможет публиковать или действовать от вашего имени.",
     "permPublicRisk": "Только чтение",
-
     "permSignLabel": "Публикация или действия от вашего имени",
     "permSignWhat": "Приложение хочет опубликовать что-то от вашего имени — запись, реакцию или действие.",
     "permSignDetail": "Это как нажать «Отправить». Содержимое будет видно другим.",
     "permSignRisk": "Запись",
-
     "permEncryptLabel": "Зашифровать сообщение",
     "permEncryptWhat": "Приложение хочет отправить личное сообщение, которое сможет прочитать только получатель.",
     "permEncryptDetail": "Сообщение будет зашифровано перед отправкой.",
     "permEncryptRisk": "Сообщения",
-
     "permDecryptLabel": "Прочитать личное сообщение",
     "permDecryptWhat": "Приложение хочет открыть личное сообщение, отправленное вам.",
     "permDecryptDetail": "Расшифрованное сообщение будет доступно приложению.",
     "permDecryptRisk": "Сообщения",
-
     "permDefaultWhat": "Это приложение запрашивает доступ к вашему аккаунту.",
     "permDefaultRisk": "Разрешение",
-
     "kindProfile": "Данные профиля",
     "kindNote": "Короткая заметка",
     "kindContacts": "Список контактов",
@@ -261,7 +240,6 @@
     "kindAppData": "Данные приложения",
     "kindGeneric": "Тип события {kind}"
   },
-
   "wallet": {
     "balance": "Баланс",
     "refreshBalance": "Обновить баланс",
@@ -281,12 +259,10 @@
     "failedRefresh": "Не удалось обновить",
     "walletConnected": "Кошелёк подключён",
     "connectFailed": "Не удалось подключить кошелёк",
-
     "noWallet": "Кошелёк не подключён",
     "noWalletDesc": "Вставьте ссылку для подключения из приложения-кошелька, чтобы включить платежи.",
     "connectWallet": "Подключить кошелёк",
     "connecting": "Подключение...",
-
     "sendTitle": "Отправить платёж",
     "sendResult": "Результат платежа",
     "invoiceLabel": "Инвойс или адрес",
@@ -306,7 +282,6 @@
     "paymentSuccess": "Ваш Lightning-платёж успешно выполнен",
     "preimage": "Прообраз",
     "sendAnother": "Отправить ещё один платёж",
-
     "receiveTitle": "Получить платёж",
     "shareInvoice": "Поделиться инвойсом",
     "memo": "Примечание",
@@ -315,22 +290,18 @@
     "creating": "Создание...",
     "requesting": "Запрос",
     "newInvoice": "Новый инвойс",
-
     "historyTitle": "История транзакций",
     "loadMore": "Загрузить ещё",
     "noResults": "Транзакции не найдены",
-
     "detailTitle": "Детали транзакции",
     "description": "Описание",
     "date": "Дата",
     "fees": "Комиссия",
     "paymentHash": "Хеш платежа",
-
     "statusPending": "В обработке",
     "statusExpired": "Истёк",
     "statusReceived": "Получено",
     "statusSent": "Отправлено",
-
     "merchantPayment": "Оплата в магазине",
     "merchantDetected": "QR-код магазина обнаружен",
     "merchantPaying": "Оплата в",
@@ -346,7 +317,6 @@
     "merchantNotSupported": "QR-коды {name} пока не поддерживаются. В настоящее время работают только розничные QR-коды EMVCo (Pick n Pay, Checkers, Woolworths).",
     "merchantInsufficientBalance": "Недостаточный баланс для этого платежа"
   },
-
   "toast": {
     "accountReady": "Аккаунт готов",
     "switchedTo": "Переключено на {name}",
@@ -358,12 +328,49 @@
     "failedRevoke": "Не удалось отозвать доступ",
     "failedPublish": "Не удалось сохранить профиль"
   },
-
   "qr": {
     "scanTitle": "Сканировать QR-код",
     "startingCamera": "Запуск камеры...",
     "uploadImage": "Загрузить изображение QR-кода",
     "orUpload": "Или загрузите файл изображения",
     "pointCamera": "Наведите камеру на QR-код"
+  },
+  "errors": {
+    "PERMISSION_DENIED": "Permission denied",
+    "NO_SIGNER": "No signer available",
+    "NO_ACCOUNT": "No active account",
+    "NO_EVENT": "No event provided",
+    "NO_PUBKEY": "No public key available",
+    "LOCAL_ACCOUNT_REQUIRED": "This action requires a local account",
+    "LOCKED": "Extension is locked",
+    "WRONG_PASSWORD": "Incorrect password"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "desc": "Choose which browser notifications you'd like to receive. You can change these anytime.",
+    "categories": "Categories",
+    "dms": "Messages",
+    "dmsDesc": "New encrypted messages from contacts",
+    "groups": "Group Messages",
+    "groupsDesc": "New messages in your groups and channels",
+    "payments": "Payments",
+    "paymentsDesc": "Incoming Lightning payments to your wallet",
+    "schedule": "Schedule",
+    "dnd": "Do Not Disturb",
+    "dndDesc": "Silence all notifications until turned off",
+    "quietHours": "Quiet Hours",
+    "quietHoursDesc": "Automatically silence notifications during set hours",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "hint": "Notifications appear as browser alerts even when the popup is closed.",
+    "settingsLabel": "Notifications",
+    "settingsDesc": "Manage browser alerts"
+  },
+  "chat": {
+    "initFailed": "Could not connect to relays. Try reloading.",
+    "contactsLoadFailed": "Could not load contacts. Check your connection."
+  },
+  "group": {
+    "initFailed": "Could not connect to group relays. Try reloading."
   }
 }

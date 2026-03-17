@@ -21,9 +21,11 @@
     "optional": "任意",
     "getStarted": "はじめる",
     "copiedToClipboard": "クリップボードにコピーしました",
-    "pleaseWait": "お待ちください"
+    "pleaseWait": "お待ちください",
+    "showingOf": "Showing {shown} of {total}",
+    "showMore": "Show more",
+    "offline": "No internet connection"
   },
-
   "lock": {
     "createTitle": "パスワードを作成",
     "unlockTitle": "おかえりなさい",
@@ -43,12 +45,10 @@
     "strengthStrong": "強い",
     "mismatch": "パスワードが一致しません"
   },
-
   "tabs": {
     "account": "アカウント",
     "wallet": "ウォレット"
   },
-
   "settings": {
     "appearance": "外観",
     "lightMode": "ライトモード",
@@ -66,7 +66,6 @@
     "relaySettingsDesc": "アカウント、ウォレット、チャットのリレーを管理",
     "version": "Buho Jump v{version}"
   },
-
   "relay": {
     "title": "リレー設定",
     "warning": "警告：これらの設定を変更すると、基本的な使用体験に影響する可能性があります",
@@ -111,7 +110,6 @@
     "infoYes": "はい",
     "infoNo": "いいえ"
   },
-
   "account": {
     "activeDesc": "アクティブなアカウント——アプリはこのプロフィールを使用します",
     "appPermissions": "アプリの権限",
@@ -131,19 +129,16 @@
     "external": "外部",
     "local": "ローカル"
   },
-
   "wizard": {
     "addAccount": "アカウントを追加",
     "addAccountDesc": "アカウントがあれば、アプリへのログイン、投稿、メッセージの送信が可能です——中央サーバーは不要です。",
     "recommended": "おすすめ",
-
     "modeNewTitle": "新しいアカウントを作成",
     "modeNewDesc": "ゼロから始めましょう——数秒ですべて設定します。",
     "modeImportTitle": "すでにアカウントを持っています",
     "modeImportDesc": "バックアップキーを入力して既存のアカウントを使用します。",
     "modeSignerTitle": "外部署名者",
     "modeSignerDesc": "nsec.app、Amber、Primalなどの署名アプリに接続します。",
-
     "stepSetup": "セットアップ",
     "stepName": "名前",
     "stepImport": "インポート",
@@ -151,14 +146,12 @@
     "stepBackup": "バックアップ",
     "stepProfile": "プロフィール",
     "stepDone": "完了",
-
     "chooseName": "名前を選ぶ",
     "chooseNameDesc": "他の人があなたとやり取りする際に表示される名前を選んでください。いつでも変更できます。",
     "importAccount": "アカウントをインポート",
     "importAccountDesc": "既存アカウントのバックアップキーを入力して、ここで復元します。",
     "connectSigner": "署名者を接続",
     "connectSignerDesc": "署名アプリから取得した接続リンクを貼り付けてください。",
-
     "displayName": "表示名",
     "namePlaceholder": "例: satoshi、alice、あなたの名前",
     "nameHint": "他の人に表示される名前です。本名、ニックネーム、お好きなものをどうぞ。",
@@ -168,11 +161,9 @@
     "connectionLink": "接続リンク",
     "connectionPlaceholder": "bunker://... または nostrconnect://...",
     "signerHint": "署名アプリ（nsec.app、Amber、Primal）から取得してください。キーはそちらに保管され、私たちが見ることはありません。",
-
     "createAccount": "アカウントを作成",
     "importAccountBtn": "アカウントをインポート",
     "connect": "接続",
-
     "connectPreparing": "準備中...",
     "connectConnecting": "署名者に接続中...",
     "connectFetchingProfile": "プロフィールを読み込み中...",
@@ -181,7 +172,6 @@
     "progressSecureConnection": "安全な接続を確立中",
     "progressConnecting": "署名アプリに接続中",
     "progressLoadingProfile": "プロフィールを読み込み中",
-
     "backupTitle": "バックアップキーを保存",
     "backupDesc": "これはアカウントを復元する唯一の方法です。紛失した場合、誰も助けることはできません——私たちでさえも。",
     "backupWarning": "絶対に誰にも共有しないでください——パスワードと同じように扱ってください",
@@ -190,7 +180,6 @@
     "downloadFile": "ファイルをダウンロード",
     "backupConfirm": "バックアップキーを安全な場所に保存しました",
     "backupConfirmHint": "パスワードマネージャー、安全なメモ、または紙に書いて安全に保管してください。",
-
     "profileTitle": "あなたのプロフィール",
     "profileDesc": "プロフィール情報を確認してください。いつでも更新できます。",
     "completeProfile": "プロフィールを完成させる",
@@ -199,19 +188,16 @@
     "aboutPlaceholder": "自己紹介を書いてみましょう...",
     "saveProfile": "プロフィールを保存",
     "saving": "保存中...",
-
     "connectedTitle": "接続完了",
     "connectedDesc": "署名者がリンクされ、使用可能です",
     "connectedBadge": "接続中",
     "signerExplainer": "キーは署名アプリに安全に保管されています。アプリがあなたとして行動する必要がある場合、リクエストが署名者に送られ承認を求めます。",
     "howItWorks": "仕組み：",
-
     "doneTitle": "準備完了",
     "doneDesc": "アカウントの準備ができました。アプリがアクセスを求める際は、必ず最初にあなたに確認されます。",
     "profileSaved": "プロフィールを保存しました",
     "profileSyncLater": "一部のサーバーに接続できませんでした——プロフィールは後で同期されます"
   },
-
   "prompt": {
     "wantsAccess": "アカウントへのアクセスを求めています",
     "yourAccount": "あなたのアカウント",
@@ -222,33 +208,26 @@
     "denyAlways": "常に拒否",
     "moreOptions": "その他のオプション",
     "fewerOptions": "オプションを閉じる",
-
     "lockedTitle": "Buho Jumpはロックされています",
     "lockedDesc": "アプリがアクセスを必要としています。パスワードを入力して続けてください。",
-
     "permPublicLabel": "公開プロフィールの閲覧",
     "permPublicWhat": "アプリがあなたの身元を確認したいと思っています——プロフィールカードの表示のようなものです。",
     "permPublicDetail": "公開情報のみが共有されます。投稿やあなたに代わっての操作はできません。",
     "permPublicRisk": "読み取り専用",
-
     "permSignLabel": "あなたとして投稿・操作",
     "permSignWhat": "アプリがあなたのアカウントで何かを公開しようとしています——投稿、リアクション、操作など。",
     "permSignDetail": "「送信」を押すのと同じです。コンテンツは他の人に表示されます。",
     "permSignRisk": "書き込み権限",
-
     "permEncryptLabel": "メッセージを暗号化",
     "permEncryptWhat": "アプリが受信者だけが読める非公開メッセージを送信しようとしています。",
     "permEncryptDetail": "メッセージは送信前に暗号化されます。",
     "permEncryptRisk": "メッセージ",
-
     "permDecryptLabel": "非公開メッセージを読む",
     "permDecryptWhat": "アプリがあなた宛の非公開メッセージを開こうとしています。",
     "permDecryptDetail": "復号されたメッセージはアプリから閲覧可能になります。",
     "permDecryptRisk": "メッセージ",
-
     "permDefaultWhat": "このアプリがアカウントへのアクセスを求めています。",
     "permDefaultRisk": "権限",
-
     "kindProfile": "プロフィールデータ",
     "kindNote": "短いテキスト",
     "kindContacts": "連絡先リスト",
@@ -261,7 +240,6 @@
     "kindAppData": "アプリデータ",
     "kindGeneric": "イベントタイプ {kind}"
   },
-
   "wallet": {
     "balance": "残高",
     "refreshBalance": "残高を更新",
@@ -281,12 +259,10 @@
     "failedRefresh": "更新に失敗しました",
     "walletConnected": "ウォレットが接続されました",
     "connectFailed": "ウォレットの接続に失敗しました",
-
     "noWallet": "ウォレット未接続",
     "noWalletDesc": "ウォレットアプリの接続リンクを貼り付けて、支払い機能を有効にしてください。",
     "connectWallet": "ウォレットを接続",
     "connecting": "接続中...",
-
     "sendTitle": "支払いを送信",
     "sendResult": "支払い結果",
     "invoiceLabel": "インボイスまたはアドレス",
@@ -306,7 +282,6 @@
     "paymentSuccess": "Lightningの支払いが成功しました",
     "preimage": "プリイメージ",
     "sendAnother": "別の支払いを送信",
-
     "receiveTitle": "支払いを受け取る",
     "shareInvoice": "インボイスを共有",
     "memo": "メモ",
@@ -315,22 +290,18 @@
     "creating": "作成中...",
     "requesting": "リクエスト中",
     "newInvoice": "新しいインボイス",
-
     "historyTitle": "取引履歴",
     "loadMore": "もっと読み込む",
     "noResults": "取引が見つかりません",
-
     "detailTitle": "取引の詳細",
     "description": "説明",
     "date": "日付",
     "fees": "手数料",
     "paymentHash": "ペイメントハッシュ",
-
     "statusPending": "処理中",
     "statusExpired": "期限切れ",
     "statusReceived": "受取済み",
     "statusSent": "送金済み",
-
     "merchantPayment": "店舗決済",
     "merchantDetected": "店舗QRコードを検出",
     "merchantPaying": "支払い先",
@@ -346,7 +317,6 @@
     "merchantNotSupported": "{name} のQRコードはまだサポートされていません。現在、EMVCoリテールQRコード（Pick n Pay、Checkers、Woolworths）のみ対応しています。",
     "merchantInsufficientBalance": "この支払いに対して残高が不足しています"
   },
-
   "toast": {
     "accountReady": "アカウントの準備完了",
     "switchedTo": "{name} に切り替えました",
@@ -358,12 +328,49 @@
     "failedRevoke": "アクセスの削除に失敗しました",
     "failedPublish": "プロフィールの保存に失敗しました"
   },
-
   "qr": {
     "scanTitle": "QRコードをスキャン",
     "startingCamera": "カメラを起動中...",
     "uploadImage": "QRコード画像をアップロード",
     "orUpload": "または画像ファイルをアップロード",
     "pointCamera": "カメラをQRコードに向けてください"
+  },
+  "errors": {
+    "PERMISSION_DENIED": "Permission denied",
+    "NO_SIGNER": "No signer available",
+    "NO_ACCOUNT": "No active account",
+    "NO_EVENT": "No event provided",
+    "NO_PUBKEY": "No public key available",
+    "LOCAL_ACCOUNT_REQUIRED": "This action requires a local account",
+    "LOCKED": "Extension is locked",
+    "WRONG_PASSWORD": "Incorrect password"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "desc": "Choose which browser notifications you'd like to receive. You can change these anytime.",
+    "categories": "Categories",
+    "dms": "Messages",
+    "dmsDesc": "New encrypted messages from contacts",
+    "groups": "Group Messages",
+    "groupsDesc": "New messages in your groups and channels",
+    "payments": "Payments",
+    "paymentsDesc": "Incoming Lightning payments to your wallet",
+    "schedule": "Schedule",
+    "dnd": "Do Not Disturb",
+    "dndDesc": "Silence all notifications until turned off",
+    "quietHours": "Quiet Hours",
+    "quietHoursDesc": "Automatically silence notifications during set hours",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "hint": "Notifications appear as browser alerts even when the popup is closed.",
+    "settingsLabel": "Notifications",
+    "settingsDesc": "Manage browser alerts"
+  },
+  "chat": {
+    "initFailed": "Could not connect to relays. Try reloading.",
+    "contactsLoadFailed": "Could not load contacts. Check your connection."
+  },
+  "group": {
+    "initFailed": "Could not connect to group relays. Try reloading."
   }
 }

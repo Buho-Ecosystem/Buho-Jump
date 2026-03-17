@@ -1,18 +1,18 @@
 {
   "name": "buho-jump",
   "description": "Your Bitcoin Lightning wallet and companion for Nostr apps, social identity, encrypted messaging and instant payments.",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "author": "Buho (https://github.com/DoktorShift)",
+  "author": "Buho Ecosystem (https://github.com/Buho-Ecosystem)",
   "contributors": [
     "DoktorShift (https://github.com/DoktorShift)",
     "Pratik227 (https://github.com/Pratik227)"
   ],
-  "homepage": "https://github.com/DoktorShift/buho-jump",
+  "homepage": "https://github.com/Buho-Ecosystem/Buho-Jump",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DoktorShift/buho-jump.git"
+    "url": "https://github.com/Buho-Ecosystem/Buho-Jump.git"
   },
   "scripts": {
     "dev": "wxt",
@@ -33,14 +33,16 @@
     "open:chrome": "open .output/chrome-mv3",
     "open:edge": "open .output/edge-mv3",
     "open:firefox": "open .output/firefox-mv3",
-    "postinstall": "wxt prepare"
+    "postinstall": "wxt prepare",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "html5-qrcode": "^2.3.8",
     "lucide-vue-next": "^0.575.0",
-    "nostr-core": "file:../nostr-core",
+    "nostr-core": "^0.6.0",
     "qrcode": "^1.5.4",
     "tailwind-merge": "^3.5.0",
     "vue": "^3.5.27",
@@ -51,6 +53,7 @@
     "@tailwindcss/vite": "^4.2.0",
     "@wxt-dev/module-vue": "^1.0.3",
     "tailwindcss": "^4.2.0",
+    "vitest": "^4.1.0",
     "wxt": "^0.20.17"
   },
   "license": "MIT"

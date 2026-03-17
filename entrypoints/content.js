@@ -97,7 +97,7 @@ function createBridge(eventName, responseType, methodMap, allowedMethods) {
       })
       if (res?.error) {
         // Track rejections for anti-spam
-        if (res.error === 'Permission denied' || res.error.includes('Access denied')) {
+        if (res.error === 'PERMISSION_DENIED' || res.error.includes('Access denied')) {
           isRejected = true
         }
         sendResponse({ id, error: res.error })

@@ -21,9 +21,11 @@
     "optional": "facoltativo",
     "getStarted": "Inizia",
     "copiedToClipboard": "Copiato negli appunti",
-    "pleaseWait": "Attendi"
+    "pleaseWait": "Attendi",
+    "showingOf": "Showing {shown} of {total}",
+    "showMore": "Show more",
+    "offline": "No internet connection"
   },
-
   "lock": {
     "createTitle": "Crea una password",
     "unlockTitle": "Bentornato",
@@ -43,12 +45,10 @@
     "strengthStrong": "Forte",
     "mismatch": "Le password non corrispondono"
   },
-
   "tabs": {
     "account": "Account",
     "wallet": "Portafoglio"
   },
-
   "settings": {
     "appearance": "Aspetto",
     "lightMode": "Tema chiaro",
@@ -66,7 +66,6 @@
     "relaySettingsDesc": "Gestisci le tue connessioni relay",
     "version": "Buho Jump v{version}"
   },
-
   "relay": {
     "title": "Impostazioni relay",
     "warning": "Attenzione: la modifica di queste impostazioni può influire sulla tua esperienza principale",
@@ -111,7 +110,6 @@
     "infoYes": "Sì",
     "infoNo": "No"
   },
-
   "account": {
     "activeDesc": "Account attivo — le app useranno questo profilo",
     "appPermissions": "Permessi delle app",
@@ -131,19 +129,16 @@
     "external": "Esterno",
     "local": "Locale"
   },
-
   "wizard": {
     "addAccount": "Aggiungi un account",
     "addAccountDesc": "Il tuo account ti permette di accedere alle app, pubblicare e inviare messaggi — tutto senza un server centrale.",
     "recommended": "Consigliato",
-
     "modeNewTitle": "Crea nuovo account",
     "modeNewDesc": "Parti da zero — configuriamo tutto in pochi secondi.",
     "modeImportTitle": "Ho già un account",
     "modeImportDesc": "Usa il tuo account esistente inserendo la tua chiave di backup.",
     "modeSignerTitle": "Firmatario esterno",
     "modeSignerDesc": "Collegati a un'app di firma come nsec.app, Amber o Primal.",
-
     "stepSetup": "Configurazione",
     "stepName": "Nome",
     "stepImport": "Importa",
@@ -151,14 +146,12 @@
     "stepBackup": "Backup",
     "stepProfile": "Profilo",
     "stepDone": "Fatto",
-
     "chooseName": "Scegli un nome",
     "chooseNameDesc": "Scegli un nome che gli altri vedranno quando interagiranno con te. Puoi cambiarlo in qualsiasi momento.",
     "importAccount": "Importa il tuo account",
     "importAccountDesc": "Inserisci la chiave di backup del tuo account esistente per ripristinarlo qui.",
     "connectSigner": "Collega il tuo firmatario",
     "connectSignerDesc": "Incolla il link di connessione dalla tua app di firma.",
-
     "displayName": "Nome visualizzato",
     "namePlaceholder": "es. satoshi, alice, il_tuo_nome",
     "nameHint": "È così che ti vedranno gli altri. Usa il tuo vero nome, un soprannome o quello che preferisci.",
@@ -168,11 +161,9 @@
     "connectionLink": "Link di connessione",
     "connectionPlaceholder": "bunker://... o nostrconnect://...",
     "signerHint": "Ottienilo dalla tua app di firma (nsec.app, Amber, Primal). Le tue chiavi restano lì — non le vediamo mai.",
-
     "createAccount": "Crea account",
     "importAccountBtn": "Importa account",
     "connect": "Collega",
-
     "connectPreparing": "Preparazione...",
     "connectConnecting": "Connessione al tuo firmatario...",
     "connectFetchingProfile": "Caricamento del tuo profilo...",
@@ -181,7 +172,6 @@
     "progressSecureConnection": "Creazione connessione sicura",
     "progressConnecting": "Connessione alla tua app di firma",
     "progressLoadingProfile": "Caricamento del tuo profilo",
-
     "backupTitle": "Salva la tua chiave di backup",
     "backupDesc": "Questo è l'unico modo per recuperare il tuo account. Se la perdi, nessuno potrà aiutarti — nemmeno noi.",
     "backupWarning": "Non condividerla mai con nessuno — trattala come una password",
@@ -190,7 +180,6 @@
     "downloadFile": "Scarica file",
     "backupConfirm": "Ho salvato la mia chiave di backup in un posto sicuro",
     "backupConfirmHint": "Usa un gestore di password, una nota sicura oppure scrivila su carta e conservala al sicuro.",
-
     "profileTitle": "Il tuo profilo",
     "profileDesc": "Controlla le informazioni del tuo profilo. Puoi aggiornarle in qualsiasi momento.",
     "completeProfile": "Completa il tuo profilo",
@@ -199,19 +188,16 @@
     "aboutPlaceholder": "Racconta al mondo qualcosa di te...",
     "saveProfile": "Salva profilo",
     "saving": "Salvataggio...",
-
     "connectedTitle": "Connesso",
     "connectedDesc": "Il tuo firmatario è collegato e pronto all'uso",
     "connectedBadge": "Attivo",
     "signerExplainer": "Le tue chiavi restano al sicuro nell'app di firma. Quando un'app deve agire per tuo conto, la richiesta viene inviata al tuo firmatario per l'approvazione.",
     "howItWorks": "Come funziona:",
-
     "doneTitle": "Tutto pronto",
     "doneDesc": "Il tuo account è pronto. Le app ora possono chiedere di usarlo — ti verrà sempre chiesta l'autorizzazione.",
     "profileSaved": "Profilo salvato con successo",
     "profileSyncLater": "Alcuni server non erano raggiungibili — il tuo profilo verrà sincronizzato più tardi"
   },
-
   "prompt": {
     "wantsAccess": "vuole accedere al tuo account",
     "yourAccount": "Il tuo account",
@@ -222,33 +208,26 @@
     "denyAlways": "Nega sempre",
     "moreOptions": "Più opzioni",
     "fewerOptions": "Meno opzioni",
-
     "lockedTitle": "Buho Jump è bloccato",
     "lockedDesc": "Un'app ha bisogno di accesso. Inserisci la password per continuare.",
-
     "permPublicLabel": "Vedere il tuo profilo pubblico",
     "permPublicWhat": "L'app vuole sapere chi sei — ad esempio mostrare la tua scheda profilo.",
     "permPublicDetail": "Vengono condivise solo informazioni pubbliche. Non può pubblicare o agire per tuo conto.",
     "permPublicRisk": "Solo lettura",
-
     "permSignLabel": "Pubblicare o agire per tuo conto",
     "permSignWhat": "L'app vuole pubblicare qualcosa con il tuo account — come un post, una reazione o un'azione.",
     "permSignDetail": "È come premere \"invia\". Il contenuto sarà visibile agli altri.",
     "permSignRisk": "Accesso in scrittura",
-
     "permEncryptLabel": "Crittografare un messaggio",
     "permEncryptWhat": "L'app vuole inviare un messaggio privato leggibile solo dal destinatario.",
     "permEncryptDetail": "Il messaggio verrà crittografato prima dell'invio.",
     "permEncryptRisk": "Messaggistica",
-
     "permDecryptLabel": "Leggere un messaggio privato",
     "permDecryptWhat": "L'app vuole aprire un messaggio privato che ti è stato inviato.",
     "permDecryptDetail": "Il messaggio decrittografato sarà visibile all'app.",
     "permDecryptRisk": "Messaggistica",
-
     "permDefaultWhat": "Questa app richiede l'accesso al tuo account.",
     "permDefaultRisk": "Permesso",
-
     "kindProfile": "Metadati del profilo",
     "kindNote": "Nota di testo breve",
     "kindContacts": "Lista contatti",
@@ -261,7 +240,6 @@
     "kindAppData": "Dati dell'app",
     "kindGeneric": "Tipo di evento {kind}"
   },
-
   "wallet": {
     "balance": "Saldo",
     "refreshBalance": "Aggiorna saldo",
@@ -281,12 +259,10 @@
     "failedRefresh": "Aggiornamento non riuscito",
     "walletConnected": "Portafoglio connesso",
     "connectFailed": "Connessione al portafoglio fallita",
-
     "noWallet": "Nessun portafoglio connesso",
     "noWalletDesc": "Incolla il link di connessione dalla tua app portafoglio per abilitare i pagamenti.",
     "connectWallet": "Connetti portafoglio",
     "connecting": "Connessione...",
-
     "sendTitle": "Invia pagamento",
     "sendResult": "Risultato del pagamento",
     "invoiceLabel": "Fattura o indirizzo",
@@ -306,7 +282,6 @@
     "paymentSuccess": "Il tuo pagamento Lightning è andato a buon fine",
     "preimage": "Preimage",
     "sendAnother": "Invia un altro pagamento",
-
     "receiveTitle": "Ricevi pagamento",
     "shareInvoice": "Condividi fattura",
     "memo": "Note",
@@ -315,22 +290,18 @@
     "creating": "Creazione...",
     "requesting": "Richiesta in corso",
     "newInvoice": "Nuova fattura",
-
     "historyTitle": "Cronologia transazioni",
     "loadMore": "Carica altre",
     "noResults": "Nessuna transazione trovata",
-
     "detailTitle": "Dettagli transazione",
     "description": "Descrizione",
     "date": "Data",
     "fees": "Commissioni",
     "paymentHash": "Hash del pagamento",
-
     "statusPending": "In attesa",
     "statusExpired": "Scaduto",
     "statusReceived": "Ricevuto",
     "statusSent": "Inviato",
-
     "merchantPayment": "Pagamento in negozio",
     "merchantDetected": "QR del negozio rilevato",
     "merchantPaying": "Pagamento presso",
@@ -346,7 +317,6 @@
     "merchantNotSupported": "I codici QR {name} non sono ancora supportati. Attualmente funzionano solo i codici QR retail EMVCo (Pick n Pay, Checkers, Woolworths).",
     "merchantInsufficientBalance": "Saldo insufficiente per questo pagamento"
   },
-
   "toast": {
     "accountReady": "Account pronto",
     "switchedTo": "Passato a {name}",
@@ -358,12 +328,49 @@
     "failedRevoke": "Rimozione accesso non riuscita",
     "failedPublish": "Salvataggio profilo non riuscito"
   },
-
   "qr": {
     "scanTitle": "Scansiona codice QR",
     "startingCamera": "Avvio fotocamera...",
     "uploadImage": "Carica un'immagine con codice QR",
     "orUpload": "Oppure carica un file immagine",
     "pointCamera": "Inquadra un codice QR con la fotocamera"
+  },
+  "errors": {
+    "PERMISSION_DENIED": "Permission denied",
+    "NO_SIGNER": "No signer available",
+    "NO_ACCOUNT": "No active account",
+    "NO_EVENT": "No event provided",
+    "NO_PUBKEY": "No public key available",
+    "LOCAL_ACCOUNT_REQUIRED": "This action requires a local account",
+    "LOCKED": "Extension is locked",
+    "WRONG_PASSWORD": "Incorrect password"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "desc": "Choose which browser notifications you'd like to receive. You can change these anytime.",
+    "categories": "Categories",
+    "dms": "Messages",
+    "dmsDesc": "New encrypted messages from contacts",
+    "groups": "Group Messages",
+    "groupsDesc": "New messages in your groups and channels",
+    "payments": "Payments",
+    "paymentsDesc": "Incoming Lightning payments to your wallet",
+    "schedule": "Schedule",
+    "dnd": "Do Not Disturb",
+    "dndDesc": "Silence all notifications until turned off",
+    "quietHours": "Quiet Hours",
+    "quietHoursDesc": "Automatically silence notifications during set hours",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "hint": "Notifications appear as browser alerts even when the popup is closed.",
+    "settingsLabel": "Notifications",
+    "settingsDesc": "Manage browser alerts"
+  },
+  "chat": {
+    "initFailed": "Could not connect to relays. Try reloading.",
+    "contactsLoadFailed": "Could not load contacts. Check your connection."
+  },
+  "group": {
+    "initFailed": "Could not connect to group relays. Try reloading."
   }
 }

@@ -21,9 +21,11 @@
     "optional": "volitelné",
     "getStarted": "Začít",
     "copiedToClipboard": "Zkopírováno do schránky",
-    "pleaseWait": "Čekejte prosím"
+    "pleaseWait": "Čekejte prosím",
+    "showingOf": "Showing {shown} of {total}",
+    "showMore": "Show more",
+    "offline": "No internet connection"
   },
-
   "lock": {
     "createTitle": "Vytvořte heslo",
     "unlockTitle": "Vítejte zpět",
@@ -43,12 +45,10 @@
     "strengthStrong": "Silné",
     "mismatch": "Hesla se neshodují"
   },
-
   "tabs": {
     "account": "Účet",
     "wallet": "Peněženka"
   },
-
   "settings": {
     "appearance": "Vzhled",
     "lightMode": "Světlý režim",
@@ -66,7 +66,6 @@
     "relaySettingsDesc": "Spravujte svá relay připojení",
     "version": "Buho Jump v{version}"
   },
-
   "relay": {
     "title": "Nastavení relay",
     "warning": "Upozornění: Změna těchto nastavení může ovlivnit vaše základní prostředí",
@@ -111,7 +110,6 @@
     "infoYes": "Ano",
     "infoNo": "Ne"
   },
-
   "account": {
     "activeDesc": "Aktivní účet — aplikace budou používat tento profil",
     "appPermissions": "Oprávnění aplikací",
@@ -131,19 +129,16 @@
     "external": "Externí",
     "local": "Místní"
   },
-
   "wizard": {
     "addAccount": "Přidat účet",
     "addAccountDesc": "Váš účet vám umožňuje přihlašovat se do aplikací, publikovat příspěvky a posílat zprávy — to vše bez centrálního serveru.",
     "recommended": "Doporučeno",
-
     "modeNewTitle": "Vytvořit nový účet",
     "modeNewDesc": "Začněte od začátku — vše nastavíme za pár sekund.",
     "modeImportTitle": "Již mám účet",
     "modeImportDesc": "Použijte svůj existující účet zadáním záložního klíče.",
     "modeSignerTitle": "Externí podepisovatel",
     "modeSignerDesc": "Připojte se k aplikaci pro podepisování jako nsec.app, Amber nebo Primal.",
-
     "stepSetup": "Nastavení",
     "stepName": "Jméno",
     "stepImport": "Import",
@@ -151,14 +146,12 @@
     "stepBackup": "Záloha",
     "stepProfile": "Profil",
     "stepDone": "Hotovo",
-
     "chooseName": "Zvolte si jméno",
     "chooseNameDesc": "Vyberte jméno, které ostatní uvidí, když s vámi budou komunikovat. Můžete ho kdykoli změnit.",
     "importAccount": "Importovat účet",
     "importAccountDesc": "Zadejte záložní klíč z vašeho existujícího účtu pro jeho obnovení zde.",
     "connectSigner": "Připojit podepisovatele",
     "connectSignerDesc": "Vložte odkaz pro připojení z vaší aplikace pro podepisování.",
-
     "displayName": "Zobrazované jméno",
     "namePlaceholder": "např. satoshi, alice, vaše_jméno",
     "nameHint": "Takto vás ostatní uvidí. Použijte své skutečné jméno, přezdívku nebo cokoli chcete.",
@@ -168,11 +161,9 @@
     "connectionLink": "Odkaz pro připojení",
     "connectionPlaceholder": "bunker://... nebo nostrconnect://...",
     "signerHint": "Získáte ho z vaší aplikace pro podepisování (nsec.app, Amber, Primal). Vaše klíče zůstávají tam — nikdy je neuvidíme.",
-
     "createAccount": "Vytvořit účet",
     "importAccountBtn": "Importovat účet",
     "connect": "Připojit",
-
     "connectPreparing": "Příprava...",
     "connectConnecting": "Připojování k vašemu podepisovateli...",
     "connectFetchingProfile": "Načítání vašeho profilu...",
@@ -181,7 +172,6 @@
     "progressSecureConnection": "Navazování zabezpečeného spojení",
     "progressConnecting": "Připojování k vaší aplikaci pro podepisování",
     "progressLoadingProfile": "Načítání vašeho profilu",
-
     "backupTitle": "Uložte si záložní klíč",
     "backupDesc": "Toto je jediný způsob, jak obnovit váš účet. Pokud ho ztratíte, nikdo vám nepomůže — ani my.",
     "backupWarning": "Nikdy ho s nikým nesdílejte — zacházejte s ním jako s heslem",
@@ -190,7 +180,6 @@
     "downloadFile": "Stáhnout soubor",
     "backupConfirm": "Záložní klíč jsem si bezpečně uložil/a",
     "backupConfirmHint": "Použijte správce hesel, zabezpečenou poznámku nebo si ho zapište na papír a uložte na bezpečné místo.",
-
     "profileTitle": "Váš profil",
     "profileDesc": "Zkontrolujte informace ve svém profilu. Můžete je kdykoli upravit.",
     "completeProfile": "Doplňte svůj profil",
@@ -199,19 +188,16 @@
     "aboutPlaceholder": "Řekněte světu něco o sobě...",
     "saveProfile": "Uložit profil",
     "saving": "Ukládání...",
-
     "connectedTitle": "Připojeno",
     "connectedDesc": "Váš podepisovatel je propojen a připraven k použití",
     "connectedBadge": "Aktivní",
     "signerExplainer": "Vaše klíče zůstávají bezpečně v aplikaci pro podepisování. Když nějaká aplikace potřebuje jednat vaším jménem, požadavek je odeslán vašemu podepisovateli ke schválení.",
     "howItWorks": "Jak to funguje:",
-
     "doneTitle": "Vše je připraveno",
     "doneDesc": "Váš účet je připraven. Aplikace vás nyní mohou požádat o přístup — vždy budete dotázáni jako první.",
     "profileSaved": "Profil úspěšně uložen",
     "profileSyncLater": "Některé servery nebyly dostupné — váš profil se synchronizuje později"
   },
-
   "prompt": {
     "wantsAccess": "chce přistupovat k vašemu účtu",
     "yourAccount": "Váš účet",
@@ -222,33 +208,26 @@
     "denyAlways": "Vždy odmítnout",
     "moreOptions": "Více možností",
     "fewerOptions": "Méně možností",
-
     "lockedTitle": "Buho Jump je zamčený",
     "lockedDesc": "Aplikace potřebuje přístup. Zadejte heslo pro pokračování.",
-
     "permPublicLabel": "Zobrazit váš veřejný profil",
     "permPublicWhat": "Aplikace chce vědět, kdo jste — například zobrazit vaši profilovou kartu.",
     "permPublicDetail": "Sdílí se pouze veřejné informace. Aplikace nemůže publikovat ani jednat vaším jménem.",
     "permPublicRisk": "Pouze ke čtení",
-
     "permSignLabel": "Publikovat nebo jednat vaším jménem",
     "permSignWhat": "Aplikace chce něco zveřejnit přes váš účet — například příspěvek, reakci nebo akci.",
     "permSignDetail": "Je to jako stisknout tlačítko odeslat. Obsah bude viditelný pro ostatní.",
     "permSignRisk": "Přístup pro zápis",
-
     "permEncryptLabel": "Zašifrovat zprávu",
     "permEncryptWhat": "Aplikace chce odeslat soukromou zprávu, kterou si přečte pouze příjemce.",
     "permEncryptDetail": "Zpráva bude před odesláním zašifrována.",
     "permEncryptRisk": "Zprávy",
-
     "permDecryptLabel": "Přečíst soukromou zprávu",
     "permDecryptWhat": "Aplikace chce otevřít soukromou zprávu, která vám byla zaslána.",
     "permDecryptDetail": "Dešifrovaná zpráva bude viditelná pro aplikaci.",
     "permDecryptRisk": "Zprávy",
-
     "permDefaultWhat": "Tato aplikace žádá o přístup k vašemu účtu.",
     "permDefaultRisk": "Oprávnění",
-
     "kindProfile": "Metadata profilu",
     "kindNote": "Krátká textová poznámka",
     "kindContacts": "Seznam kontaktů",
@@ -261,7 +240,6 @@
     "kindAppData": "Data aplikace",
     "kindGeneric": "Typ události {kind}"
   },
-
   "wallet": {
     "balance": "Zůstatek",
     "refreshBalance": "Obnovit zůstatek",
@@ -281,12 +259,10 @@
     "failedRefresh": "Aktualizace se nezdařila",
     "walletConnected": "Peněženka připojena",
     "connectFailed": "Připojení peněženky selhalo",
-
     "noWallet": "Žádná připojená peněženka",
     "noWalletDesc": "Vložte odkaz pro připojení z vaší peněženkové aplikace pro aktivaci plateb.",
     "connectWallet": "Připojit peněženku",
     "connecting": "Připojování...",
-
     "sendTitle": "Odeslat platbu",
     "sendResult": "Výsledek platby",
     "invoiceLabel": "Faktura nebo adresa",
@@ -306,7 +282,6 @@
     "paymentSuccess": "Vaše lightning platba proběhla úspěšně",
     "preimage": "Preimage",
     "sendAnother": "Odeslat další platbu",
-
     "receiveTitle": "Přijmout platbu",
     "shareInvoice": "Sdílet fakturu",
     "memo": "Poznámka",
@@ -315,22 +290,18 @@
     "creating": "Vytváření...",
     "requesting": "Vyžádání",
     "newInvoice": "Nová faktura",
-
     "historyTitle": "Historie transakcí",
     "loadMore": "Načíst další",
     "noResults": "Žádné transakce nenalezeny",
-
     "detailTitle": "Detail transakce",
     "description": "Popis",
     "date": "Datum",
     "fees": "Poplatky",
     "paymentHash": "Hash platby",
-
     "statusPending": "Čeká na zpracování",
     "statusExpired": "Vypršela",
     "statusReceived": "Přijato",
     "statusSent": "Odesláno",
-
     "merchantPayment": "Platba v obchodě",
     "merchantDetected": "QR kód obchodu rozpoznán",
     "merchantPaying": "Platba u",
@@ -346,7 +317,6 @@
     "merchantNotSupported": "QR kódy {name} zatím nejsou podporovány. Aktuálně fungují pouze EMVCo maloobchodní QR kódy (Pick n Pay, Checkers, Woolworths).",
     "merchantInsufficientBalance": "Nedostatečný zůstatek pro tuto platbu"
   },
-
   "toast": {
     "accountReady": "Účet je připraven",
     "switchedTo": "Přepnuto na {name}",
@@ -358,12 +328,49 @@
     "failedRevoke": "Odebrání přístupu se nezdařilo",
     "failedPublish": "Uložení profilu se nezdařilo"
   },
-
   "qr": {
     "scanTitle": "Skenovat QR kód",
     "startingCamera": "Spouštění kamery...",
     "uploadImage": "Nahrát obrázek s QR kódem",
     "orUpload": "Nebo nahrajte soubor s obrázkem",
     "pointCamera": "Namiřte kameru na QR kód"
+  },
+  "errors": {
+    "PERMISSION_DENIED": "Permission denied",
+    "NO_SIGNER": "No signer available",
+    "NO_ACCOUNT": "No active account",
+    "NO_EVENT": "No event provided",
+    "NO_PUBKEY": "No public key available",
+    "LOCAL_ACCOUNT_REQUIRED": "This action requires a local account",
+    "LOCKED": "Extension is locked",
+    "WRONG_PASSWORD": "Incorrect password"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "desc": "Choose which browser notifications you'd like to receive. You can change these anytime.",
+    "categories": "Categories",
+    "dms": "Messages",
+    "dmsDesc": "New encrypted messages from contacts",
+    "groups": "Group Messages",
+    "groupsDesc": "New messages in your groups and channels",
+    "payments": "Payments",
+    "paymentsDesc": "Incoming Lightning payments to your wallet",
+    "schedule": "Schedule",
+    "dnd": "Do Not Disturb",
+    "dndDesc": "Silence all notifications until turned off",
+    "quietHours": "Quiet Hours",
+    "quietHoursDesc": "Automatically silence notifications during set hours",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "hint": "Notifications appear as browser alerts even when the popup is closed.",
+    "settingsLabel": "Notifications",
+    "settingsDesc": "Manage browser alerts"
+  },
+  "chat": {
+    "initFailed": "Could not connect to relays. Try reloading.",
+    "contactsLoadFailed": "Could not load contacts. Check your connection."
+  },
+  "group": {
+    "initFailed": "Could not connect to group relays. Try reloading."
   }
 }

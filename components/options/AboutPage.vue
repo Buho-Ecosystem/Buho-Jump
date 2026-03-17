@@ -32,7 +32,7 @@ const creators = [
       <img src="/logo/logo.svg" alt="Buho Jump" class="w-14 h-14 rounded-2xl shrink-0 shadow-md" />
       <div>
         <h2 class="text-base font-extrabold tracking-tight">Buho Jump</h2>
-        <p class="text-xs text-text-muted mt-0.5">{{ t('options.version', { version: '0.1.0' }) }}</p>
+        <p class="text-xs text-text-muted mt-0.5">{{ t('options.version', { version: '1.0.0' }) }}</p>
         <p class="text-[10px] text-text-muted mt-1">{{ t('options.tagline') }}</p>
       </div>
     </div>

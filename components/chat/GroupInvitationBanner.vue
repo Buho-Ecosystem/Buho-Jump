@@ -25,7 +25,7 @@ function inviterName(pubkey) {
 async function handleAccept(inv) {
   processing.value = `${inv.groupId}:${inv.relay}`
   try {
-    await acceptInvitation(inv.groupId, inv.relay)
+    await acceptInvitation(inv)
     toast.success(t('group.accepted'))
   } catch {
     toast.error(t('group.joinFailed'))
@@ -35,7 +35,7 @@ async function handleAccept(inv) {
 }
 
 function handleDecline(inv) {
-  declineInvitation(inv.groupId, inv.relay)
+  declineInvitation(inv)
   toast.info(t('group.declined'))
 }
 </script>

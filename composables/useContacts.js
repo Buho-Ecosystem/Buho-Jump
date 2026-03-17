@@ -14,6 +14,7 @@ import { getPoolRelays, DEFAULT_ACCOUNT_RELAYS } from '../lib/relays.js'
 const profileCache = new Map()
 const contacts = ref([])
 const loading = ref(false)
+const error = ref(null)  // i18n key or null — set when loadFollowList fails
 let loadedForPubkey = null
 
 export function useContacts() {
@@ -23,6 +24,7 @@ export function useContacts() {
   async function loadFollowList(pubkey) {
     if (loading.value) return // prevent concurrent loads
     loading.value = true
+    error.value = null
     loadedForPubkey = pubkey
     try {
       const pool = getPool()
@@ -51,6 +53,7 @@ export function useContacts() {
       }))
     } catch {
       contacts.value = []
+      error.value = 'chat.contactsLoadFailed'
     } finally {
       loading.value = false
     }
@@ -164,8 +167,10 @@ export function useContacts() {
    */
   function resetContacts() {
     contacts.value = []
+    profileCache.clear()
     loadedForPubkey = null
     loading.value = false
+    error.value = null
   }
 
   /**
@@ -178,6 +183,7 @@ export function useContacts() {
   return {
     contacts,
     loading,
+    error,
     loadFollowList,
     fetchProfile,
     fetchProfiles,

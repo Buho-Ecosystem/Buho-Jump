@@ -18,8 +18,10 @@ import { getPoolRelays, DEFAULT_ACCOUNT_RELAYS } from '../../lib/relays.js'
 import { getAvatarColor } from '../../lib/avatarColor.js'
 import {
   ArrowLeft, UserSearch, Loader2, User, RefreshCw,
-  AlertCircle, Users, Globe,
+  AlertCircle, Users, Globe, ChevronRight,
 } from 'lucide-vue-next'
+
+const PAGE_SIZE = 20
 
 const { t } = useI18n()
 const emit = defineEmits(['back', 'open'])
@@ -54,7 +56,10 @@ const looksLikeAddress = computed(() => {
   return isNostrAddress(val) || isNip05(val)
 })
 
+const contactVisibleCount = ref(PAGE_SIZE)
 const filteredContacts = computed(() => searchContacts(input.value))
+const paginatedContacts = computed(() => filteredContacts.value.slice(0, contactVisibleCount.value))
+const hasMoreContacts = computed(() => contactVisibleCount.value < filteredContacts.value.length)
 const hasInput = computed(() => input.value.trim().length > 0)
 
 // Auto-resolve everything on input change — no Enter needed
@@ -63,6 +68,7 @@ watch(input, (val) => {
   resolvedPubkey.value = null
   resolvedProfile.value = null
   relaySearchResults.value = []
+  contactVisibleCount.value = PAGE_SIZE
 
   if (debounceTimer) clearTimeout(debounceTimer)
 
@@ -246,7 +252,7 @@ function truncateNpub(pubkey) {
         <!-- Contact list -->
         <div v-else-if="filteredContacts.length > 0" class="space-y-0 -mx-3">
           <button
-            v-for="c in filteredContacts"
+            v-for="c in paginatedContacts"
             :key="c.pubkey"
             @click="openContact(c.pubkey)"
             class="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface-elevated transition-all duration-200 text-left"
@@ -263,6 +269,14 @@ function truncateNpub(pubkey) {
             </div>
           </button>
         </div>
+
+        <!-- Show more contacts -->
+        <button v-if="hasMoreContacts" @click="contactVisibleCount += PAGE_SIZE"
+          class="w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] text-text-muted hover:text-brand font-semibold transition-all duration-200">
+          <span>{{ t('common.showMore') }}</span>
+          <span class="text-[10px] opacity-60">({{ t('common.showingOf', { shown: paginatedContacts.length, total: filteredContacts.length }) }})</span>
+          <ChevronRight class="w-3 h-3" />
+        </button>
 
         <!-- No contacts + no search -->
         <div v-else-if="!hasInput" class="text-center py-6 space-y-2">
