@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="g3" x1=".5" y1="0" x2=".5" y2="1">
+      <stop offset="0%" stop-color="#059573"/>
+      <stop offset="100%" stop-color="#78D53C"/>
+    </linearGradient>
+    <linearGradient id="glow3" x1=".5" y1="0" x2=".5" y2="1">
+      <stop offset="0%" stop-color="#059573" stop-opacity=".15"/>
+      <stop offset="100%" stop-color="#059573" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#0C0A1D"/>
+  <circle cx="100" cy="80" r="1.5" fill="#fff" opacity=".15"/>
+  <circle cx="300" cy="50" r="1" fill="#fff" opacity=".1"/>
+  <circle cx="500" cy="90" r="1.2" fill="#fff" opacity=".12"/>
+  <circle cx="750" cy="40" r="1" fill="#fff" opacity=".1"/>
+  <circle cx="950" cy="100" r="1.3" fill="#fff" opacity=".13"/>
+  <circle cx="1100" cy="60" r="1" fill="#fff" opacity=".1"/>
+  <circle cx="200" cy="550" r="1" fill="#fff" opacity=".08"/>
+  <circle cx="800" cy="580" r="1.2" fill="#fff" opacity=".1"/>
+  <circle cx="1050" cy="520" r="1" fill="#fff" opacity=".09"/>
+  <ellipse cx="600" cy="315" rx="280" ry="220" fill="url(#glow3)"/>
+  <path d="M600 120 L780 195 V370 C780 500 690 560 600 590 C510 560 420 500 420 370 V195 Z" fill="none" stroke="url(#g3)" stroke-width="2" opacity=".3"/>
+  <path d="M600 160 L740 220 V370 C740 475 670 525 600 550 C530 525 460 475 460 370 V220 Z" fill="none" stroke="url(#g3)" stroke-width="1.5" opacity=".2"/>
+  <path d="M600 200 L700 245 V370 C700 445 650 485 600 505 C550 485 500 445 500 370 V245 Z" fill="url(#g3)" opacity=".06"/>
+  <circle cx="600" cy="320" r="40" fill="url(#g3)" opacity=".12"/>
+  <path d="M580 320 L595 335 L625 305" fill="none" stroke="url(#g3)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity=".8"/>
+  <rect x="545" y="390" width="110" height="6" rx="3" fill="url(#g3)" opacity=".1"/>
+  <rect x="555" y="405" width="90" height="4" rx="2" fill="url(#g3)" opacity=".06"/>
+  <rect x="560" y="418" width="80" height="4" rx="2" fill="url(#g3)" opacity=".04"/>
+</svg>

@@ -14,7 +14,7 @@
 
 import { ref, computed } from 'vue'
 import {
-  nip04, nip44, nip59, nip17, hexToBytes,
+  nip04, nip44, nip59, nip17, hexToBytes, addExpiration, isExpired,
 } from 'nostr-core'
 import { useMessaging } from './useMessaging.js'
 import { getPool } from '../lib/relayPool.js'
@@ -165,7 +165,7 @@ export function useChat() {
 
   // ── Send ──
 
-  async function sendMessage(recipientPubkey, content) {
+  async function sendMessage(recipientPubkey, content, { expiresAt, contentWarning, replyTo } = {}) {
     const account = await getActiveAccount()
     if (!account) throw new Error('No active account')
 
@@ -177,14 +177,17 @@ export function useChat() {
     const tempId = `pending-${now}-${Math.random().toString(36).slice(2, 8)}`
 
     // Add optimistic "sending" message immediately
-    addMessage(recipientPubkey, {
+    const optimistic = {
       id: tempId,
       sender: 'me',
       content,
       created_at: now,
       protocol: account.secretHex ? 'nip17' : 'nip04',
       status: 'sending',
-    })
+    }
+    if (replyTo) optimistic.replyTo = replyTo
+    if (expiresAt) optimistic.expiresAt = expiresAt
+    addMessage(recipientPubkey, optimistic)
 
     try {
       // Outbox model: own chat relays + recipient's NIP-65 write relays
@@ -199,10 +202,14 @@ export function useChat() {
         // ── Local account → NIP-17 gift wraps ──
         const secretKey = hexToBytes(account.secretHex)
 
+        const tags = [['p', recipientPubkey]]
+        if (expiresAt) addExpiration(tags, expiresAt)
+        if (contentWarning) tags.push(['content-warning', contentWarning])
+        if (replyTo?.id) tags.push(['e', replyTo.id, '', 'reply'])
         const rumor = nip59.createRumor({
           kind: 14,
           content,
-          tags: [['p', recipientPubkey]],
+          tags,
           created_at: now,
         }, senderPubkey)
 
@@ -240,7 +247,7 @@ export function useChat() {
       }
 
       // Update optimistic message: replace temp ID with real ID, mark as sent
-      updateMessageStatus(recipientPubkey, tempId, 'sent', finalId)
+      updateMessageStatus(recipientPubkey, tempId, 'sent', finalId, publishRelays)
     } catch (err) {
       // Mark message as failed
       updateMessageStatus(recipientPubkey, tempId, 'failed')
@@ -248,12 +255,13 @@ export function useChat() {
     }
   }
 
-  function updateMessageStatus(pubkey, msgId, status, newId) {
+  function updateMessageStatus(pubkey, msgId, status, newId, relays) {
     const msgs = messages.value[pubkey]
     if (!msgs) return
     const idx = msgs.findIndex(m => m.id === msgId)
     if (idx === -1) return
     const updated = { ...msgs[idx], status }
+    if (relays) updated.publishedRelays = relays
     if (newId) {
       updated.id = newId
       // Update ID set: remove old, add new
@@ -372,6 +380,9 @@ export function useChat() {
           try {
             const dm = nip17.unwrapDirectMessage(event, secretKey)
 
+            // Check for NIP-40 expiration
+            const expiry = dm.tags ? (() => { const t = dm.tags.find(t => t[0] === 'expiration'); return t ? parseInt(t[1]) : undefined })() : undefined
+
             if (dm.sender === myPubkey) {
               // Self-copy: message we sent (from this or another client)
               const pTag = dm.tags?.find(t => t[0] === 'p')
@@ -382,6 +393,7 @@ export function useChat() {
                 content: cleanMessageContent(dm.content),
                 created_at: dm.created_at,
                 protocol: 'nip17',
+                expiresAt: expiry,
               })
             } else {
               // Incoming message from someone else
@@ -391,6 +403,7 @@ export function useChat() {
                 content: cleanMessageContent(dm.content),
                 created_at: dm.created_at,
                 protocol: 'nip17',
+                expiresAt: expiry,
               })
             }
           } catch { /* decrypt failed — not for us or corrupt */ }
@@ -489,7 +502,10 @@ export function useChat() {
   function getMessages(pubkey) {
     return computed(() => {
       const msgs = messages.value[pubkey] || []
-      return [...msgs].sort((a, b) => a.created_at - b.created_at)
+      const now = Math.floor(Date.now() / 1000)
+      return [...msgs]
+        .filter(m => !m.expiresAt || m.expiresAt > now)
+        .sort((a, b) => a.created_at - b.created_at)
     })
   }
 

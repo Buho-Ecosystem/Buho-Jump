@@ -78,5 +78,24 @@ const creators = [
         <span class="px-2.5 py-1 text-xs rounded-lg bg-brand/8 text-brand font-medium">LNURL</span>
       </div>
     </div>
+
+    <!-- Ecosystem links -->
+    <div class="bg-surface-card rounded-3xl border border-border shadow-sm p-5 space-y-3">
+      <h3 class="text-xs font-semibold uppercase tracking-wider text-text-muted">{{ t('options.ecosystem') }}</h3>
+      <a
+        href="https://badgebox.rinbal.de"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center gap-3 px-2 py-2 -mx-2 rounded-lg hover:bg-surface-elevated transition-all duration-200 group"
+      >
+        <div class="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center shrink-0">
+          <span class="text-brand text-sm font-bold">B</span>
+        </div>
+        <div>
+          <span class="text-sm font-medium group-hover:text-brand transition-colors">BadgeBox</span>
+          <p class="text-[10px] text-text-muted">{{ t('options.badgeboxDesc') }}</p>
+        </div>
+      </a>
+    </div>
   </div>
 </template>

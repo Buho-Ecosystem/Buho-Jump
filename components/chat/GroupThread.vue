@@ -197,7 +197,7 @@ watch(messageList, () => {
   <div class="flex flex-col h-full">
     <!-- Header -->
     <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-border shrink-0">
-      <button @click="emit('back')" class="p-1 rounded-full hover:bg-surface-elevated transition-all duration-200">
+      <button @click="emit('back')" :aria-label="t('common.back')" class="p-1 rounded-full hover:bg-surface-elevated transition-all duration-200">
         <ArrowLeft class="w-5 h-5 text-text-secondary" />
       </button>
 

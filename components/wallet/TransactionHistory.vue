@@ -9,7 +9,8 @@ import { useWallet } from '../../composables/useWallet.js'
 
 const { t } = useI18n()
 import TransactionItem from './TransactionItem.vue'
-import { ArrowLeft, Loader2, ChevronDown } from 'lucide-vue-next'
+import EmptyState from '../EmptyState.vue'
+import { ArrowLeft, Loader2, ChevronDown, Receipt } from 'lucide-vue-next'
 
 const emit = defineEmits(['back', 'detail'])
 
@@ -103,7 +104,7 @@ onMounted(() => load())
   <div class="animate-fade-in-up">
     <!-- Header -->
     <div class="flex items-center gap-2 mb-3">
-      <button @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
+      <button @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.back')">
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
       <span class="text-sm font-extrabold">{{ t('wallet.historyTitle') }}</span>
@@ -174,8 +175,11 @@ onMounted(() => load())
     </div>
 
     <!-- Empty -->
-    <div v-else class="text-center py-12">
-      <p class="text-xs text-text-muted">{{ t('wallet.noResults') }}</p>
-    </div>
+    <EmptyState
+      v-else
+      :icon="Receipt"
+      :title="t('wallet.noResults')"
+      :description="t('wallet.noResultsHint')"
+    />
   </div>
 </template>

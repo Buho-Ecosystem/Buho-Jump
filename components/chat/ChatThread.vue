@@ -10,21 +10,24 @@ import { useContacts } from '../../composables/useContacts.js'
 import { useWallet } from '../../composables/useWallet.js'
 import { useMuteList } from '../../composables/useMuteList.js'
 import { useToast } from '../../composables/useToast.js'
+import { useOnline } from '../../composables/useOnline.js'
+import { useMessaging } from '../../composables/useMessaging.js'
 import { nip19 } from 'nostr-core'
 import { formatSats } from '../../lib/utils.js'
 import ChatBubble from './ChatBubble.vue'
+import ErrorBanner from '../ErrorBanner.vue'
 import { getAvatarColor } from '../../lib/avatarColor.js'
 import {
   ArrowLeft, Send, Zap, Loader2, Lock, X,
   MoreHorizontal, Copy, Check, ExternalLink,
-  ChevronDown, VolumeX, Volume2,
+  ChevronDown, VolumeX, Volume2, Timer, ShieldAlert,
 } from 'lucide-vue-next'
 
 const props = defineProps({
   pubkey: { type: String, required: true },
 })
 
-const emit = defineEmits(['back'])
+const emit = defineEmits(['back', 'report'])
 
 const { t } = useI18n()
 const { getMessages, sendMessage, retryMessage, markRead, addZapMessage, updateZapStatus, currentAccountPubkey } = useChat()
@@ -32,6 +35,8 @@ const { fetchProfile, getCachedProfile } = useContacts()
 const { status: walletStatus, sendZap } = useWallet()
 const { isMuted, mute, unmute } = useMuteList()
 const toast = useToast()
+const { online } = useOnline()
+const { send } = useMessaging()
 
 const muted = computed(() => isMuted(props.pubkey))
 
@@ -46,6 +51,22 @@ const copied = ref(false)
 const showMenu = ref(false)
 const menuRef = ref(null)
 const showScrollBtn = ref(false)
+
+// Reply state
+const replyingTo = ref(null)
+
+// Expiring message state (NIP-40)
+const expiryMinutes = ref(0) // 0 = no expiry
+const EXPIRY_OPTIONS = [
+  { label: 'Off', minutes: 0 },
+  { label: '5m', minutes: 5 },
+  { label: '1h', minutes: 60 },
+  { label: '24h', minutes: 1440 },
+]
+
+// Content warning state (NIP-36)
+const cwEnabled = ref(false)
+const cwReason = ref('')
 
 // Zap state
 const showZapPicker = ref(false)
@@ -145,10 +166,55 @@ function handleSend() {
   resetTextareaHeight()
   scrollToBottom()
 
+  const sendOpts = {}
+  if (replyingTo.value) {
+    sendOpts.replyTo = { id: replyingTo.value.id, content: replyingTo.value.content }
+    replyingTo.value = null
+  }
+  if (expiryMinutes.value > 0) {
+    sendOpts.expiresAt = Math.floor(Date.now() / 1000) + expiryMinutes.value * 60
+  }
+  if (cwEnabled.value) {
+    sendOpts.contentWarning = cwReason.value.trim() || 'sensitive'
+    cwReason.value = ''
+    cwEnabled.value = false
+  }
+
   // Send in background — status updates via optimistic message ticks
-  sendMessage(props.pubkey, text).catch(() => {
+  sendMessage(props.pubkey, text, sendOpts).catch(() => {
     // Failed status shown on the bubble itself (tap to retry)
   })
+}
+
+function handleReply(message) {
+  replyingTo.value = message
+  textareaRef.value?.focus()
+}
+
+function handleReact({ messageId, emoji }) {
+  send('SEND_REACTION', messageId, props.pubkey, emoji).catch(() => {
+    toast.error(t('chat.sendFailed'))
+  })
+}
+
+async function handleDeleteMessage(message) {
+  try {
+    await send('DELETE_EVENT', message.id)
+    toast.success(t('chat.messageDeleted'))
+  } catch {
+    toast.error(t('chat.sendFailed'))
+  }
+}
+
+function handleReport(message) {
+  // Emit up to parent to open report dialog
+  emit('report', { pubkey: props.pubkey, messageId: message.id })
+}
+
+function handleForward(message) {
+  // Copy content for now — full forwarding would need a contact picker
+  navigator.clipboard.writeText(message.content || '')
+  toast.success(t('chat.messageCopied'))
 }
 
 async function handleZap(amount) {
@@ -355,6 +421,11 @@ watch(messageList, () => {
             :is-first-in-group="item.isFirstInGroup"
             :is-last-in-group="item.isLastInGroup"
             @retry="handleRetry"
+            @react="handleReact"
+            @reply="handleReply"
+            @delete="handleDeleteMessage"
+            @report="handleReport"
+            @forward="handleForward"
           />
         </template>
 
@@ -427,8 +498,65 @@ watch(messageList, () => {
       </div>
     </div>
 
+    <!-- Offline banner -->
+    <ErrorBanner v-if="!online" type="warning" :message="t('common.offline')" class="mx-2 mb-0" />
+
+    <!-- Compose toolbar (expiry + CW toggles) -->
+    <div v-if="expiryMinutes > 0 || cwEnabled" class="flex items-center gap-2 px-3 py-1 bg-surface-elevated/50 border-t border-border text-[10px]">
+      <div v-if="expiryMinutes > 0" class="flex items-center gap-1 text-warning">
+        <Timer class="w-3 h-3" />
+        <span class="font-medium">{{ EXPIRY_OPTIONS.find(o => o.minutes === expiryMinutes)?.label }}</span>
+        <button @click="expiryMinutes = 0" class="ml-0.5 opacity-60 hover:opacity-100" :aria-label="t('common.cancel')">
+          <X class="w-2.5 h-2.5" />
+        </button>
+      </div>
+      <div v-if="cwEnabled" class="flex items-center gap-1 text-text-muted flex-1 min-w-0">
+        <ShieldAlert class="w-3 h-3 shrink-0" />
+        <input v-model="cwReason" :placeholder="t('chat.cwPlaceholder')" class="flex-1 bg-transparent text-[10px] outline-none min-w-0" />
+        <button @click="cwEnabled = false; cwReason = ''" class="opacity-60 hover:opacity-100" :aria-label="t('common.cancel')">
+          <X class="w-2.5 h-2.5" />
+        </button>
+      </div>
+    </div>
+
+    <!-- Reply preview bar -->
+    <div v-if="replyingTo" class="flex items-center gap-2 px-3 py-1.5 bg-surface-elevated border-t border-border">
+      <div class="flex-1 min-w-0 border-l-2 border-brand pl-2">
+        <p class="text-[10px] text-brand font-semibold">{{ t('chat.replyingTo') }}</p>
+        <p class="text-[11px] text-text-muted truncate">{{ replyingTo.content?.slice(0, 80) }}</p>
+      </div>
+      <button @click="replyingTo = null" class="p-1 rounded hover:bg-surface-hover transition-colors" :aria-label="t('common.cancel')">
+        <X class="w-3.5 h-3.5 text-text-muted" />
+      </button>
+    </div>
+
     <!-- Input bar (Telegram-style) -->
     <div class="flex items-end gap-2 px-2 py-2 bg-surface-base border-t border-border shrink-0">
+      <!-- Compose option buttons -->
+      <div class="flex items-center shrink-0">
+        <!-- Expiry timer toggle -->
+        <button
+          @click="expiryMinutes = expiryMinutes === 0 ? 5 : (EXPIRY_OPTIONS[(EXPIRY_OPTIONS.findIndex(o => o.minutes === expiryMinutes) + 1) % EXPIRY_OPTIONS.length].minutes)"
+          class="p-1.5 rounded-full transition-all duration-200"
+          :class="expiryMinutes > 0 ? 'text-warning bg-warning/10' : 'text-text-muted/40 hover:text-text-muted'"
+          :title="t('chat.expiringMessage')"
+          :aria-label="t('chat.expiringMessage')"
+        >
+          <Timer class="w-4 h-4" />
+        </button>
+
+        <!-- CW toggle -->
+        <button
+          @click="cwEnabled = !cwEnabled"
+          class="p-1.5 rounded-full transition-all duration-200"
+          :class="cwEnabled ? 'text-warning bg-warning/10' : 'text-text-muted/40 hover:text-text-muted'"
+          :title="t('chat.addContentWarning')"
+          :aria-label="t('chat.addContentWarning')"
+        >
+          <ShieldAlert class="w-4 h-4" />
+        </button>
+      </div>
+
       <!-- Zap button -->
       <button
         v-if="canZap"
@@ -449,9 +577,15 @@ watch(messageList, () => {
           @keydown="onKeydown"
           @input="autoResize"
           :placeholder="t('chat.inputPlaceholder')"
+          maxlength="5000"
           rows="1"
           class="chat-input-pill w-full resize-none max-h-[120px]"
         />
+        <span v-if="input.length > 4500"
+          class="absolute right-2 bottom-1 text-[9px] tabular-nums"
+          :class="input.length > 4900 ? 'text-error' : 'text-text-muted/50'">
+          {{ input.length }}/5000
+        </span>
       </div>
 
       <!-- Send button (circular, brand-colored when active) -->

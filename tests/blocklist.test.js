@@ -98,3 +98,60 @@ describe('prototype pollution protection', () => {
     expect(await isBlocked('constructor')).toBe(false)
   })
 })
+
+// ── Enterprise hardening ────────────────────────────────────────
+
+describe('defensive input types', () => {
+  it('addToBlocklist with number is ignored', async () => {
+    await addToBlocklist(123)
+    expect(await getBlocklist()).toEqual([])
+  })
+
+  it('addToBlocklist with boolean is ignored', async () => {
+    await addToBlocklist(true)
+    expect(await getBlocklist()).toEqual([])
+  })
+
+  it('addToBlocklist with object is ignored', async () => {
+    await addToBlocklist({ host: 'evil.com' })
+    expect(await getBlocklist()).toEqual([])
+  })
+
+  it('addToBlocklist with array is ignored', async () => {
+    await addToBlocklist(['evil.com'])
+    expect(await getBlocklist()).toEqual([])
+  })
+
+  it('isBlocked with null returns false', async () => {
+    expect(await isBlocked(null)).toBe(false)
+  })
+
+  it('isBlocked with number returns false', async () => {
+    expect(await isBlocked(42)).toBe(false)
+  })
+
+  it('removeFromBlocklist with invalid type is safe', async () => {
+    await addToBlocklist('valid.com')
+    await removeFromBlocklist(null)
+    await removeFromBlocklist(123)
+    expect(await getBlocklist()).toEqual(['valid.com'])
+  })
+})
+
+describe('unicode and special character hosts', () => {
+  it('accepts unicode domain', async () => {
+    await addToBlocklist('例え.jp')
+    expect(await isBlocked('例え.jp')).toBe(true)
+  })
+
+  it('accepts host with port', async () => {
+    await addToBlocklist('evil.com:8080')
+    expect(await isBlocked('evil.com:8080')).toBe(true)
+  })
+
+  it('treats hosts case-sensitively', async () => {
+    await addToBlocklist('Evil.COM')
+    expect(await isBlocked('Evil.COM')).toBe(true)
+    expect(await isBlocked('evil.com')).toBe(false)
+  })
+})

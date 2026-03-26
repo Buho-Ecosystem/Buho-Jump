@@ -2,12 +2,18 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLocale } from '../composables/useLocale.js'
+import { useListKeyboard } from '../composables/useListKeyboard.js'
 import { Eye, EyeOff, AlertTriangle, ShieldCheck, ChevronDown, Globe } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { locale, locales, switchLocale } = useLocale()
 const showLangDropdown = ref(false)
 const langDropdownRef = ref(null)
+
+const { highlightedIndex: langHighlight, onKeydown: onLangKeydown, resetHighlight: resetLangHighlight } = useListKeyboard({
+  itemCount: () => locales.length,
+  onSelect: (i) => { pickLang(locales[i].code); resetLangHighlight() },
+})
 
 const currentLangNative = computed(() => {
   const found = locales.find(l => l.code === locale.value)
@@ -24,6 +30,13 @@ const props = defineProps({
   isSetup: { type: Boolean, default: false },
   error: { type: String, default: '' },
   loading: { type: Boolean, default: false },
+  lastUnlockedAt: { type: Number, default: 0 },
+})
+
+const lastUnlockedLabel = computed(() => {
+  if (!props.lastUnlockedAt || props.isSetup) return ''
+  const d = new Date(props.lastUnlockedAt)
+  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 })
 
 const password = ref('')
@@ -127,13 +140,22 @@ onUnmounted(() => {
       <div
         v-if="showLangDropdown"
         class="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-44 max-h-52 overflow-y-auto bg-surface-card rounded-3xl border border-border shadow-lg z-50 py-1 animate-scale-in origin-top"
+        role="listbox"
+        @keydown="onLangKeydown"
+        tabindex="0"
       >
         <button
-          v-for="lang in locales"
+          v-for="(lang, idx) in locales"
           :key="lang.code"
           @click="pickLang(lang.code)"
+          role="option"
+          :aria-selected="locale === lang.code"
+          :data-list-active="idx === langHighlight ? 'true' : undefined"
           class="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-surface-elevated transition-all duration-200 text-left"
-          :class="locale === lang.code ? 'text-brand font-semibold' : 'text-text-secondary'"
+          :class="[
+            locale === lang.code ? 'text-brand font-semibold' : 'text-text-secondary',
+            idx === langHighlight ? 'ring-2 ring-brand/40' : '',
+          ]"
         >
           <span>{{ lang.native }}</span>
           <span v-if="locale === lang.code" class="w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
@@ -151,6 +173,9 @@ onUnmounted(() => {
           ? t('lock.createDesc')
           : t('lock.unlockDesc')
         }}
+      </p>
+      <p v-if="lastUnlockedLabel" class="text-[10px] text-text-muted/60 mt-1">
+        {{ t('lock.lastSession', { time: lastUnlockedLabel }) }}
       </p>
     </div>
 

@@ -10,7 +10,7 @@
  */
 
 import { ref, watch } from 'vue'
-import { getExchangeRate, fiatToSats as nostrCoreFiatToSats } from 'nostr-core'
+import { getExchangeRate, fiatToSats as nostrCoreFiatToSats, satsToFiat as nostrCoreSatsToFiat } from 'nostr-core'
 
 // ── Supported currencies ────────────────────────────────────────
 export const CURRENCIES = [
@@ -117,6 +117,16 @@ export function useFiat() {
   }
 
   /**
+   * Async sats→fiat via nostr-core (fetches rate if needed).
+   * Returns { amount, rate, currency } or null on failure.
+   */
+  async function convertSatsToFiat(sats) {
+    if (!sats || sats <= 0) return null
+    try { return await nostrCoreSatsToFiat(sats, currency.value) }
+    catch { return null }
+  }
+
+  /**
    * Convert fiat amount to sats.
    * Uses nostr-core's fiatToSats (which fetches rate if needed).
    */
@@ -150,6 +160,7 @@ export function useFiat() {
     loadRate,
     toFiat,
     toFiatRaw,
+    convertSatsToFiat,
     fiatToSats,
     setCurrency,
     toggleDenomination,

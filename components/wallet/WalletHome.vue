@@ -3,7 +3,7 @@
  * Wallet home — balance card, quick actions, recent transactions.
  * Tap the balance to toggle between sats and fiat primary display.
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWallet } from '../../composables/useWallet.js'
 import { useToast } from '../../composables/useToast.js'
@@ -20,7 +20,7 @@ import {
 
 const emit = defineEmits(['send', 'receive', 'history', 'detail', 'disconnect'])
 
-const { status, getBalance, getInfo, listTransactions } = useWallet()
+const { status, walletType, getBalance, getBudget, getInfo, listTransactions } = useWallet()
 const toast = useToast()
 const { toFiat, denomination, toggleDenomination, loadRate, currency } = useFiat()
 
@@ -32,6 +32,8 @@ const fiatBalance = computed(() => {
 const recentTxs = ref([])
 const loadingTxs = ref(false)
 const refreshing = ref(false)
+const walletBudget = ref(null)
+const nwcConnected = ref(true)
 const confirmDisconnect = ref(false)
 const disconnecting = ref(false)
 
@@ -49,10 +51,18 @@ async function loadTransactions() {
 
 async function refresh() {
   refreshing.value = true
+  const prevBalance = status.value.balance
   try {
     await Promise.all([getBalance(), loadTransactions()])
-    toast.success(t('wallet.balanceUpdated'))
-  } catch (err) {
+    const newBalance = status.value.balance
+    if (prevBalance != null && newBalance != null && newBalance !== prevBalance) {
+      const diff = newBalance - prevBalance
+      const sign = diff > 0 ? '+' : ''
+      toast.success(`${t('wallet.balanceUpdated')} (${sign}${formatSats(diff)})`)
+    } else {
+      toast.success(t('wallet.balanceUpdated'))
+    }
+  } catch {
     toast.error(t('wallet.failedRefresh'))
   } finally {
     refreshing.value = false
@@ -69,9 +79,31 @@ async function handleDisconnect() {
   }
 }
 
+let nwcPollTimer = null
+
 onMounted(() => {
   loadTransactions()
   loadRate()
+  // Load wallet-side budget (NWC only — Cashu has no budget concept)
+  if (walletType.value !== 'cashu') {
+    getBudget().then(b => { walletBudget.value = b }).catch(() => {})
+  }
+  // Poll NWC connection status (skip for Cashu — always "connected")
+  if (walletType.value !== 'cashu') {
+    const checkNwc = () => {
+      chrome.runtime.sendMessage({ type: 'GET_NWC_STATUS' })
+        .then(res => { nwcConnected.value = res?.result?.connected !== false })
+        .catch(() => {})
+    }
+    checkNwc()
+    nwcPollTimer = setInterval(checkNwc, 10000)
+  } else {
+    nwcConnected.value = true
+  }
+})
+
+onBeforeUnmount(() => {
+  if (nwcPollTimer) clearInterval(nwcPollTimer)
 })
 </script>
 
@@ -86,12 +118,16 @@ onMounted(() => {
         <!-- Header row: status dot + refresh -->
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-1.5">
-            <div class="w-1.5 h-1.5 rounded-full bg-success" />
-            <span class="text-[9px] font-semibold uppercase tracking-wider text-text-muted">{{ t('wallet.balance') }}</span>
+            <div class="w-1.5 h-1.5 rounded-full transition-colors"
+              :class="nwcConnected ? 'bg-success' : 'bg-warning animate-pulse'" />
+            <span class="text-[9px] font-semibold uppercase tracking-wider text-text-muted">
+              {{ nwcConnected ? t('wallet.balance') : t('wallet.reconnecting') }}
+            </span>
           </div>
           <button
             @click="refresh"
             :disabled="refreshing"
+            :aria-label="t('wallet.refresh')"
             class="p-1 rounded-lg hover:bg-surface-elevated transition-all duration-200"
           >
             <RefreshCw
@@ -135,6 +171,16 @@ onMounted(() => {
             <span class="text-[8px] text-text-muted">{{ denomination === 'sats' ? currency.toUpperCase() : t('wallet.sats') }}</span>
           </div>
         </button>
+
+        <!-- Wallet-side budget (NWC only) -->
+        <div v-if="walletType !== 'cashu' && walletBudget?.used_budget != null" class="text-center mb-1">
+          <span class="text-[9px] text-text-muted">
+            {{ t('wallet.nwcBudget', {
+              used: formatSats(Math.floor((walletBudget.used_budget || 0) / 1000)),
+              total: formatSats(Math.floor((walletBudget.total_budget || 0) / 1000)),
+            }) }}
+          </span>
+        </div>
 
         <!-- Quick actions — flat solid colors, no gradient/glow -->
         <div class="grid grid-cols-2 gap-3">

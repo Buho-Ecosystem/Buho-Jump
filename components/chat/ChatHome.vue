@@ -17,7 +17,7 @@ import { MessageSquare, PenSquare, Search, ChevronDown, VolumeX, Users, AlertTri
 const { t } = useI18n()
 const emit = defineEmits(['open', 'open-group', 'new-chat', 'new-group'])
 
-const { conversations, init: initChat, initialized: chatInitialized, error: chatError, currentAccountPubkey } = useChat()
+const { conversations, messages: allMessages, init: initChat, initialized: chatInitialized, error: chatError, currentAccountPubkey } = useChat()
 const { groupConversations, init: initGroups, initialized: groupsInitialized, error: groupError } = useGroups()
 const { getCachedProfile, fetchProfiles } = useContacts()
 
@@ -49,10 +49,13 @@ const unified = computed(() => {
       const profile = getCachedProfile(c.pubkey)
       const name = profile?.display_name || profile?.name || ''
       const identity = profile?.nip05 || ''
-      return name.toLowerCase().includes(q) ||
+      if (name.toLowerCase().includes(q) ||
         identity.toLowerCase().includes(q) ||
-        c.pubkey.includes(q) ||
-        c.lastMessage?.content?.toLowerCase().includes(q)
+        c.pubkey.includes(q)) return true
+      // Deep search: check all messages in this conversation
+      const msgs = allMessages.value[c.pubkey]
+      if (msgs) return msgs.some(m => m.content?.toLowerCase().includes(q))
+      return false
     })
     grps = grps.filter(c => {
       const name = c.group?.name || c.group?.id || ''

@@ -15,11 +15,13 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <nav class="bottom-tabs">
+  <nav class="bottom-tabs" role="tablist">
     <button
       @click="$emit('update:activeTab', 'wallet')"
       class="bottom-tab"
       :class="{ active: activeTab === 'wallet' }"
+      role="tab"
+      :aria-selected="activeTab === 'wallet'"
     >
       <Wallet class="w-4 h-4" />
       {{ t('tabs.wallet') }}
@@ -28,6 +30,8 @@ const { t } = useI18n()
       @click="$emit('update:activeTab', 'chat')"
       class="bottom-tab"
       :class="{ active: activeTab === 'chat' }"
+      role="tab"
+      :aria-selected="activeTab === 'chat'"
     >
       <MessageSquare class="w-4 h-4" />
       {{ t('tabs.chat') }}

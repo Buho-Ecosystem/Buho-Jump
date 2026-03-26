@@ -43,6 +43,10 @@ function injectScript(fileName) {
   const script = document.createElement('script')
   script.src = chrome.runtime.getURL(fileName)
   script.onload = () => script.remove()
+  script.onerror = () => {
+    script.remove()
+    console.warn(`[Buho Jump] Failed to inject ${fileName}`)
+  }
   ;(document.documentElement || document.head).appendChild(script)
 }
 
@@ -68,7 +72,7 @@ function createBridge(eventName, responseType, methodMap, allowedMethods) {
     if (!id || !method) return
 
     function sendResponse(payload) {
-      window.postMessage({ type: responseType, payload }, '*')
+      window.postMessage({ type: responseType, payload }, window.location.origin)
     }
 
     // Anti-spam: block after rejection
@@ -90,6 +94,12 @@ function createBridge(eventName, responseType, methodMap, allowedMethods) {
     }
 
     try {
+      // Guard against extension context invalidation (unload/update)
+      if (!chrome.runtime?.id) {
+        sendResponse({ id, error: 'Extension context invalidated. Please reload the page.' })
+        return
+      }
+
       // All messages go through the PUBLIC route
       const res = await chrome.runtime.sendMessage({
         type: 'PUBLIC',
@@ -97,7 +107,7 @@ function createBridge(eventName, responseType, methodMap, allowedMethods) {
       })
       if (res?.error) {
         // Track rejections for anti-spam
-        if (res.error === 'PERMISSION_DENIED' || res.error.includes('Access denied')) {
+        if (res.error === 'PERMISSION_DENIED' || (typeof res.error === 'string' && res.error.includes('Access denied'))) {
           isRejected = true
         }
         sendResponse({ id, error: res.error })
@@ -105,10 +115,9 @@ function createBridge(eventName, responseType, methodMap, allowedMethods) {
         sendResponse({ id, result: res?.result })
       }
     } catch (err) {
-      sendResponse({
-        id,
-        error: err instanceof Error ? err.message : 'Unknown error',
-      })
+      // Extension context invalidated (service worker restart, update)
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      sendResponse({ id, error: msg })
     }
   })
 }

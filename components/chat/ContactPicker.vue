@@ -8,7 +8,7 @@
  *   2. Resolved address (npub/NIP-05 → profile card)
  *   3. Nostr relay search (NIP-50, debounced)
  */
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContacts } from '../../composables/useContacts.js'
 import { useAccounts } from '../../composables/useAccounts.js'
@@ -16,6 +16,7 @@ import { nip19, nip50 } from 'nostr-core'
 import { getPool } from '../../lib/relayPool.js'
 import { getPoolRelays, DEFAULT_ACCOUNT_RELAYS } from '../../lib/relays.js'
 import { getAvatarColor } from '../../lib/avatarColor.js'
+import ErrorBanner from '../ErrorBanner.vue'
 import {
   ArrowLeft, UserSearch, Loader2, User, RefreshCw,
   AlertCircle, Users, Globe, ChevronRight,
@@ -26,7 +27,7 @@ const PAGE_SIZE = 20
 const { t } = useI18n()
 const emit = defineEmits(['back', 'open'])
 
-const { contacts, loading, loadFollowList, resolveInput, searchContacts, fetchProfile, needsLoad } = useContacts()
+const { contacts, loading, error: contactsError, loadFollowList, resolveInput, searchContacts, fetchProfile, needsLoad } = useContacts()
 const { activeAccount } = useAccounts()
 
 const input = ref('')
@@ -157,6 +158,10 @@ function handleRetryContacts() {
   }
 }
 
+onBeforeUnmount(() => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+})
+
 function truncateNpub(pubkey) {
   try {
     const npub = nip19.npubEncode(pubkey)
@@ -248,6 +253,16 @@ function truncateNpub(pubkey) {
             </div>
           </div>
         </div>
+
+        <!-- Contacts load error -->
+        <ErrorBanner
+          v-else-if="contactsError"
+          type="warning"
+          :message="t(contactsError)"
+          :retry-label="t('common.retry')"
+          @retry="handleRetryContacts"
+          class="mb-2"
+        />
 
         <!-- Contact list -->
         <div v-else-if="filteredContacts.length > 0" class="space-y-0 -mx-3">

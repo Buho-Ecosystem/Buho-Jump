@@ -1,10 +1,11 @@
 /**
- * Wallet composable — full NIP-47 wallet state for popup UI.
- * Supports multiple named NWC wallets with one active at a time.
- * Wraps all NWC operations via background message passing.
+ * Wallet composable — unified wallet state for popup UI.
+ * Supports both NWC (NIP-47) and Cashu (NIP-60) wallets with one active at a time.
+ * All operations route through background message passing — the composable
+ * never knows or cares which engine is active.
  */
 
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useMessaging } from './useMessaging.js'
 
 const status = ref({ connected: false, balance: null, activeWallet: null })
@@ -15,6 +16,16 @@ const walletInfo = ref(null)
 const { send } = useMessaging()
 
 export function useWallet() {
+  // ── Computed ────────────────────────────────────────────────────
+
+  /** Active wallet type: 'nwc' | 'cashu' | null */
+  const walletType = computed(() => {
+    const active = wallets.value.find(w => w.isActive)
+    return active?.type || status.value.activeWallet?.type || null
+  })
+
+  // ── Existing methods (unchanged signatures) ────────────────────
+
   async function loadStatus() {
     const res = await send('GET_WALLET_STATUS')
     status.value = res || { connected: false, balance: null, activeWallet: null }
@@ -60,7 +71,6 @@ export function useWallet() {
   async function rename(walletId, name) {
     await send('RENAME_WALLET', walletId, name)
     await loadWallets()
-    // Update active wallet name in status if it was the renamed one
     if (status.value.activeWallet?.id === walletId) {
       status.value = {
         ...status.value,
@@ -115,18 +125,60 @@ export function useWallet() {
     return await send('SEND_ZAP', { recipientPubkey, amountSats, lightningAddress, content })
   }
 
+  // ── Cashu-specific methods ─────────────────────────────────────
+
+  async function autoCreateWallet() {
+    return await send('AUTO_CREATE_CASHU_WALLET')
+  }
+
+  async function redeemToken(tokenStr) {
+    return await send('CASHU_RECEIVE_TOKEN', tokenStr)
+  }
+
+  async function createToken(amountSats, memo) {
+    return await send('CASHU_CREATE_TOKEN', amountSats, memo)
+  }
+
+  async function checkMintQuote(mintUrl, quoteId) {
+    return await send('CASHU_CHECK_MINT_QUOTE', mintUrl, quoteId)
+  }
+
+  async function mintTokens(mintUrl, amountSats, quoteId) {
+    return await send('CASHU_MINT_TOKENS', mintUrl, amountSats, quoteId)
+  }
+
+  async function exportBackup() {
+    return await send('CASHU_EXPORT_BACKUP')
+  }
+
+  async function importBackup(data) {
+    return await send('CASHU_IMPORT_BACKUP', data)
+  }
+
+  async function restoreFromRelay() {
+    return await send('CASHU_RESTORE_FROM_RELAY')
+  }
+
+  async function getCashuMintInfo(mintUrl) {
+    return await send('CASHU_GET_MINT_INFO', mintUrl)
+  }
+
   return {
+    // State
     status,
     wallets,
     connecting,
     switching,
     walletInfo,
+    walletType,
+    // Lifecycle
     loadStatus,
     loadWallets,
     connect,
     disconnect,
     switchWallet,
     rename,
+    // Operations (unified — background routes by wallet type)
     getBalance,
     getInfo,
     getBudget,
@@ -137,5 +189,15 @@ export function useWallet() {
     payKeysend,
     signMessage,
     sendZap,
+    // Cashu-specific
+    autoCreateWallet,
+    redeemToken,
+    createToken,
+    checkMintQuote,
+    mintTokens,
+    exportBackup,
+    importBackup,
+    restoreFromRelay,
+    getCashuMintInfo,
   }
 }

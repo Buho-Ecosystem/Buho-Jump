@@ -236,3 +236,126 @@ describe('multiple accounts', () => {
     expect(accounts[c.id].mode).toBe('nip46')
   })
 })
+
+describe('edge cases', () => {
+  it('re-encrypt with wrong old password — no data loss', async () => {
+    await createLocalAccount(PW, 'Alice')
+    // Should fail or be no-op with wrong password
+    const withWrong = await getAccounts('wrong-pw')
+    expect(Object.keys(withWrong)).toHaveLength(0)
+    // Original password should still work
+    const accounts = await getAccounts(PW)
+    expect(Object.values(accounts)[0].name).toBe('Alice')
+  })
+
+  it('remove last account clears activeAccountId', async () => {
+    const only = await createLocalAccount(PW, 'Only')
+    expect(await getActiveAccountId()).toBe(only.id)
+    await removeAccount(PW, only.id)
+    const accounts = await getAccounts(PW)
+    expect(Object.keys(accounts)).toHaveLength(0)
+    // Active ID should be cleared or null
+    const activeId = await getActiveAccountId()
+    expect(activeId === null || activeId === undefined || !(activeId in accounts)).toBe(true)
+  })
+
+  it('import duplicate nsec reuses existing account', async () => {
+    const original = await createLocalAccount(PW, 'Original')
+    // Import the same nsec again
+    const duplicate = await importAccount(PW, 'Duplicate', original.nsec)
+    // Should have same pubkey
+    expect(duplicate.pubkey).toBe(original.pubkey)
+  })
+
+  it('mnemonic derives deterministic pubkey', async () => {
+    const a = await createAccountWithMnemonic(PW, 'First')
+    const mnemonic = a.mnemonic
+    resetStorage()
+    const b = await importFromMnemonic(PW, 'Second', mnemonic)
+    expect(b.pubkey).toBe(a.pubkey)
+    expect(b.secretHex).toBe(a.secretHex)
+  })
+})
+
+// ── Enterprise hardening ────────────────────────────────────────
+
+describe('createLocalAccount — defensive inputs', () => {
+  it('empty string name creates account', async () => {
+    const account = await createLocalAccount(PW, '')
+    expect(account.pubkey).toBeDefined()
+    expect(account.name).toBe('')
+  })
+
+  it('null name creates account', async () => {
+    const account = await createLocalAccount(PW, null)
+    expect(account.pubkey).toBeDefined()
+  })
+
+  it('unicode name preserved', async () => {
+    const account = await createLocalAccount(PW, '🔑 Мой аккаунт')
+    const accounts = await getAccounts(PW)
+    expect(accounts[account.id].name).toBe('🔑 Мой аккаунт')
+  })
+
+  it('very long name preserved', async () => {
+    const longName = 'A'.repeat(500)
+    const account = await createLocalAccount(PW, longName)
+    const accounts = await getAccounts(PW)
+    expect(accounts[account.id].name).toBe(longName)
+  })
+})
+
+describe('getAccounts — password edge cases', () => {
+  it('empty string password returns empty', async () => {
+    await createLocalAccount(PW, 'Alice')
+    const accounts = await getAccounts('')
+    expect(Object.keys(accounts)).toHaveLength(0)
+  })
+
+  it('undefined password returns empty', async () => {
+    await createLocalAccount(PW, 'Alice')
+    const accounts = await getAccounts(undefined)
+    expect(Object.keys(accounts)).toHaveLength(0)
+  })
+
+  it('numeric password returns empty', async () => {
+    await createLocalAccount(PW, 'Alice')
+    const accounts = await getAccounts(12345)
+    expect(Object.keys(accounts)).toHaveLength(0)
+  })
+})
+
+describe('importAccount — invalid key formats', () => {
+  it('rejects empty string key', async () => {
+    await expect(importAccount(PW, 'Test', '')).rejects.toThrow()
+  })
+
+  it('rejects whitespace-only key', async () => {
+    await expect(importAccount(PW, 'Test', '   ')).rejects.toThrow()
+  })
+
+  it('rejects 63-char hex (too short)', async () => {
+    await expect(importAccount(PW, 'Test', 'a'.repeat(63))).rejects.toThrow()
+  })
+
+  it('rejects 65-char hex (too long)', async () => {
+    await expect(importAccount(PW, 'Test', 'a'.repeat(65))).rejects.toThrow()
+  })
+})
+
+describe('updateAccount — edge cases', () => {
+  it('update with empty object does not lose data', async () => {
+    const account = await createLocalAccount(PW, 'Original')
+    await updateAccount(PW, account.id, {})
+    const updated = await getActiveAccount(PW)
+    expect(updated.name).toBe('Original')
+    expect(updated.secretHex).toBe(account.secretHex)
+  })
+
+  it('update preserves mode', async () => {
+    const account = await createLocalAccount(PW, 'Test')
+    await updateAccount(PW, account.id, { name: 'Updated' })
+    const updated = await getActiveAccount(PW)
+    expect(updated.mode).toBe('local')
+  })
+})

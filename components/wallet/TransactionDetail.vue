@@ -97,7 +97,7 @@ function copy(text, field) {
         >
           <Code class="w-4 h-4" />
         </button>
-        <button @click="emit('close')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
+        <button @click="emit('close')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.close')">
           <X class="w-4 h-4 text-text-muted" />
         </button>
       </div>

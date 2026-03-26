@@ -34,10 +34,13 @@
     "open:edge": "open .output/edge-mv3",
     "open:firefox": "open .output/firefox-mv3",
     "postinstall": "wxt prepare",
+    "locales:check": "node scripts/locales.mjs --check",
+    "locales:sync": "node scripts/locales.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@cashu/cashu-ts": "^3.6.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "html5-qrcode": "^2.3.8",

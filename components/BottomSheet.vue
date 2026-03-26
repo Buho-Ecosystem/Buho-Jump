@@ -14,6 +14,7 @@
  *   </BottomSheet>
  */
 import { computed, onMounted, ref } from 'vue'
+import { useFocusTrap } from '../composables/useFocusTrap.js'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -21,6 +22,10 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close'])
+
+// Focus trap — traps Tab/Shift+Tab inside the sheet when open
+const sheetRef = ref(null)
+useFocusTrap(sheetRef, { onEscape: () => emit('close') })
 
 // Detect if we're inside the popup or the options page
 const isPopup = ref(false)
@@ -44,6 +49,7 @@ const teleportTarget = computed(() => isPopup.value ? '.popup-container' : 'body
         />
 
         <div
+          ref="sheetRef"
           :class="[
             'border-t px-4 pt-4 pb-5 space-y-3 relative',
             isPopup ? '' : 'w-full max-w-md rounded-t-3xl shadow-lg',

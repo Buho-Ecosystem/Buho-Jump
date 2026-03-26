@@ -13,13 +13,15 @@ import { useI18n } from 'vue-i18n'
 import { useWallet } from '../../composables/useWallet.js'
 import { useToast } from '../../composables/useToast.js'
 import { useFiat } from '../../composables/useFiat.js'
+import { useOnline } from '../../composables/useOnline.js'
 
 const { t } = useI18n()
 import { formatSats, detectPaymentInput } from '../../lib/utils.js'
 import { parseZARFromMetadata, getMerchantInitials } from '../../lib/merchantQR.js'
-import { fetchInvoice, lnurl as lnurlCore } from 'nostr-core'
-import { fetchLnurlPayParams, fetchLnurlPayInvoice, executeLnurlPay } from '../../lib/lnurl.js'
+import { fetchInvoice, lnurl as lnurlCore, parseSuccessAction, decryptAesSuccessAction } from 'nostr-core'
+import { fetchLnurlPayParams, fetchLnurlPayInvoice, executeLnurlPay, verifyLnurlPayment } from '../../lib/lnurl.js'
 import QrScanner from '../QrScanner.vue'
+import ErrorBanner from '../ErrorBanner.vue'
 import {
   ArrowLeft, ScanLine, Zap, ArrowUpRight, ArrowDownLeft, ArrowLeftRight,
   Check, AlertTriangle, Loader2, AtSign, Store, Timer, Code,
@@ -29,6 +31,7 @@ const emit = defineEmits(['back', 'done'])
 const { payInvoice, makeInvoice, status } = useWallet()
 const toast = useToast()
 const { toFiat, fiatToSats, currency, loadRate } = useFiat()
+const { online } = useOnline()
 
 // ── State ──
 const step = ref('input') // 'input' | 'confirm' | 'merchant-confirm' | 'withdraw-confirm' | 'result'
@@ -55,12 +58,17 @@ const merchantLogoFailed = ref(false)
 const countdown = ref(90)
 let countdownTimer = null
 
+const fiatRateUnavailable = ref(false)
+
 // ── LNURL-withdraw state ──
 const withdrawInfo = ref(null)
 const withdrawAmountSats = ref('')
 
 // ── Success action state (LNURL-pay) ──
-const successAction = ref(null)
+const successAction = ref(null) // Parsed SuccessAction from LNURL callback
+const pendingSuccessAction = ref(null) // Raw action stored between invoice fetch and payment
+const pendingVerifyUrl = ref(null) // LUD-21 verify URL
+const paymentVerified = ref(false) // True if LUD-21 verification passed
 
 // Load rate for conversions
 loadRate()
@@ -131,6 +139,17 @@ const conversionHint = computed(() => {
   }
 })
 
+const amountError = computed(() => {
+  if (!needsAmount.value) return ''
+  const sats = effectiveSats.value
+  if (!sats) return ''
+  if (sats <= 0) return t('wallet.amountTooLow')
+  if (status.value?.balance != null && sats > status.value.balance) {
+    return t('wallet.insufficientBalance', { balance: formatSats(status.value.balance) })
+  }
+  return ''
+})
+
 const canProceed = computed(() => {
   if (!detected.value) return false
   if (detected.value.type === 'unknown') return false
@@ -164,7 +183,10 @@ watch(amountFiat, (val) => {
     try {
       const sats = await fiatToSats(num)
       if (inputMode.value === 'fiat') amountSats.value = String(sats)
-    } catch { /* rate unavailable */ }
+      fiatRateUnavailable.value = false
+    } catch {
+      fiatRateUnavailable.value = true
+    }
   }, 300)
 })
 
@@ -207,6 +229,7 @@ function stopCountdown() {
 
 onBeforeUnmount(() => {
   stopCountdown()
+  clearTimeout(fiatDebounce)
 })
 
 async function resolveMerchantPayment() {
@@ -248,8 +271,10 @@ async function resolveMerchantPayment() {
     }
 
     // Fetch the invoice from CryptoQR callback
-    const { invoice } = await fetchLnurlPayInvoice(params, amountToSend)
-    resolvedInvoice.value = invoice
+    const lnResult = await fetchLnurlPayInvoice(params, amountToSend)
+    resolvedInvoice.value = lnResult.invoice
+    pendingSuccessAction.value = lnResult.successAction || null
+    pendingVerifyUrl.value = lnResult.verify || null
 
     // Start countdown — invoice is time-sensitive
     startCountdown()
@@ -317,6 +342,8 @@ async function proceed() {
     try {
       const result = await executeLnurlPay(detected.value.value, effectiveSats.value)
       resolvedInvoice.value = result.invoice
+      pendingSuccessAction.value = result.successAction || null
+      pendingVerifyUrl.value = result.verify || null
       step.value = 'confirm'
     } catch (err) {
       payError.value = err.message || t('wallet.lnurlFailed')
@@ -356,6 +383,28 @@ async function confirmPay() {
     const result = await payInvoice(invoice)
     payResult.value = result
     stopCountdown()
+
+    // Process LNURL success action if present
+    if (pendingSuccessAction.value) {
+      try {
+        const parsed = parseSuccessAction(pendingSuccessAction.value)
+        const action = { ...parsed }
+        if (parsed.tag === 'aes' && result?.preimage) {
+          action.decrypted = await decryptAesSuccessAction(parsed, result.preimage)
+        }
+        successAction.value = action
+      } catch { /* success action parsing is non-critical */ }
+      pendingSuccessAction.value = null
+    }
+
+    // LUD-21 payment verification (non-blocking)
+    if (pendingVerifyUrl.value) {
+      verifyLnurlPayment(pendingVerifyUrl.value).then(v => {
+        if (v?.settled) paymentVerified.value = true
+      })
+      pendingVerifyUrl.value = null
+    }
+
     step.value = 'result'
   } catch (err) {
     payError.value = err.message || t('wallet.paymentFailed')
@@ -386,6 +435,10 @@ function reset() {
   withdrawInfo.value = null
   withdrawAmountSats.value = ''
   successAction.value = null
+  pendingSuccessAction.value = null
+  pendingVerifyUrl.value = null
+  paymentVerified.value = false
+  fiatRateUnavailable.value = false
   stopCountdown()
 }
 </script>
@@ -397,6 +450,7 @@ function reset() {
     <div class="flex items-center gap-2 mb-4">
       <button
         @click="step === 'input' ? emit('back') : (step === 'merchant-confirm' || step === 'withdraw-confirm' ? reset() : (step = 'input'))"
+        :aria-label="t('common.back')"
         class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200"
       >
         <ArrowLeft class="w-4 h-4 text-text-muted" />
@@ -498,10 +552,19 @@ function reset() {
         />
         <!-- Conversion hint -->
         <p v-if="conversionHint" class="text-[10px] text-text-muted px-1">{{ conversionHint }}</p>
+        <p v-if="fiatRateUnavailable && inputMode === 'fiat'" class="text-[10px] text-warning px-1">
+          {{ t('wallet.rateUnavailable') }}
+        </p>
+        <p v-else-if="amountError" class="text-[10px] text-error px-1">
+          {{ amountError }}
+        </p>
       </div>
 
+      <!-- Offline -->
+      <ErrorBanner v-if="!online" type="warning" :message="t('common.offline')" />
+
       <!-- Error -->
-      <div v-if="payError" class="flex items-start gap-2 p-2.5 rounded-lg bg-error/10 text-error text-xs animate-scale-in">
+      <div v-else-if="payError" class="flex items-start gap-2 p-2.5 rounded-lg bg-error/10 text-error text-xs animate-scale-in">
         <AlertTriangle class="w-3.5 h-3.5 mt-0.5 shrink-0" />
         <span>{{ payError }}</span>
       </div>
@@ -545,7 +608,7 @@ function reset() {
           <div class="flex items-center gap-3 mb-4">
             <div
               class="w-11 h-11 rounded-[10px] flex items-center justify-center shrink-0 overflow-hidden"
-              :style="{ backgroundColor: merchantInfo?.color || '#607D8B' }"
+              :style="{ backgroundColor: merchantInfo?.color || 'var(--text-muted)' }"
             >
               <img
                 v-if="merchantInfo?.logo && !merchantLogoFailed"
@@ -772,9 +835,34 @@ function reset() {
           <p class="text-xs text-text-muted">
             {{ merchantInfo ? `${t('wallet.merchantPaying')} ${merchantInfo.name}` : t('wallet.paymentSuccess') }}
           </p>
+          <p v-if="paymentVerified" class="text-[10px] text-success mt-1 font-medium">
+            {{ t('wallet.paymentVerified') }}
+          </p>
 
           <div v-if="merchantInfo && merchantZAR" class="mt-3 text-sm text-text-secondary">
             R{{ merchantZAR.toFixed(2) }} → {{ formatSats(merchantSats) }} sats
+          </div>
+
+          <!-- LNURL Success Action -->
+          <div v-if="successAction" class="mt-4 bg-surface-base rounded-2xl p-3 text-left">
+            <p v-if="successAction.tag === 'message'" class="text-xs text-text-secondary">
+              {{ successAction.message }}
+            </p>
+            <template v-else-if="successAction.tag === 'url'">
+              <p class="text-xs text-text-secondary mb-1">{{ successAction.description }}</p>
+              <a v-if="successAction.url?.startsWith('https://')"
+                :href="successAction.url" target="_blank" rel="noopener noreferrer"
+                class="text-xs text-brand hover:underline break-all">
+                {{ successAction.url }}
+              </a>
+              <p v-else class="text-xs text-text-muted break-all">{{ successAction.url }}</p>
+            </template>
+            <template v-else-if="successAction.tag === 'aes'">
+              <p class="text-xs text-text-secondary mb-1">{{ successAction.description }}</p>
+              <p v-if="successAction.decrypted" class="text-xs text-text-primary break-all">
+                {{ successAction.decrypted }}
+              </p>
+            </template>
           </div>
 
           <div v-if="payResult?.preimage" class="mt-4 text-left">

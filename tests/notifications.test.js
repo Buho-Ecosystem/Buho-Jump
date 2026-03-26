@@ -229,3 +229,56 @@ describe('click handler', () => {
     expect(chrome.notifications.onClicked.addListener).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('dedup reset', () => {
+  it('allows same messageId after _resetForTesting', async () => {
+    await notifyDm('Alice', 'first', 'reset-dup-1')
+    expect(chrome.notifications.create).toHaveBeenCalledTimes(1)
+
+    vitest.advanceTimersByTime(5000)
+    // Same ID — suppressed by dedup
+    await notifyDm('Alice', 'again', 'reset-dup-1')
+    expect(chrome.notifications.create).toHaveBeenCalledTimes(1)
+
+    // Reset clears dedup state
+    _resetForTesting()
+    vitest.advanceTimersByTime(5000)
+    await notifyDm('Alice', 'after reset', 'reset-dup-1')
+    expect(chrome.notifications.create).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('quiet hours edge — midnight wrap', () => {
+  it('blocks at 23:30 with range 22:00–08:00', async () => {
+    await setNotificationSettings({
+      dms: true, groups: true, payments: true,
+      quietHours: true, quietStart: '22:00', quietEnd: '08:00',
+    })
+    vitest.setSystemTime(new Date(2026, 2, 16, 23, 30))
+    _resetForTesting()
+    await notifyDm('Alice', 'late', 'qh-wrap-1')
+    expect(chrome.notifications.create).not.toHaveBeenCalled()
+  })
+
+  it('blocks at 05:00 with range 22:00–08:00', async () => {
+    await setNotificationSettings({
+      dms: true, groups: true, payments: true,
+      quietHours: true, quietStart: '22:00', quietEnd: '08:00',
+    })
+    vitest.setSystemTime(new Date(2026, 2, 17, 5, 0))
+    _resetForTesting()
+    await notifyDm('Alice', 'early morning', 'qh-wrap-2')
+    expect(chrome.notifications.create).not.toHaveBeenCalled()
+  })
+
+  it('allows at 09:00 with range 22:00–08:00', async () => {
+    await setNotificationSettings({
+      dms: true, groups: true, payments: true,
+      quietHours: true, quietStart: '22:00', quietEnd: '08:00',
+    })
+    vitest.setSystemTime(new Date(2026, 2, 17, 9, 0))
+    _resetForTesting()
+    await notifyDm('Alice', 'after quiet', 'qh-wrap-3')
+    expect(chrome.notifications.create).toHaveBeenCalled()
+  })
+})

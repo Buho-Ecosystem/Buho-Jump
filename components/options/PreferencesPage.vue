@@ -45,6 +45,19 @@ const changingPassword = ref(false)
 const showOldPw = ref(false)
 const showNewPw = ref(false)
 
+const newPwStrength = computed(() => {
+  const p = newPassword.value
+  if (!p || p.length < 8) return { label: t('lock.strengthTooShort'), level: 0, color: 'bg-error' }
+  let score = 0
+  if (p.length >= 12) score++
+  if (/[A-Z]/.test(p) && /[a-z]/.test(p)) score++
+  if (/[0-9]/.test(p)) score++
+  if (/[^A-Za-z0-9]/.test(p)) score++
+  if (score <= 1) return { label: t('lock.strengthWeak'), level: 1, color: 'bg-warning' }
+  if (score === 2) return { label: t('lock.strengthFair'), level: 2, color: 'bg-brand' }
+  return { label: t('lock.strengthStrong'), level: 3, color: 'bg-success' }
+})
+
 onMounted(async () => {
   loadNotif()
   try {
@@ -119,9 +132,9 @@ function handleLock() {
         >
           <div class="flex items-center gap-1">
             <span class="w-5 h-5 rounded-full border border-border/50"
-              :style="{ background: themes[id]?.dark?.['brand-primary'] || '#888' }" />
+              :style="{ background: themes[id]?.dark?.['brand-primary'] || 'var(--text-muted)' }" />
             <span class="w-5 h-5 rounded-full border border-border/50"
-              :style="{ background: themes[id]?.light?.['brand-primary'] || '#888' }" />
+              :style="{ background: themes[id]?.light?.['brand-primary'] || 'var(--text-muted)' }" />
           </div>
           <span class="text-[10px] font-medium text-center leading-tight"
             :class="currentTheme === id ? 'text-brand' : 'text-text-secondary'">
@@ -389,6 +402,16 @@ function handleLock() {
             <EyeOff v-if="showNewPw" class="w-4 h-4" />
             <Eye v-else class="w-4 h-4" />
           </button>
+        </div>
+        <div v-if="newPassword" class="flex items-center gap-2">
+          <div class="flex-1 flex gap-1">
+            <div v-for="i in 3" :key="i"
+              class="h-1 flex-1 rounded-full transition-colors"
+              :class="i <= newPwStrength.level ? newPwStrength.color : 'bg-border'" />
+          </div>
+          <span class="text-[10px]" :class="newPwStrength.level <= 1 ? 'text-warning' : 'text-text-muted'">
+            {{ newPwStrength.label }}
+          </span>
         </div>
         <input v-model="confirmNewPassword" type="password"
           :placeholder="t('options.confirmNewPassword')"

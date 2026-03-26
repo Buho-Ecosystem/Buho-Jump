@@ -4,17 +4,23 @@
  * Slides up from bottom, covers the entire popup.
  * Content scrolls inside the panel.
  */
+import { ref } from 'vue'
+import { useFocusTrap } from '../composables/useFocusTrap.js'
+
 defineProps({
   open: { type: Boolean, default: false },
 })
 
-defineEmits(['close'])
+const emit = defineEmits(['close'])
+
+const panelRef = ref(null)
+useFocusTrap(panelRef, { onEscape: () => emit('close') })
 </script>
 
 <template>
   <Teleport to=".popup-container">
     <Transition name="slide-panel">
-      <div v-if="open" class="absolute inset-0 z-50 flex flex-col bg-surface-base overflow-y-auto">
+      <div v-if="open" ref="panelRef" class="absolute inset-0 z-50 flex flex-col bg-surface-base overflow-y-auto">
         <slot />
       </div>
     </Transition>

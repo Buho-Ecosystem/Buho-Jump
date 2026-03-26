@@ -7,14 +7,20 @@
  */
 
 // Longer timeout for operations that involve relay connections
-const SLOW_OPS = new Set(['CONNECT_NIP46', 'PUBLISH_PROFILE', 'PUBLISH_NIP65', 'FETCH_PROFILE', 'FETCH_NIP65', 'CONNECT_WALLET', 'SWITCH_WALLET'])
-const DEFAULT_TIMEOUT = 15000 // 15s for CRUD / storage ops
-const SLOW_TIMEOUT = 45000   // 45s for relay / network ops
+const SLOW_OPS = new Set([
+  'CONNECT_NIP46', 'PUBLISH_PROFILE', 'PUBLISH_NIP65', 'FETCH_PROFILE', 'FETCH_NIP65',
+  'CONNECT_WALLET', 'SWITCH_WALLET',
+  'CASHU_MINT_TOKENS', 'CASHU_CREATE_TOKEN', 'CASHU_RECEIVE_TOKEN',
+  'CASHU_EXPORT_BACKUP', 'CASHU_IMPORT_BACKUP', 'CASHU_RESTORE_FROM_RELAY',
+  'WALLET_PAY_INVOICE', 'WALLET_MAKE_INVOICE',
+])
+import { MESSAGING_DEFAULT_TIMEOUT, MESSAGING_SLOW_TIMEOUT } from '../lib/constants/timers.js'
 
 // Known error codes from background.js → i18n key prefix: "errors."
 const ERROR_CODES = new Set([
   'PERMISSION_DENIED', 'NO_SIGNER', 'NO_ACCOUNT', 'NO_EVENT',
   'NO_PUBKEY', 'LOCAL_ACCOUNT_REQUIRED', 'LOCKED', 'WRONG_PASSWORD',
+  'NO_WALLET', 'WALLET_DISCONNECTED', 'TIMEOUT', 'INSUFFICIENT_BALANCE',
 ])
 
 export function useMessaging() {
@@ -25,7 +31,7 @@ export function useMessaging() {
    * @returns {Promise<any>} - the result from the background
    */
   async function send(type, ...params) {
-    const ms = SLOW_OPS.has(type) ? SLOW_TIMEOUT : DEFAULT_TIMEOUT
+    const ms = SLOW_OPS.has(type) ? MESSAGING_SLOW_TIMEOUT : MESSAGING_DEFAULT_TIMEOUT
     let timer
     const response = await Promise.race([
       chrome.runtime.sendMessage({ type, params }),

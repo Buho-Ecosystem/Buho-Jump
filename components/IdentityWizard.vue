@@ -47,6 +47,8 @@ const nostrConnectQr = ref('')
 const nostrConnectAccountId = ref(null)
 let nostrConnectPollTimer = null
 let nostrConnectStarted = false
+const nostrConnectCountdown = ref(0)
+let nostrConnectCountdownTimer = null
 
 // Auto-generate QR when user selects "Show QR" on step 2
 watch(nip46Method, async (method) => {
@@ -67,11 +69,22 @@ watch(nip46Method, async (method) => {
       width: 220, margin: 2, color: { dark: '#000', light: '#fff' },
     })
 
+    // Start countdown (matches 90s timeout in background.js)
+    nostrConnectCountdown.value = 90
+    nostrConnectCountdownTimer = setInterval(() => {
+      nostrConnectCountdown.value--
+      if (nostrConnectCountdown.value <= 0) {
+        clearInterval(nostrConnectCountdownTimer)
+        nostrConnectCountdownTimer = null
+      }
+    }, 1000)
+
     nostrConnectPollTimer = setInterval(async () => {
       await loadNip46Status()
       if (nip46GlobalStatus.value.connected) {
         clearInterval(nostrConnectPollTimer)
         nostrConnectPollTimer = null
+        if (nostrConnectCountdownTimer) { clearInterval(nostrConnectCountdownTimer); nostrConnectCountdownTimer = null }
         await loadAccounts()
         nip46Status.value = 'done'
         step.value = 3
@@ -87,7 +100,8 @@ watch(nip46Method, async (method) => {
 const createdAccount = ref(null)
 const publishResult = ref(null)
 
-const modes = computed(() => [
+// Primary modes — visible by default (90% of users)
+const primaryModes = computed(() => [
   {
     id: 'new',
     icon: Sparkles,
@@ -96,17 +110,21 @@ const modes = computed(() => [
     recommended: true,
   },
   {
-    id: 'recover',
-    icon: RotateCcw,
-    title: t('wizard.modeRecoverTitle'),
-    desc: t('wizard.modeRecoverDesc'),
-    recommended: false,
-  },
-  {
     id: 'import',
     icon: Download,
     title: t('wizard.modeImportTitle'),
     desc: t('wizard.modeImportDesc'),
+    recommended: false,
+  },
+])
+
+// Advanced modes — hidden behind toggle (power users)
+const advancedModes = computed(() => [
+  {
+    id: 'recover',
+    icon: RotateCcw,
+    title: t('wizard.modeRecoverTitle'),
+    desc: t('wizard.modeRecoverDesc'),
     recommended: false,
   },
   {
@@ -118,13 +136,29 @@ const modes = computed(() => [
   },
 ])
 
+const showAdvanced = ref(false)
+
+function isValidKeyInput(val) {
+  if (!val) return false
+  if (val.startsWith('nsec1') && val.length >= 60) return true
+  if (/^[0-9a-f]{64}$/i.test(val)) return true
+  return false
+}
+
+const importKeyError = computed(() => {
+  const val = importNsec.value.trim()
+  if (!val) return ''
+  if (isValidKeyInput(val)) return ''
+  return t('wizard.invalidKeyFormat')
+})
+
 const canProceedStep2 = computed(() => {
   if (mode.value === 'new') return displayName.value.trim().length > 0
   if (mode.value === 'recover') {
     const words = mnemonicWords.value.trim()
     return words.split(/\s+/).filter(Boolean).length >= 12 && nip06.validateMnemonic(words.toLowerCase())
   }
-  if (mode.value === 'import') return importNsec.value.trim().length > 0
+  if (mode.value === 'import') return isValidKeyInput(importNsec.value.trim())
   if (mode.value === 'nip46') return nip46Method.value === 'nostrconnect' || bunkerUri.value.trim().length > 0
   return false
 })
@@ -304,8 +338,12 @@ function copyMnemonic() {
   setTimeout(() => (copied.value = false), 2500)
 }
 
-// Clean up NIP-46 polling timer on unmount to prevent memory leaks
+// Clean up timers on unmount to prevent memory leaks
 onBeforeUnmount(() => {
+  if (nostrConnectCountdownTimer) {
+    clearInterval(nostrConnectCountdownTimer)
+    nostrConnectCountdownTimer = null
+  }
   if (nostrConnectPollTimer) {
     clearInterval(nostrConnectPollTimer)
     nostrConnectPollTimer = null
@@ -361,10 +399,10 @@ onBeforeUnmount(() => {
         </p>
       </div>
 
-      <!-- Mode cards -->
+      <!-- Primary mode cards -->
       <div class="space-y-2">
         <button
-          v-for="m in modes" :key="m.id"
+          v-for="m in primaryModes" :key="m.id"
           @click="selectMode(m.id)"
           class="w-full flex items-center gap-3.5 p-3.5 rounded-3xl bg-surface-card border text-left group card-interactive relative shadow-sm"
           :class="m.recommended ? 'border-brand/30' : 'border-border hover:border-brand/20'"
@@ -378,6 +416,33 @@ onBeforeUnmount(() => {
           <div class="w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0"
             :class="m.recommended ? 'bg-brand/10' : 'bg-surface-elevated'">
             <component :is="m.icon" class="w-5 h-5" :class="m.recommended ? 'text-brand' : 'text-text-muted'" />
+          </div>
+          <div class="flex-1 min-w-0 pr-4">
+            <div class="text-[13px] font-extrabold group-hover:text-brand transition-all duration-200">{{ m.title }}</div>
+            <div class="text-[10px] text-text-muted leading-relaxed mt-0.5">{{ m.desc }}</div>
+          </div>
+          <ArrowRight class="w-4 h-4 text-text-muted group-hover:text-brand transition-all duration-200 shrink-0 absolute right-3.5 top-1/2 -translate-y-1/2" />
+        </button>
+      </div>
+
+      <!-- Advanced options toggle -->
+      <button
+        @click="showAdvanced = !showAdvanced"
+        class="w-full flex items-center justify-center gap-1.5 text-[11px] text-text-muted hover:text-text-secondary py-1.5 transition-all duration-200 font-medium"
+      >
+        <span>{{ t('wizard.advancedOptions') }}</span>
+        <ArrowRight class="w-3 h-3 transition-transform duration-200" :class="showAdvanced ? 'rotate-90' : ''" />
+      </button>
+
+      <!-- Advanced mode cards (collapsed by default) -->
+      <div v-if="showAdvanced" class="space-y-2 animate-fade-in-up">
+        <button
+          v-for="m in advancedModes" :key="m.id"
+          @click="selectMode(m.id)"
+          class="w-full flex items-center gap-3.5 p-3.5 rounded-3xl bg-surface-card border text-left group card-interactive relative shadow-sm border-border hover:border-brand/20"
+        >
+          <div class="w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0 bg-surface-elevated">
+            <component :is="m.icon" class="w-5 h-5 text-text-muted" />
           </div>
           <div class="flex-1 min-w-0 pr-4">
             <div class="text-[13px] font-extrabold group-hover:text-brand transition-all duration-200">{{ m.title }}</div>
@@ -424,7 +489,7 @@ onBeforeUnmount(() => {
           {{ t('wizard.displayName') }}
         </label>
         <input v-model="displayName" :placeholder="t('wizard.namePlaceholder')"
-          autofocus
+          autofocus maxlength="50"
           class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50" />
         <p class="text-[10px] text-text-muted px-0.5 leading-relaxed">
           {{ t('wizard.nameHint') }}
@@ -456,10 +521,13 @@ onBeforeUnmount(() => {
               <Eye v-else class="w-4 h-4" />
             </button>
           </div>
+          <p v-if="importKeyError" class="text-[10px] text-warning px-0.5">
+            {{ importKeyError }}
+          </p>
           <div class="flex items-start gap-1.5 px-0.5">
             <Info class="w-3 h-3 text-text-muted shrink-0 mt-px" />
             <p class="text-[10px] text-text-muted leading-relaxed">
-              {{ t('wizard.keySecurityHint') }}
+              {{ t('wizard.nsecWhereToFind') }}
             </p>
           </div>
         </div>
@@ -470,7 +538,7 @@ onBeforeUnmount(() => {
         <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold block px-0.5">
           {{ t('wizard.displayName') }} <span class="normal-case tracking-normal text-text-muted/60">{{ t('common.optional') }}</span>
         </label>
-        <input v-model="displayName" placeholder="satoshi"
+        <input v-model="displayName" placeholder="satoshi" maxlength="50"
           class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50" />
       </div>
 
@@ -483,7 +551,11 @@ onBeforeUnmount(() => {
           rows="3"
           class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted/50 placeholder:font-sans resize-none lowercase" />
         <div class="flex items-center justify-between px-0.5">
-          <p class="text-[10px] text-text-muted leading-relaxed">
+          <p v-if="mnemonicWords.trim().split(/\s+/).filter(Boolean).length >= 12 && !nip06.validateMnemonic(mnemonicWords.trim().toLowerCase())"
+            class="text-[10px] text-warning leading-relaxed">
+            {{ t('wizard.invalidMnemonic') }}
+          </p>
+          <p v-else class="text-[10px] text-text-muted leading-relaxed">
             {{ t('wizard.recoveryWordsHint') }}
           </p>
           <span class="text-[10px] tabular-nums font-mono"
@@ -558,7 +630,13 @@ onBeforeUnmount(() => {
           </button>
           <div class="flex items-center gap-2 text-[10px] text-text-muted">
             <Loader2 class="w-3 h-3 animate-spin text-brand" />
-            {{ t('wizard.waitingForSigner') }}
+            <span>{{ t('wizard.waitingForSigner') }}</span>
+            <span v-if="nostrConnectCountdown > 0" class="tabular-nums text-text-muted/60">
+              {{ Math.floor(nostrConnectCountdown / 60) }}:{{ (nostrConnectCountdown % 60).toString().padStart(2, '0') }}
+            </span>
+            <span v-else-if="nostrConnectCountdown <= 0 && nostrConnectQr" class="text-warning">
+              {{ t('wizard.connectExpired') }}
+            </span>
           </div>
         </div>
       </div>

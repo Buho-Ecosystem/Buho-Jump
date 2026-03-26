@@ -115,4 +115,86 @@ describe('changePassword', () => {
     await setupPassword('old')
     await expect(changePassword('wrong', 'new')).rejects.toThrow('incorrect')
   })
+
+  it('old password is fully invalid after change', async () => {
+    await setupPassword('original')
+    await changePassword('original', 'updated')
+    expect(await verifyPassword('original')).toBe(false)
+    expect(await verifyPassword('updated')).toBe(true)
+    // Encrypt with new, cannot decrypt with old
+    const encrypted = await encryptData('secret', 'updated')
+    await expect(decryptData(encrypted, 'original')).rejects.toThrow()
+  })
+})
+
+describe('edge cases', () => {
+  it('handles empty string data', async () => {
+    const encrypted = await encryptData('', 'pw')
+    const result = await decryptData(encrypted, 'pw')
+    expect(result).toBe('')
+  })
+
+  it('handles large data (10KB+ payload)', async () => {
+    const largeData = 'x'.repeat(10240)
+    const encrypted = await encryptData(largeData, 'pw')
+    const result = await decryptData(encrypted, 'pw')
+    expect(result).toBe(largeData)
+  })
+
+  it('handles deeply nested object', async () => {
+    const deep = { a: { b: { c: { d: [1, 2, { e: 'f' }] } } } }
+    const result = await decryptData(await encryptData(deep, 'pw'), 'pw')
+    expect(result).toEqual(deep)
+  })
+
+  it('handles empty object', async () => {
+    const result = await decryptData(await encryptData({}, 'pw'), 'pw')
+    expect(result).toEqual({})
+  })
+
+  it('handles empty array', async () => {
+    const result = await decryptData(await encryptData([], 'pw'), 'pw')
+    expect(result).toEqual([])
+  })
+
+  it('handles unicode / emoji data', async () => {
+    const data = '🔥 Bitcoin ₿ ⚡ Nostr 日本語 العربية'
+    const result = await decryptData(await encryptData(data, 'pw'), 'pw')
+    expect(result).toBe(data)
+  })
+
+  it('handles special JSON values (Infinity → null in JSON)', async () => {
+    // JSON.stringify(Infinity) → null
+    const data = { a: Infinity, b: -Infinity, c: NaN }
+    const result = await decryptData(await encryptData(data, 'pw'), 'pw')
+    expect(result.a).toBeNull()
+    expect(result.b).toBeNull()
+    expect(result.c).toBeNull()
+  })
+
+  it('handles numeric zero and boolean false', async () => {
+    expect(await decryptData(await encryptData(0, 'pw'), 'pw')).toBe(0)
+    expect(await decryptData(await encryptData(false, 'pw'), 'pw')).toBe(false)
+  })
+
+  it('handles very long password', async () => {
+    const longPw = 'x'.repeat(10000)
+    const encrypted = await encryptData('secret', longPw)
+    const result = await decryptData(encrypted, longPw)
+    expect(result).toBe('secret')
+  })
+
+  it('rejects completely empty ciphertext', async () => {
+    await expect(decryptData('', 'pw')).rejects.toThrow()
+  })
+
+  it('rejects non-base64 ciphertext', async () => {
+    await expect(decryptData('not-base64!!!', 'pw')).rejects.toThrow()
+  })
+
+  it('rejects truncated ciphertext (too short for salt+iv)', async () => {
+    // Valid base64 but too short to contain salt (16) + iv (12) + data
+    const short = btoa('short')
+    await expect(decryptData(short, 'pw')).rejects.toThrow()
+  })
 })

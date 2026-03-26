@@ -20,6 +20,7 @@ function openOptions() {
     @click.stop="openOptions"
     class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200"
     :title="t('options.openInTab')"
+    :aria-label="t('options.openInTab')"
   >
     <ExternalLink class="w-3 h-3 text-text-muted hover:text-brand transition-all duration-200" />
   </button>

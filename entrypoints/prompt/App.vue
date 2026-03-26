@@ -337,8 +337,10 @@ async function submitUnlock() {
       const msg = res.error
       if (msg.startsWith('TOO_MANY_ATTEMPTS:')) {
         unlockError.value = t('lock.tooManyAttempts', { seconds: msg.split(':')[1] })
+      } else if (msg === 'WRONG_PASSWORD') {
+        unlockError.value = t('lock.wrongPassword')
       } else {
-        unlockError.value = msg
+        unlockError.value = t(`errors.${msg}`, msg)
       }
       unlockBusy.value = false
     } else {
@@ -537,8 +539,23 @@ async function submitUnlock() {
             <p class="text-[10px] text-text-muted leading-relaxed">{{ permInfo.detail }}</p>
           </div>
 
-          <!-- Raw event data (signEvent only) -->
-          <div v-if="eventData && method === 'signEvent'" class="border-t border-border">
+          <!-- NIP-98 HTTP Auth display (kind 27235) -->
+          <div v-if="eventData && method === 'signEvent' && eventData.kind === 27235" class="border-t border-border px-4 py-3 space-y-1.5">
+            <p class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">{{ t('prompt.httpAuth') }}</p>
+            <div class="bg-surface-base rounded-lg p-2.5 border border-border space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-[9px] font-bold uppercase text-brand bg-brand/10 px-1.5 py-0.5 rounded">
+                  {{ eventData.tags?.find(t => t[0] === 'method')?.[1] || 'GET' }}
+                </span>
+                <span class="text-[10px] text-text-secondary font-mono truncate">
+                  {{ eventData.tags?.find(t => t[0] === 'u')?.[1] || '' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Raw event data (signEvent only, non-HTTP-auth) -->
+          <div v-else-if="eventData && method === 'signEvent'" class="border-t border-border">
             <button @click="showEventData = !showEventData"
               class="w-full flex items-center gap-2 px-4 py-2 text-[10px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
               <FileSignature class="w-3 h-3 shrink-0" />

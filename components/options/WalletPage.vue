@@ -7,6 +7,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWallet } from '../../composables/useWallet.js'
 import { useToast } from '../../composables/useToast.js'
+import CashuBackupSection from './CashuBackupSection.vue'
 import { formatSats } from '../../lib/utils.js'
 import BottomSheet from '../BottomSheet.vue'
 import QrScanner from '../QrScanner.vue'
@@ -17,7 +18,7 @@ import {
 
 const { t } = useI18n()
 const {
-  status, wallets, connecting, switching,
+  status, wallets, walletType, connecting, switching,
   loadStatus, loadWallets, connect, disconnect, switchWallet, rename,
 } = useWallet()
 const toast = useToast()
@@ -297,5 +298,8 @@ async function handleRefresh() {
         </button>
       </template>
     </BottomSheet>
+
+    <!-- Cashu backup section (only when Cashu wallet is active) -->
+    <CashuBackupSection v-if="walletType === 'cashu'" class="mt-8" />
   </div>
 </template>

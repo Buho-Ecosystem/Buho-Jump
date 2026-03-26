@@ -61,6 +61,14 @@ globalThis.chrome = {
   },
 }
 
+// ── Navigator mock (for useOnline) ──
+
+if (typeof globalThis.navigator === 'undefined') {
+  globalThis.navigator = { onLine: true }
+} else {
+  try { globalThis.navigator.onLine = true } catch { /* read-only in some envs */ }
+}
+
 /**
  * Reset storage between tests.
  */

@@ -9,8 +9,10 @@ import { useTheme } from '../../composables/useTheme.js'
 import { useToast } from '../../composables/useToast.js'
 import { useFiat, CURRENCIES } from '../../composables/useFiat.js'
 import { useLocale } from '../../composables/useLocale.js'
+import { useListKeyboard } from '../../composables/useListKeyboard.js'
+import { usePopupState } from '../../composables/usePopupState.js'
 import { truncateKey } from '../../lib/utils.js'
-import { nip19 } from 'nostr-core'
+import { nip19, nip21 } from 'nostr-core'
 import QRCode from 'qrcode'
 import LockScreen from '../../components/LockScreen.vue'
 import IdentityWizard from '../../components/IdentityWizard.vue'
@@ -48,14 +50,14 @@ import NotificationSettings from '../../components/NotificationSettings.vue'
 import OpenInBrowserButton from '../../components/OpenInBrowserButton.vue'
 import {
   Plus, ArrowLeft, Globe, Coins,
-  Copy, Check, Trash2, User, Zap, Sun, Moon, Palette,
-  Lock, ShieldCheck, ChevronDown, AlertTriangle, AtSign, ExternalLink,
-  Settings, X, Loader2, CheckCircle, Languages, Radio, Bell,
+  Copy, Check, Trash2, Zap, Sun, Moon,
+  Lock, ShieldCheck, ChevronDown, AlertTriangle,
+  Settings, Loader2, CheckCircle, Languages, Radio, Bell,
   QrCode, Maximize2, WifiOff,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const { locale, locales, switchLocale } = useLocale()
+const { locale, locales } = useLocale()
 
 // Catch rendering errors from child components
 onErrorCaptured((err) => {
@@ -65,33 +67,15 @@ onErrorCaptured((err) => {
 
 const activeTab = ref('wallet')
 const showLanguagePicker = ref(false)
-const showWizard = ref(false)
 const copied = ref(false)
 const dataLoaded = ref(false)
 const lockError = ref('')
 const lockBusy = ref(false)
 
-// Wallet sub-view state
-const walletView = ref('home')
-const walletViewBefore = ref('home')
-const showSendPanel = ref(false)
-const showReceivePanel = ref(false)
-const showWalletConnect = ref(false)
-
-// Chat sub-view state
-const chatView = ref('home') // 'home' | 'thread' | 'new' | 'group-thread' | 'group-create' | 'group-info'
-const chatPubkey = ref(null)
-const chatGroupKey = ref(null) // "groupId:relay" for group views
-const selectedTx = ref(null)
-
 // Delete confirmation state
 const confirmingDelete = ref(null)
 
-// Site detail view
-const selectedSite = ref(null)
-
 // Settings menu
-const showSettings = ref(false)
 const settingsRef = ref(null)
 
 // Loading states for async actions
@@ -100,9 +84,6 @@ const confirmSwitchId = ref(null) // account id pending switch confirmation
 const deletingAccount = ref(false)
 const revokingDomain = ref(null) // domain being revoked
 const confirmRevokeDomain = ref(null) // domain pending confirmation
-
-// Permissions popup
-const showPermissionsPopup = ref(false)
 
 // Pubkey format cycling: 0 = npub, 1 = hex, 2 = nprofile
 const pubkeyFormat = ref(0)
@@ -117,16 +98,19 @@ const formattedPubkey = computed(() => {
   if (pubkeyFormat.value === 2 && acct.pubkey) {
     try { return nip19.nprofileEncode({ pubkey: acct.pubkey, relays: [] }) } catch { return acct.npub || '' }
   }
+  if (pubkeyFormat.value === 3 && acct.npub) {
+    try { return nip21.encodeNostrURI(acct.npub) } catch { return acct.npub || '' }
+  }
   return acct.npub || ''
 })
 
 const pubkeyFormatLabel = computed(() => {
-  const labels = ['npub', 'hex', 'nprofile']
+  const labels = ['npub', 'hex', 'nprofile', 'nostr:']
   return labels[pubkeyFormat.value] || 'npub'
 })
 
 function cyclePubkeyFormat() {
-  pubkeyFormat.value = (pubkeyFormat.value + 1) % 3
+  pubkeyFormat.value = (pubkeyFormat.value + 1) % 4
 }
 
 async function togglePubkeyQr() {
@@ -148,7 +132,7 @@ const profileLoading = ref(false)
 
 const { locked, passwordSet, loading: lockLoading, autoLockCountdown, setup: setupPassword, unlock, lock, resetAutoLock } = useLock()
 const { accounts, activeAccount, nip46Status, load: loadAccounts, switchTo, remove, fetchProfile, loadNip46Status } = useAccounts()
-const { status: walletStatus, wallets: savedWallets, switching: walletSwitching, loadStatus: loadWallet, loadWallets, disconnect: disconnectWallet, switchWallet, rename: renameWallet } = useWallet()
+const { status: walletStatus, wallets: savedWallets, switching: walletSwitching, walletType, loadStatus: loadWallet, loadWallets, disconnect: disconnectWallet, switchWallet, rename: renameWallet, autoCreateWallet } = useWallet()
 const { policies: permissions, load: loadPermissions, revokeDomain } = usePermissions()
 const { currentTheme, currentMode, themes, themeIds, setTheme, toggleMode } = useTheme()
 const toast = useToast()
@@ -158,9 +142,38 @@ const { switchAccount: switchGroupAccount, unreadTotal: groupUnreadTotal } = use
 const { resetContacts } = useContacts()
 const { relayConfig, loadRelays } = useRelays()
 const { online } = useOnline()
+const {
+  showWizard,
+  showSettings,
+  showPermissionsPopup,
+  selectedSite,
+  showRelaySettings,
+  showNotificationSettings,
+  walletView,
+  showSendPanel,
+  showReceivePanel,
+  showWalletConnect,
+  selectedTx,
+  chatView,
+  chatPubkey,
+  chatGroupKey,
+  resetForTabSwitch,
+  resetForAccountSwitch,
+  showTxDetail,
+  closeTxDetail,
+  openChatThread,
+  closeChatThread,
+  openGroupThread,
+  closeGroupThread,
+} = usePopupState()
+const { highlightedIndex: currencyHighlight, onKeydown: onCurrencyKeydown, resetHighlight: resetCurrencyHighlight } = useListKeyboard({
+  itemCount: () => CURRENCIES.length,
+  onSelect: (i) => { setFiatCurrency(CURRENCIES[i].code); showCurrencyPicker.value = false; resetCurrencyHighlight() },
+})
+const needsBackup = ref(false)
+const profileBadges = ref([])
+const lastUnlockedAt = ref(0)
 const showCurrencyPicker = ref(false)
-const showRelaySettings = ref(false)
-const showNotificationSettings = ref(false)
 
 function toggleIdentity() {
   activeTab.value = activeTab.value === 'identity' ? 'wallet' : 'identity'
@@ -175,16 +188,7 @@ const totalRelayCount = computed(() => accountRelayCount.value + walletRelayCoun
 
 // Reset sub-views when switching tabs
 watch(activeTab, () => {
-  walletView.value = 'home'
-  selectedTx.value = null
-  selectedSite.value = null
-  showPermissionsPopup.value = false
-  showWalletConnect.value = false
-  chatView.value = 'home'
-  chatPubkey.value = null
-  chatGroupKey.value = null
-  showSendPanel.value = false
-  showReceivePanel.value = false
+  resetForTabSwitch()
 })
 
 // Fetch profile from relays when active account changes
@@ -207,22 +211,7 @@ watch(() => activeAccount.value?.pubkey, async (pubkey) => {
 // Reset all account-scoped state when active account changes
 watch(() => activeAccount.value?.pubkey, (newPubkey, oldPubkey) => {
   if (oldPubkey && newPubkey !== oldPubkey) {
-    // Close any open overlays — they show account-scoped data
-    showRelaySettings.value = false
-    showNotificationSettings.value = false
-    showPermissionsPopup.value = false
-    selectedSite.value = null
-
-    // Reset wallet sub-views (wallet is global but clear navigation state)
-    walletView.value = 'home'
-    selectedTx.value = null
-    showSendPanel.value = false
-    showReceivePanel.value = false
-
-    // Reset chat + group state & subscriptions
-    chatView.value = 'home'
-    chatPubkey.value = null
-    chatGroupKey.value = null
+    resetForAccountSwitch()
     resetContacts()
     switchChatAccount()
     switchGroupAccount()
@@ -379,9 +368,16 @@ async function handleRemoveWallet(walletId) {
   toast.info(t('toast.walletDisconnected'))
 }
 
-function onWizardComplete() {
+async function onWizardComplete() {
   showWizard.value = false
-  loadAccounts()
+  await loadAccounts()
+  // Auto-create Cashu wallet for new users (non-blocking on failure)
+  try {
+    await autoCreateWallet()
+    await Promise.all([loadWallet(), loadWallets()])
+  } catch (err) {
+    // Non-fatal — user can still add a wallet manually
+  }
   toast.success(t('toast.accountReady'))
 }
 
@@ -428,11 +424,27 @@ async function loadData() {
       .then(p => { profileData.value = p })
       .catch(() => { profileData.value = null })
       .finally(() => { profileLoading.value = false })
+    // Fetch profile badges (non-blocking)
+    import('../../lib/badges.js').then(({ fetchProfileBadges }) => {
+      chrome.runtime.sendMessage({ type: 'GET_RELAY_CONFIG' }).then(res => {
+        const relays = res?.result?.account || []
+        if (relays.length) {
+          fetchProfileBadges(activeAccount.value.pubkey, relays)
+            .then(b => { profileBadges.value = b })
+            .catch(() => {})
+        }
+      })
+    })
   }
   // Poll NIP-46 reconnection status for remote signer accounts
   if (activeAccount.value?.mode === 'nip46') {
     pollNip46Status()
   }
+  // Check if backup reminder is needed
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'CHECK_BACKUP_STATUS' })
+    needsBackup.value = res?.result?.needsBackup || false
+  } catch { needsBackup.value = false }
 }
 
 let nip46PollTimer = null
@@ -447,17 +459,6 @@ function pollNip46Status() {
       nip46PollTimer = null
     }
   }, 1500)
-}
-
-function showTxDetail(tx) {
-  walletViewBefore.value = walletView.value
-  selectedTx.value = tx
-  walletView.value = 'detail'
-}
-
-function closeTxDetail() {
-  walletView.value = walletViewBefore.value || 'home'
-  selectedTx.value = null
 }
 
 function handleLock() {
@@ -483,7 +484,14 @@ function onLanguageSelected() {
 
 // Load data when unlocked
 watch([locked, lockLoading], async ([isLocked, isLoading]) => {
-  if (!isLoading && !isLocked && !dataLoaded.value) {
+  if (isLoading) return
+  if (isLocked) {
+    // Fetch last-unlocked timestamp for lock screen display
+    try {
+      const data = await chrome.storage.local.get('_sessionFallback')
+      lastUnlockedAt.value = data._sessionFallback?.unlockedAt || 0
+    } catch { lastUnlockedAt.value = 0 }
+  } else if (!dataLoaded.value) {
     try {
       await loadData()
     } catch (err) {
@@ -558,6 +566,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         :is-setup="!passwordSet"
         :error="lockError"
         :loading="lockBusy"
+        :last-unlocked-at="lastUnlockedAt"
         @setup="handleSetup"
         @unlock="handleUnlock"
       />
@@ -572,6 +581,15 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         <span class="font-medium">{{ t('lock.autoLockWarning', { seconds: autoLockCountdown }) }}</span>
         <button @click="resetAutoLock" class="px-2 py-0.5 rounded-lg bg-warning/20 hover:bg-warning/30 font-semibold transition-all duration-200 text-[10px]">
           {{ t('lock.stayUnlocked') }}
+        </button>
+      </div>
+
+      <!-- Backup reminder banner -->
+      <div v-if="needsBackup"
+        class="flex items-center justify-between px-4 py-2 bg-warning/8 border-b border-warning/15 text-[11px] text-warning animate-fade-in">
+        <span class="font-medium">{{ t('lock.backupReminder') }}</span>
+        <button @click="needsBackup = false" class="p-0.5 rounded hover:bg-warning/15 transition-colors" :aria-label="t('common.close')">
+          <span class="text-xs">&times;</span>
         </button>
       </div>
 
@@ -684,7 +702,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                   :title="themes[id]?.label"
                 >
                   <span class="w-4 h-4 rounded-full border border-border/50"
-                    :style="{ background: themes[id]?.dark?.['brand-primary'] || '#888' }" />
+                    :style="{ background: themes[id]?.dark?.['brand-primary'] || 'var(--text-muted)' }" />
                 </button>
               </div>
             </div>
@@ -715,7 +733,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             <div class="px-4 pt-2.5 pb-1.5">
               <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.currency') }}</span>
             </div>
-            <button @click="showCurrencyPicker = !showCurrencyPicker"
+            <button @click="showCurrencyPicker = !showCurrencyPicker; resetCurrencyHighlight()"
               class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
               <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
                 <Coins class="w-3.5 h-3.5 text-text-muted" />
@@ -725,12 +743,18 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                 <span class="text-[9px] text-text-muted">{{ t('settings.currencyDesc') }}</span>
               </div>
             </button>
-            <div v-if="showCurrencyPicker" class="px-3 pb-2 max-h-40 overflow-y-auto">
+            <div v-if="showCurrencyPicker" class="px-3 pb-2 max-h-40 overflow-y-auto" role="listbox" @keydown="onCurrencyKeydown" tabindex="0">
               <div class="space-y-0.5">
-                <button v-for="cur in CURRENCIES" :key="cur.code"
+                <button v-for="(cur, idx) in CURRENCIES" :key="cur.code"
                   @click="setFiatCurrency(cur.code); showCurrencyPicker = false"
+                  role="option"
+                  :aria-selected="fiatCurrency === cur.code"
+                  :data-list-active="idx === currencyHighlight ? 'true' : undefined"
                   class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all duration-200 text-left"
-                  :class="fiatCurrency === cur.code ? 'bg-brand/8' : 'hover:bg-surface-elevated'">
+                  :class="[
+                    fiatCurrency === cur.code ? 'bg-brand/8' : 'hover:bg-surface-elevated',
+                    idx === currencyHighlight ? 'ring-2 ring-brand/40' : '',
+                  ]">
                   <div class="flex items-center gap-2">
                     <span class="text-xs font-mono w-5 text-center">{{ cur.symbol }}</span>
                     <span class="text-xs" :class="fiatCurrency === cur.code ? 'font-semibold text-brand' : 'text-text-secondary'">
@@ -984,6 +1008,16 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                   </div>
                   <div v-if="profileLoading && !profileData" class="skeleton-shimmer h-4 w-24 rounded-full" />
                 </div>
+
+                <!-- Profile badges (NIP-58) -->
+                <div v-if="profileBadges.length > 0" class="flex items-center gap-1.5 flex-wrap">
+                  <div v-for="badge in profileBadges" :key="badge.name"
+                    class="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full bg-brand/6 text-brand border border-brand/12 font-medium"
+                    :title="badge.description || badge.name">
+                    <img v-if="badge.thumbUrl" :src="badge.thumbUrl" alt="" class="w-3 h-3 rounded-sm object-cover" />
+                    <span class="truncate max-w-[100px]">{{ badge.name }}</span>
+                  </div>
+                </div>
               </div>
 
               <!-- Connected sites button -->
@@ -1194,8 +1228,8 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             :class="chatView === 'thread' || chatView === 'group-thread' ? '' : ''">
             <ChatHome
               v-if="chatView === 'home'"
-              @open="(pk) => { chatPubkey = pk; chatView = 'thread' }"
-              @open-group="(gk) => { chatGroupKey = gk; chatView = 'group-thread' }"
+              @open="openChatThread"
+              @open-group="openGroupThread"
               @new-chat="chatView = 'new'"
               @new-group="chatView = 'group-create'"
               class="flex-1 min-h-0 pt-2"
@@ -1204,20 +1238,20 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             <ChatThread
               v-else-if="chatView === 'thread' && chatPubkey"
               :pubkey="chatPubkey"
-              @back="chatView = 'home'; chatPubkey = null"
+              @back="closeChatThread"
               class="flex-1 min-h-0"
             />
 
             <ContactPicker
               v-else-if="chatView === 'new'"
               @back="chatView = 'home'"
-              @open="(pk) => { chatPubkey = pk; chatView = 'thread' }"
+              @open="openChatThread"
             />
 
             <GroupThread
               v-else-if="chatView === 'group-thread' && chatGroupKey"
               :group-key="chatGroupKey"
-              @back="chatView = 'home'; chatGroupKey = null"
+              @back="closeGroupThread"
               @info="chatView = 'group-info'"
               class="flex-1 min-h-0"
             />
@@ -1225,7 +1259,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             <GroupCreate
               v-else-if="chatView === 'group-create'"
               @back="chatView = 'home'"
-              @joined="(gk) => { chatGroupKey = gk; chatView = 'group-thread' }"
+              @joined="openGroupThread"
             />
 
             <GroupInfo
