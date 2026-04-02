@@ -45,7 +45,13 @@ import {
   getActiveWallet, getWalletSummaries,
   addWallet, removeWallet, setActiveWallet, renameWallet,
   reEncryptWallets, clearAllWallets, addCashuWallet, updateCashuMints,
+  addLnbitsWallet,
 } from '../lib/wallet.js'
+import {
+  lnbitsConnect, lnbitsGetBalance, lnbitsMakeInvoice,
+  lnbitsPayInvoice, lnbitsCheckPayment, lnbitsListPayments,
+  createLnbitsWs,
+} from '../lib/lnbits.js'
 import {
   getCashuBalance, getAllProofs as getCashuProofs, addProofs as addCashuProofs, clearProofStore,
   reEncryptProofStore, readProofStore,
@@ -86,6 +92,7 @@ import { createRequestCoordinator, PROMPT_EVENT_PREFIX } from '../lib/background
 // ── In-memory state ──────────────────────────────────────────────
 let nwcClient = null
 let nwcNotifUnsub = null // NIP-47 notification subscription cleanup
+let lnbitsWsHandle = null // LNbits WebSocket handle (from createLnbitsWs)
 let remoteSigner = null
 let _cachedPassword = null // In-memory cache of session password
 let rejectedOrigins = new Set() // Anti-spam: tracks rejected origins
@@ -379,6 +386,26 @@ function teardownNwc() {
   if (nwcClient) { try { nwcClient.close() } catch (e) { log.debug('cleanup', 'nwc-close', { err: e?.message }) } nwcClient = null }
 }
 
+// ── LNbits WebSocket lifecycle ───────────────────────────────────
+
+function teardownLnbitsWs() {
+  if (lnbitsWsHandle) { lnbitsWsHandle.close(); lnbitsWsHandle = null }
+}
+
+/**
+ * Connect LNbits WebSocket for real-time payment notifications.
+ * Delegates connection management (reconnect, backoff) to lib/lnbits.js.
+ */
+function connectLnbitsWs(wallet) {
+  teardownLnbitsWs()
+  if (!wallet?.apiUrl || !wallet?.lnbitsWalletId) return
+  lnbitsWsHandle = createLnbitsWs(
+    wallet,
+    (amountSats, hash) => notifyPayment(amountSats, hash),
+    { log: (level, ...args) => log[level]?.(...args) },
+  )
+}
+
 // ── Unified wallet router (NWC or Cashu) ────────────────────────
 
 async function getActiveWalletType() {
@@ -426,6 +453,9 @@ function getCashuMint(wallet) {
 async function walletPayInvoice(invoice, amountSats) {
   const wallet = await getActiveWallet(_cachedPassword)
   if (!wallet) throw new Error('No wallet connected')
+  if (wallet.type === 'lnbits') {
+    return await lnbitsPayInvoice(wallet.apiUrl, wallet.adminKey, invoice)
+  }
   if (wallet.type === 'cashu') {
     const mintUrl = getCashuMint(wallet)
     const amount = amountSats || 0
@@ -460,6 +490,9 @@ async function walletPayInvoice(invoice, amountSats) {
 async function walletMakeInvoice(amountSats, description) {
   const wallet = await getActiveWallet(_cachedPassword)
   if (!wallet) throw new Error('No wallet connected')
+  if (wallet.type === 'lnbits') {
+    return await lnbitsMakeInvoice(wallet.apiUrl, wallet.adminKey, amountSats, description)
+  }
   if (wallet.type === 'cashu') {
     const mintUrl = getCashuMint(wallet)
     const q = await createMintQuote(mintUrl, amountSats)
@@ -473,6 +506,7 @@ async function walletGetBalance() {
   const wallet = await getActiveWallet(_cachedPassword)
   if (!wallet) return 0
   if (wallet.type === 'cashu') return await getCashuBalance(wallet.id, _cachedPassword)
+  if (wallet.type === 'lnbits') return await lnbitsGetBalance(wallet.apiUrl, wallet.adminKey)
   const nwc = await ensureNWC()
   return Math.floor((await nwc.getBalance()).balance / 1000)
 }
@@ -1132,10 +1166,22 @@ export default defineBackground(() => {
             try { await ensureNWC(); return { result: { connected: true } } }
             catch (err) { return { error: classifyError(err) } }
           }
+          case 'CONNECT_LNBITS': {
+            const [apiUrl, adminKey, walletName] = params || []
+            try {
+              const info = await lnbitsConnect(apiUrl, adminKey)
+              await addLnbitsWallet(apiUrl, adminKey, info.id, walletName || info.name, _cachedPassword)
+              // Start WebSocket for real-time notifications
+              const w = await getActiveWallet(_cachedPassword)
+              if (w?.type === 'lnbits') connectLnbitsWs(w)
+              return { result: { connected: true, balance: info.balance, name: info.name } }
+            } catch (err) { return { error: classifyError(err) } }
+          }
           case 'DISCONNECT_WALLET': {
             const [walletId] = params || []
             teardownNwc()
             teardownCashu()
+            teardownLnbitsWs()
             if (walletId) {
               // Clean up Cashu proof store if it was a Cashu wallet
               const store = await getWalletSummaries(_cachedPassword)
@@ -1166,6 +1212,15 @@ export default defineBackground(() => {
                   activeWallet: { id: wallet.id, name: wallet.name, type: 'cashu' },
                 } }
               }
+              if (wallet?.type === 'lnbits') {
+                if (!lnbitsWsHandle) connectLnbitsWs(wallet) // Reconnect WS if needed
+                const balance = await lnbitsGetBalance(wallet.apiUrl, wallet.adminKey)
+                return { result: {
+                  connected: true,
+                  balance,
+                  activeWallet: { id: wallet.id, name: wallet.name, type: 'lnbits' },
+                } }
+              }
               if (wallet?.connectionUri) {
                 const nwc = await ensureNWC()
                 const bal = await nwc.getBalance()
@@ -1186,8 +1241,11 @@ export default defineBackground(() => {
             const [switchId] = params || []
             teardownNwc()
             teardownCashu()
+            teardownLnbitsWs()
             await setActiveWallet(switchId, _cachedPassword)
             try {
+              const w = await getActiveWallet(_cachedPassword)
+              if (w?.type === 'lnbits') connectLnbitsWs(w)
               const balance = await walletGetBalance()
               return { result: { connected: true, balance } }
             } catch (err) { return { error: classifyError(err) } }
@@ -1203,6 +1261,10 @@ export default defineBackground(() => {
               const w = await getActiveWallet(_cachedPassword)
               return { result: { alias: w.name, methods: ['pay_invoice', 'make_invoice', 'get_balance'] } }
             }
+            if (wType === 'lnbits') {
+              const w = await getActiveWallet(_cachedPassword)
+              return { result: { alias: w.name, methods: ['pay_invoice', 'make_invoice', 'get_balance', 'list_transactions'] } }
+            }
             const nwc = await ensureNWC()
             const info = await nwc.getInfo()
             return { result: info }
@@ -1213,7 +1275,7 @@ export default defineBackground(() => {
           }
           case 'WALLET_GET_BUDGET': {
             const wType = await getActiveWalletType()
-            if (wType === 'cashu') return { result: null } // no budget concept
+            if (wType === 'cashu' || wType === 'lnbits') return { result: null }
             const nwc = await ensureNWC()
             const budget = await nwc.getBudget()
             return { result: budget }
@@ -1235,6 +1297,10 @@ export default defineBackground(() => {
               const w = await getActiveWallet(_cachedPassword)
               return { result: await checkMintQuote(getCashuMint(w), lookupParams.quoteId) }
             }
+            if (wType === 'lnbits' && lookupParams?.payment_hash) {
+              const w = await getActiveWallet(_cachedPassword)
+              return { result: await lnbitsCheckPayment(w.apiUrl, w.adminKey, lookupParams.payment_hash) }
+            }
             const nwc = await ensureNWC()
             const inv = await nwc.lookupInvoice(lookupParams)
             return { result: inv }
@@ -1245,6 +1311,23 @@ export default defineBackground(() => {
             if (wType === 'cashu') {
               const w = await getActiveWallet(_cachedPassword)
               return { result: await getCashuTransactions(w.id, txParams || {}) }
+            }
+            if (wType === 'lnbits') {
+              const w = await getActiveWallet(_cachedPassword)
+              const raw = await lnbitsListPayments(w.apiUrl, w.adminKey, txParams || {})
+              // Normalise to NWC-compatible format (amounts in msats, wrapped in { transactions })
+              const txs = (raw || []).map(p => ({
+                type: p.amount > 0 ? 'incoming' : 'outgoing',
+                invoice: p.bolt11,
+                description: p.memo || '',
+                amount: Math.abs(p.amount),  // already msats from LNbits
+                fees_paid: p.fee || 0,
+                created_at: p.time,
+                settled_at: p.status === 'success' ? p.time : undefined,
+                payment_hash: p.checking_id || p.payment_hash,
+                state: p.status === 'success' ? 'settled' : (p.status === 'failed' ? 'failed' : 'pending'),
+              }))
+              return { result: { transactions: txs } }
             }
             const nwc = await ensureNWC()
             const txs = await nwc.listTransactions(txParams || {})

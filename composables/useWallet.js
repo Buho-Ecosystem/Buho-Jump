@@ -125,6 +125,19 @@ export function useWallet() {
     return await send('SEND_ZAP', { recipientPubkey, amountSats, lightningAddress, content })
   }
 
+  // ── LNbits-specific methods ─────────────────────────────────────
+
+  async function connectLnbits(apiUrl, adminKey, name) {
+    connecting.value = true
+    try {
+      const res = await send('CONNECT_LNBITS', apiUrl, adminKey, name)
+      await Promise.all([loadStatus(), loadWallets()])
+      return res
+    } finally {
+      connecting.value = false
+    }
+  }
+
   // ── Cashu-specific methods ─────────────────────────────────────
 
   async function autoCreateWallet() {
@@ -189,6 +202,8 @@ export function useWallet() {
     payKeysend,
     signMessage,
     sendZap,
+    // LNbits-specific
+    connectLnbits,
     // Cashu-specific
     autoCreateWallet,
     redeemToken,

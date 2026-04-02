@@ -24,7 +24,7 @@ import {
 } from 'lucide-vue-next'
 
 const emit = defineEmits(['back', 'done'])
-const { makeInvoice, walletType, checkMintQuote, mintTokens, getBalance, wallets, redeemToken } = useWallet()
+const { makeInvoice, walletType, checkMintQuote, mintTokens, getBalance, wallets, redeemToken, lookupInvoice } = useWallet()
 const toast = useToast()
 const { toFiat, fiatToSats, currency, loadRate } = useFiat()
 
@@ -58,6 +58,10 @@ const tokenDetected = computed(() => {
 loadRate()
 
 const isCashu = computed(() => walletType.value === 'cashu')
+const isLnbits = computed(() => walletType.value === 'lnbits')
+
+// LNbits payment hash for polling
+const paymentHash = ref('')
 
 const effectiveSats = computed(() => parseInt(amountSats.value) || 0)
 
@@ -102,14 +106,19 @@ async function createInvoice() {
   error.value = ''
   try {
     const result = await makeInvoice(effectiveSats.value, memo.value.trim())
-    invoice.value = result?.invoice || ''
+    invoice.value = result?.invoice || result?.payment_request || ''
     quoteId.value = result?.quoteId || ''
+    paymentHash.value = result?.payment_hash || result?.checking_id || ''
     if (!invoice.value) throw new Error('No invoice returned')
     step.value = 'invoice'
     generateQR()
     // Start polling for Cashu wallets
     if (quoteId.value && isCashu.value) {
       startQuotePoll()
+    }
+    // Start polling for LNbits wallets
+    if (paymentHash.value && isLnbits.value) {
+      startLnbitsPoll()
     }
   } catch (err) {
     error.value = err.message || 'Failed to create invoice'
@@ -140,6 +149,25 @@ function startQuotePoll() {
       }
     } catch { /* keep polling */ }
   }, QUOTE_POLL_MS)
+}
+
+function startLnbitsPoll() {
+  polling.value = true
+  const POLL_MS = 3000
+  pollTimer = setInterval(async () => {
+    try {
+      const status = await lookupInvoice({ payment_hash: paymentHash.value })
+      if (status?.paid) {
+        clearInterval(pollTimer)
+        pollTimer = null
+        mintedAmount.value = effectiveSats.value
+        polling.value = false
+        step.value = 'success'
+        await getBalance()
+        toast.success(t('wallet.receivedSats', { amount: formatSats(mintedAmount.value) }))
+      }
+    } catch { /* keep polling */ }
+  }, POLL_MS)
 }
 
 async function redeemEcashToken() {
@@ -199,6 +227,7 @@ function reset() {
   qrDataUrl.value = ''
   error.value = ''
   quoteId.value = ''
+  paymentHash.value = ''
   polling.value = false
   mintedAmount.value = 0
   tokenInput.value = ''

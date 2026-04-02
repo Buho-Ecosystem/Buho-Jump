@@ -13,6 +13,12 @@ import {
 } from 'lucide-vue-next'
 import BottomSheet from '../BottomSheet.vue'
 
+const WALLET_LOGOS = {
+  nwc: '/nwc/nwc-logo.svg',
+  cashu: '/cashu/cashuu.png',
+  lnbits: '/lnbits/lnbits.svg',
+}
+
 const props = defineProps({
   wallets: { type: Array, default: () => [] },
   balance: { type: Number, default: null },
@@ -90,7 +96,12 @@ function handleAdd() {
       class="flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all duration-200 max-w-[140px]"
       :class="open ? 'bg-surface-elevated' : 'hover:bg-surface-elevated/50'"
     >
-      <Wallet class="w-3 h-3 shrink-0" :class="connected ? 'text-brand' : 'text-text-muted'" />
+      <img v-if="activeWallet && WALLET_LOGOS[activeWallet.type]"
+        :src="WALLET_LOGOS[activeWallet.type]"
+        :alt="activeWallet.type"
+        class="w-4 h-4 shrink-0 rounded-sm object-contain"
+      />
+      <Wallet v-else class="w-3 h-3 shrink-0" :class="connected ? 'text-brand' : 'text-text-muted'" />
 
       <template v-if="connected && activeWallet">
         <span class="text-[11px] font-semibold truncate">{{ activeWallet.name }}</span>
@@ -116,8 +127,13 @@ function handleAdd() {
           <!-- Active wallet -->
           <div v-if="activeWallet"
             class="flex items-center gap-3 px-3 py-3 rounded-2xl bg-brand/5 border border-brand/15">
-            <div class="w-9 h-9 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">
-              <Zap class="w-4 h-4 text-brand" />
+            <div class="w-9 h-9 rounded-xl bg-brand/10 flex items-center justify-center shrink-0 overflow-hidden">
+              <img v-if="WALLET_LOGOS[activeWallet.type]"
+                :src="WALLET_LOGOS[activeWallet.type]"
+                :alt="activeWallet.type"
+                class="w-5 h-5 object-contain"
+              />
+              <Zap v-else class="w-4 h-4 text-brand" />
             </div>
             <div class="flex-1 min-w-0">
               <!-- Rename mode -->
@@ -180,8 +196,13 @@ function handleAdd() {
               :disabled="switching"
               class="w-full flex items-center gap-3 px-3 py-3 rounded-2xl hover:bg-surface-elevated transition-all duration-200 text-left group disabled:opacity-50"
             >
-              <div class="w-9 h-9 rounded-xl bg-surface-elevated flex items-center justify-center shrink-0">
+              <div class="w-9 h-9 rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 overflow-hidden">
                 <Loader2 v-if="switching" class="w-4 h-4 text-text-muted animate-spin" />
+                <img v-else-if="WALLET_LOGOS[w.type]"
+                  :src="WALLET_LOGOS[w.type]"
+                  :alt="w.type"
+                  class="w-5 h-5 object-contain"
+                />
                 <Wallet v-else class="w-4 h-4 text-text-muted" />
               </div>
               <span class="flex-1 text-xs font-medium text-text-secondary truncate">{{ w.name }}</span>
