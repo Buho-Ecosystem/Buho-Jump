@@ -277,35 +277,46 @@ function relayHostname(url) {
       {{ t('relay.resetDefaults') }}
     </button>
 
-    <!-- NIP-65 section (account tab + local accounts only) -->
-    <div v-if="activePool === 'account'" class="space-y-2 pt-1 border-t border-border">
-      <div class="px-1">
-        <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">{{ t('relay.nip65Title') }}</p>
-        <p class="text-[9px] text-text-muted mt-0.5">{{ t('relay.nip65Desc') }}</p>
+    <!-- NIP-65 section (account tab only) -->
+    <div v-if="activePool === 'account'" class="bg-surface-card rounded-2xl border border-border p-3.5 space-y-3">
+      <div>
+        <p class="text-xs font-semibold">{{ t('relay.nip65Title') }}</p>
+        <p class="text-[10px] text-text-muted mt-0.5 leading-relaxed">{{ t('relay.nip65Desc') }}</p>
       </div>
 
       <div v-if="isLocalAccount" class="grid grid-cols-2 gap-2">
         <button
           @click="handlePublish"
           :disabled="publishing"
-          class="flex items-center justify-center gap-1.5 py-2 text-xs rounded-2xl bg-surface-card border border-border hover:border-brand/30 transition-all duration-200 font-medium disabled:opacity-50"
+          class="flex flex-col items-center gap-2 py-3 rounded-xl bg-surface-elevated hover:bg-brand/5 border border-transparent hover:border-brand/20 transition-all duration-200 disabled:opacity-50"
         >
-          <Loader2 v-if="publishing" class="w-3 h-3 animate-spin text-brand" />
-          <Upload v-else class="w-3 h-3 text-text-muted" />
-          {{ publishing ? t('relay.publishing') : t('relay.publishList') }}
+          <div class="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
+            <Loader2 v-if="publishing" class="w-4 h-4 animate-spin text-brand" />
+            <Upload v-else class="w-4 h-4 text-brand" />
+          </div>
+          <span class="text-[11px] font-semibold text-text-secondary">
+            {{ publishing ? t('relay.publishing') : t('relay.publishList') }}
+          </span>
         </button>
         <button
           @click="handleFetch"
           :disabled="fetching"
-          class="flex items-center justify-center gap-1.5 py-2 text-xs rounded-2xl bg-surface-card border border-border hover:border-brand/30 transition-all duration-200 font-medium disabled:opacity-50"
+          class="flex flex-col items-center gap-2 py-3 rounded-xl bg-surface-elevated hover:bg-brand/5 border border-transparent hover:border-brand/20 transition-all duration-200 disabled:opacity-50"
         >
-          <Loader2 v-if="fetching" class="w-3 h-3 animate-spin text-brand" />
-          <Download v-else class="w-3 h-3 text-text-muted" />
-          {{ fetching ? t('relay.fetching') : t('relay.fetchList') }}
+          <div class="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
+            <Loader2 v-if="fetching" class="w-4 h-4 animate-spin text-brand" />
+            <Download v-else class="w-4 h-4 text-brand" />
+          </div>
+          <span class="text-[11px] font-semibold text-text-secondary">
+            {{ fetching ? t('relay.fetching') : t('relay.fetchList') }}
+          </span>
         </button>
       </div>
 
-      <p v-else class="text-[10px] text-text-muted px-1 italic">{{ t('relay.nip65LocalOnly') }}</p>
+      <div v-else class="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-elevated text-[11px] text-text-muted">
+        <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
+        <span>{{ t('relay.nip65LocalOnly') }}</span>
+      </div>
     </div>
 
     <!-- Remove confirmation (bottom sheet) -->

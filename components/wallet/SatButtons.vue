@@ -13,7 +13,7 @@
 import { computed } from 'vue'
 import { formatSats } from '../../lib/utils.js'
 
-const PRESETS = [1000, 5000, 10000, 21000, 50000, 100000]
+const PRESETS = [1000, 5000, 10000, 21000, 50000]
 
 const props = defineProps({
   /** Currently active sats amount (string, to match input v-model) */

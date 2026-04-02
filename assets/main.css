@@ -115,6 +115,25 @@ body {
   overflow: hidden;
 }
 
+/* Detached window / full-tab mode — fill available space, centered */
+.popup-container.detached {
+  width: 100%;
+  max-width: 420px;
+  min-height: 100vh;
+  max-height: none;
+  margin: 0 auto;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.08);
+}
+
+/* When viewport is wider, add subtle card appearance */
+@media (min-width: 500px) {
+  .popup-container.detached {
+    min-height: 100vh;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+}
+
 /* Bottom tab bar */
 .bottom-tabs {
   display: flex;

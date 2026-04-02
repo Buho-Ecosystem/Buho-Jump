@@ -12,9 +12,16 @@ const readerId = 'qr-reader-' + Math.random().toString(36).slice(2, 8)
 const scanning = ref(false)
 const error = ref('')
 const cameraUnavailable = ref(false)
+// Extension popups cannot access getUserMedia — skip camera entirely
+const isExtensionPopup = typeof chrome !== 'undefined' && !!chrome.runtime?.id
 let scanner = null
 
 async function startScanning() {
+  if (isExtensionPopup) {
+    cameraUnavailable.value = true
+    return
+  }
+
   error.value = ''
 
   try {
@@ -111,14 +118,24 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Fallback: file upload (shown when camera unavailable, or always as alternative) -->
+    <!-- File upload (primary when camera unavailable, alternative otherwise) -->
     <label
-      class="flex flex-col items-center gap-2 p-4 rounded-3xl border border-dashed border-border hover:border-brand cursor-pointer transition-all duration-200"
-      :class="cameraUnavailable ? 'bg-surface-card' : ''">
-      <Upload class="w-5 h-5 text-text-muted" />
-      <span class="text-xs text-text-muted">
-        {{ cameraUnavailable ? t('qr.uploadImage') : t('qr.orUpload') }}
-      </span>
+      class="flex flex-col items-center gap-2.5 rounded-3xl border border-dashed cursor-pointer transition-all duration-200"
+      :class="cameraUnavailable
+        ? 'p-6 bg-surface-card border-brand/30 hover:border-brand hover:bg-brand/5'
+        : 'p-4 border-border hover:border-brand'">
+      <div v-if="cameraUnavailable" class="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
+        <Upload class="w-5 h-5 text-brand" />
+      </div>
+      <Upload v-else class="w-5 h-5 text-text-muted" />
+      <div class="text-center">
+        <span class="text-xs font-medium" :class="cameraUnavailable ? 'text-text-primary' : 'text-text-muted'">
+          {{ cameraUnavailable ? t('qr.uploadImage') : t('qr.orUpload') }}
+        </span>
+        <p v-if="cameraUnavailable && isExtensionPopup" class="text-[10px] text-text-muted mt-1">
+          {{ t('qr.extensionHint') }}
+        </p>
+      </div>
       <input type="file" accept="image/*" class="hidden" @change="handleFileUpload" />
     </label>
 

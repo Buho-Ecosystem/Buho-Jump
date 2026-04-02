@@ -1,29 +1,12 @@
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLocale } from '../composables/useLocale.js'
-import { useListKeyboard } from '../composables/useListKeyboard.js'
-import { Eye, EyeOff, AlertTriangle, ShieldCheck, ChevronDown, Globe } from 'lucide-vue-next'
+import { Eye, EyeOff, AlertTriangle, Check, Globe, X } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { locale, locales, switchLocale } = useLocale()
-const showLangDropdown = ref(false)
-const langDropdownRef = ref(null)
-
-const { highlightedIndex: langHighlight, onKeydown: onLangKeydown, resetHighlight: resetLangHighlight } = useListKeyboard({
-  itemCount: () => locales.length,
-  onSelect: (i) => { pickLang(locales[i].code); resetLangHighlight() },
-})
-
-const currentLangNative = computed(() => {
-  const found = locales.find(l => l.code === locale.value)
-  return found?.native || 'English'
-})
-
-async function pickLang(code) {
-  await switchLocale(code)
-  showLangDropdown.value = false
-}
+const showLangGrid = ref(false)
 
 const emit = defineEmits(['unlock', 'setup'])
 const props = defineProps({
@@ -38,6 +21,15 @@ const lastUnlockedLabel = computed(() => {
   const d = new Date(props.lastUnlockedAt)
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 })
+
+const currentLangNative = computed(() => {
+  const found = locales.find(l => l.code === locale.value)
+  return found?.native || 'English'
+})
+
+function pickLang(code) {
+  switchLocale(code)
+}
 
 const password = ref('')
 const confirmPassword = ref('')
@@ -98,19 +90,8 @@ function handleKeydown(e) {
   if (e.key === 'Enter' && canSubmit.value) submit()
 }
 
-function onClickOutsideLang(e) {
-  if (showLangDropdown.value && langDropdownRef.value && !langDropdownRef.value.contains(e.target)) {
-    showLangDropdown.value = false
-  }
-}
-
 onMounted(() => {
   nextTick(() => passwordInput.value?.focus())
-  document.addEventListener('click', onClickOutsideLang, true)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', onClickOutsideLang, true)
 })
 </script>
 
@@ -119,48 +100,7 @@ onUnmounted(() => {
 
     <!-- Icon + branding area -->
     <div class="animate-scale-in mb-6">
-      <div class="relative">
-        <img src="/logo/logo.svg" alt="Buho Jump" class="w-12 h-12" />
-        <div v-if="isSetup" class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-surface-base flex items-center justify-center">
-          <ShieldCheck class="w-3.5 h-3.5 text-success" />
-        </div>
-      </div>
-    </div>
-
-    <!-- Language selector (setup only) -->
-    <div v-if="isSetup" class="relative mb-4 animate-fade-in-up" ref="langDropdownRef">
-      <button
-        @click.stop="showLangDropdown = !showLangDropdown"
-        class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl border border-border hover:border-brand/40 transition-all duration-200 text-xs text-text-secondary"
-      >
-        <Globe class="w-3 h-3 text-text-muted" />
-        <span class="font-medium">{{ currentLangNative }}</span>
-        <ChevronDown class="w-3 h-3 text-text-muted transition-transform" :class="showLangDropdown ? 'rotate-180' : ''" />
-      </button>
-      <div
-        v-if="showLangDropdown"
-        class="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-44 max-h-52 overflow-y-auto bg-surface-card rounded-3xl border border-border shadow-lg z-50 py-1 animate-scale-in origin-top"
-        role="listbox"
-        @keydown="onLangKeydown"
-        tabindex="0"
-      >
-        <button
-          v-for="(lang, idx) in locales"
-          :key="lang.code"
-          @click="pickLang(lang.code)"
-          role="option"
-          :aria-selected="locale === lang.code"
-          :data-list-active="idx === langHighlight ? 'true' : undefined"
-          class="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-surface-elevated transition-all duration-200 text-left"
-          :class="[
-            locale === lang.code ? 'text-brand font-semibold' : 'text-text-secondary',
-            idx === langHighlight ? 'ring-2 ring-brand/40' : '',
-          ]"
-        >
-          <span>{{ lang.native }}</span>
-          <span v-if="locale === lang.code" class="w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
-        </button>
-      </div>
+      <img src="/logo/logo.svg" alt="Buho Jump" class="w-12 h-12" />
     </div>
 
     <!-- Title -->
@@ -251,5 +191,46 @@ onUnmounted(() => {
         {{ loading ? t('common.working') : isSetup ? t('lock.setPassword') : t('lock.unlock') }}
       </button>
     </div>
+
+    <!-- Language trigger (setup only) -->
+    <button v-if="isSetup"
+      @click="showLangGrid = true"
+      class="mt-6 flex items-center justify-center gap-2 py-2 text-xs text-text-muted hover:text-text-secondary transition-all duration-200 animate-fade-in-up stagger-3"
+    >
+      <Globe class="w-3.5 h-3.5" />
+      <span class="font-medium">{{ currentLangNative }}</span>
+    </button>
+
+    <!-- Language bottom sheet -->
+    <Teleport to="body">
+      <div v-if="showLangGrid" class="fixed inset-0 z-[100] flex items-end justify-center">
+        <div class="absolute inset-0 bg-black/40" @click="showLangGrid = false" />
+        <div class="relative w-full max-w-[360px] max-h-[65vh] bg-surface-card rounded-t-3xl border border-border shadow-2xl animate-fade-in-up overflow-hidden flex flex-col">
+          <div class="flex items-center justify-between px-5 pt-4 pb-2 border-b border-border">
+            <h3 class="text-sm font-bold">{{ t('settings.language') }}</h3>
+            <button @click="showLangGrid = false"
+              class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200">
+              <X class="w-4 h-4 text-text-muted" />
+            </button>
+          </div>
+          <div class="flex-1 overflow-y-auto p-2">
+            <div class="grid grid-cols-2 gap-1">
+              <button
+                v-for="lang in locales"
+                :key="lang.code"
+                @click="pickLang(lang.code); showLangGrid = false"
+                class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all duration-200"
+                :class="locale === lang.code
+                  ? 'bg-brand/10 text-brand font-semibold border border-brand/20'
+                  : 'text-text-secondary hover:bg-surface-elevated border border-transparent'"
+              >
+                <span>{{ lang.native }}</span>
+                <Check v-if="locale === lang.code" class="w-3 h-3 text-brand shrink-0" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

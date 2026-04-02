@@ -53,7 +53,7 @@ import {
   Copy, Check, Trash2, Zap, Sun, Moon,
   Lock, ShieldCheck, ChevronDown, AlertTriangle,
   Settings, Loader2, CheckCircle, Languages, Radio, Bell,
-  QrCode, Maximize2, WifiOff,
+  QrCode, PictureInPicture2, WifiOff, KeyRound, ShieldAlert,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -290,12 +290,21 @@ async function confirmSwitch() {
   }
 }
 
+const deletingAccountObj = computed(() =>
+  accounts.value.find(a => a.id === confirmingDelete.value)
+)
+
 function requestDelete(accId) {
   confirmingDelete.value = accId
 }
 
 function cancelDelete() {
   confirmingDelete.value = null
+}
+
+function openBackupPage() {
+  const url = chrome.runtime.getURL('options.html?page=account')
+  chrome.tabs.create({ url })
 }
 
 async function confirmDelete() {
@@ -466,9 +475,23 @@ function handleLock() {
   lock()
 }
 
+const isDetached = ref(window.location.search.includes('detached=1')
+  || window.innerWidth > 420)
+
 function openFullPage() {
-  const url = chrome.runtime.getURL('popup.html')
-  chrome.tabs.create({ url })
+  const url = chrome.runtime.getURL('popup.html?detached=1')
+  if (chrome.windows?.create) {
+    chrome.windows.create({
+      url,
+      type: 'popup',
+      width: 400,
+      height: 640,
+      focused: true,
+    })
+  } else {
+    // Firefox fallback
+    chrome.tabs.create({ url })
+  }
   window.close()
 }
 
@@ -480,6 +503,11 @@ else if (targetTab === 'wallet') activeTab.value = 'wallet'
 
 function onLanguageSelected() {
   showLanguagePicker.value = false
+}
+
+function openOptionsPage() {
+  chrome.tabs.create({ url: chrome.runtime.getURL('options.html') })
+  showSettings.value = false
 }
 
 // Load data when unlocked
@@ -503,7 +531,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 </script>
 
 <template>
-  <div class="popup-container bg-surface-base text-text-primary">
+  <div :class="['popup-container bg-surface-base text-text-primary', { detached: isDetached }]">
     <ToastContainer />
 
     <!-- Offline banner -->
@@ -515,7 +543,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
     <!-- Loading state -->
     <div v-if="lockLoading" class="flex-1 flex items-center justify-center">
       <div class="text-center space-y-3 animate-fade-in">
-        <Zap class="w-8 h-8 text-brand mx-auto animate-pulse" />
+        <img src="/logo/logo.svg" alt="Buho Jump" class="w-8 h-8 mx-auto animate-pulse" />
         <p class="text-xs text-text-muted">{{ t('common.loading') }}</p>
       </div>
     </div>
@@ -524,7 +552,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
     <template v-else-if="locked || !passwordSet">
       <header class="flex items-center justify-between px-4 py-3 border-b border-border">
         <div class="flex items-center gap-2">
-          <Zap class="w-5 h-5 text-brand" />
+          <img src="/logo/logo.svg" alt="Buho Jump" class="w-5 h-5" />
           <span class="font-semibold text-sm tracking-tight">Buho Jump</span>
         </div>
         <!-- Minimal settings on lock screen -->
@@ -635,7 +663,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         </button>
         <!-- Fallback when no account -->
         <div v-else class="flex items-center gap-2 shrink-0">
-          <Zap class="w-5 h-5 text-brand" />
+          <img src="/logo/logo.svg" alt="Buho Jump" class="w-5 h-5" />
           <span class="font-semibold text-sm tracking-tight">Buho Jump</span>
         </div>
 
@@ -654,11 +682,19 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
           @remove="handleRemoveWallet"
         />
 
-        <!-- Open full page -->
-        <button @click="openFullPage" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0"
-          :title="t('settings.openFullPage')">
-          <Maximize2 class="w-3.5 h-3.5 text-text-muted" />
-        </button>
+        <!-- Pop out to detached window -->
+        <div v-if="!isDetached" class="relative shrink-0 group/pop">
+          <button @click="openFullPage" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200">
+            <PictureInPicture2 class="w-3.5 h-3.5 text-text-muted group-hover/pop:text-brand transition-colors duration-200" />
+          </button>
+          <!-- Styled tooltip -->
+          <div class="pointer-events-none absolute right-0 top-full mt-2 w-52 opacity-0 group-hover/pop:opacity-100 transition-all duration-200 translate-y-1 group-hover/pop:translate-y-0 z-50">
+            <div class="bg-surface-card border border-border rounded-xl shadow-lg px-3 py-2.5">
+              <p class="text-[11px] font-semibold text-text-primary leading-tight">{{ t('settings.popOutTitle') }}</p>
+              <p class="text-[10px] text-text-muted leading-snug mt-1">{{ t('settings.popOutDesc') }}</p>
+            </div>
+          </div>
+        </div>
 
         <!-- Settings button + dropdown -->
         <div class="relative shrink-0" ref="settingsRef">
@@ -671,157 +707,89 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 
           <!-- Settings dropdown -->
           <div v-if="showSettings"
-            class="absolute right-0 top-full mt-1.5 w-60 max-h-[75vh] overflow-y-auto bg-surface-card rounded-2xl border border-border shadow-lg z-50 animate-scale-in origin-top-right">
+            class="absolute right-0 top-full mt-1.5 w-56 bg-surface-card rounded-2xl border border-border shadow-lg z-50 animate-scale-in origin-top-right">
 
-            <!-- Appearance section -->
-            <div class="px-4 pt-3 pb-1.5">
-              <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.appearance') }}</span>
-            </div>
-
-            <!-- Mode toggle -->
+            <!-- Dark / Light toggle -->
             <button @click="toggleMode"
-              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
-              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
-                <Sun v-if="currentMode === 'dark'" class="w-3.5 h-3.5 text-warning" />
-                <Moon v-else class="w-3.5 h-3.5 text-info" />
-              </div>
-              <div>
-                <span class="text-xs font-medium block">{{ currentMode === 'dark' ? t('settings.lightMode') : t('settings.darkMode') }}</span>
-                <span class="text-[9px] text-text-muted">{{ currentMode === 'dark' ? t('settings.currentlyDark') : t('settings.currentlyLight') }}</span>
-              </div>
+              class="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-elevated transition-all duration-200 text-left">
+              <Sun v-if="currentMode === 'dark'" class="w-4 h-4 text-warning shrink-0" />
+              <Moon v-else class="w-4 h-4 text-info shrink-0" />
+              <span class="text-xs font-medium">{{ currentMode === 'dark' ? t('settings.switchToLight') : t('settings.switchToDark') }}</span>
             </button>
 
-            <!-- Theme picker (compact dot row) -->
-            <div class="px-4 pt-2 pb-2.5 flex items-center gap-3">
-              <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold shrink-0">{{ t('settings.theme') }}</span>
-              <div class="flex items-center gap-1.5 flex-1 justify-end">
-                <button v-for="id in themeIds" :key="id"
-                  @click="setTheme(id)"
-                  class="w-6 h-6 rounded-full flex items-center justify-center transition-all duration-150 shrink-0"
-                  :class="currentTheme === id ? 'ring-2 ring-brand ring-offset-1 ring-offset-surface-card scale-110' : 'hover:scale-110'"
-                  :title="themes[id]?.label"
-                >
-                  <span class="w-4 h-4 rounded-full border border-border/50"
-                    :style="{ background: themes[id]?.dark?.['brand-primary'] || 'var(--text-muted)' }" />
-                </button>
-              </div>
-            </div>
-
-            <div class="h-px bg-border" />
-
-            <!-- Language section -->
-            <div class="px-4 pt-2.5 pb-1.5">
-              <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.language') }}</span>
-            </div>
-            <button @click="showLanguagePicker = !showLanguagePicker"
-              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
-              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
-                <Languages class="w-3.5 h-3.5 text-text-muted" />
-              </div>
-              <div>
-                <span class="text-xs font-medium block">{{ locales.find(l => l.code === locale)?.native || 'English' }}</span>
-                <span class="text-[9px] text-text-muted">{{ t('settings.language') }}</span>
-              </div>
-            </button>
-            <div v-if="showLanguagePicker" class="px-2 pb-2">
-              <LanguagePicker compact @select="showLanguagePicker = false" />
-            </div>
-
-            <div class="h-px bg-border" />
-
-            <!-- Currency section -->
-            <div class="px-4 pt-2.5 pb-1.5">
-              <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.currency') }}</span>
-            </div>
-            <button @click="showCurrencyPicker = !showCurrencyPicker; resetCurrencyHighlight()"
-              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
-              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
-                <Coins class="w-3.5 h-3.5 text-text-muted" />
-              </div>
-              <div>
-                <span class="text-xs font-medium block">{{ CURRENCIES.find(c => c.code === fiatCurrency)?.symbol }} {{ fiatCurrency.toUpperCase() }}</span>
-                <span class="text-[9px] text-text-muted">{{ t('settings.currencyDesc') }}</span>
-              </div>
-            </button>
-            <div v-if="showCurrencyPicker" class="px-3 pb-2 max-h-40 overflow-y-auto" role="listbox" @keydown="onCurrencyKeydown" tabindex="0">
-              <div class="space-y-0.5">
-                <button v-for="(cur, idx) in CURRENCIES" :key="cur.code"
-                  @click="setFiatCurrency(cur.code); showCurrencyPicker = false"
-                  role="option"
-                  :aria-selected="fiatCurrency === cur.code"
-                  :data-list-active="idx === currencyHighlight ? 'true' : undefined"
-                  class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all duration-200 text-left"
-                  :class="[
-                    fiatCurrency === cur.code ? 'bg-brand/8' : 'hover:bg-surface-elevated',
-                    idx === currencyHighlight ? 'ring-2 ring-brand/40' : '',
-                  ]">
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-mono w-5 text-center">{{ cur.symbol }}</span>
-                    <span class="text-xs" :class="fiatCurrency === cur.code ? 'font-semibold text-brand' : 'text-text-secondary'">
-                      {{ cur.code.toUpperCase() }}
-                    </span>
-                    <span class="text-[9px] text-text-muted">{{ cur.name }}</span>
-                  </div>
-                  <Check v-if="fiatCurrency === cur.code" class="w-3 h-3 text-brand" />
-                </button>
-              </div>
-            </div>
-
-            <div class="h-px bg-border" />
-
-            <!-- Relay settings -->
-            <div class="flex items-center">
-              <button @click="showRelaySettings = true; showNotificationSettings = false; showWizard = false; showSettings = false"
-                class="flex-1 flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
-                <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
-                  <Radio class="w-3.5 h-3.5 text-text-muted" />
-                </div>
-                <div>
-                  <span class="text-xs font-medium block">{{ t('settings.relaySettings') }}</span>
-                  <span class="text-[9px] text-text-muted">{{ t('settings.relaySettingsDesc') }}</span>
-                </div>
+            <!-- Theme dots -->
+            <div class="px-4 pb-3 flex items-center gap-2">
+              <button v-for="id in themeIds" :key="id"
+                @click="setTheme(id)"
+                class="w-6 h-6 rounded-full flex items-center justify-center transition-all duration-150 shrink-0"
+                :class="currentTheme === id ? 'ring-2 ring-brand ring-offset-1 ring-offset-surface-card scale-110' : 'hover:scale-110'"
+                :title="themes[id]?.label"
+              >
+                <span class="w-4 h-4 rounded-full border border-border/50"
+                  :style="{ background: themes[id]?.dark?.['brand-primary'] || 'var(--text-muted)' }" />
               </button>
-              <OpenInBrowserButton page="relays" class="mr-3" />
-            </div>
-
-            <!-- Notification settings -->
-            <div class="flex items-center">
-              <button @click="showNotificationSettings = true; showRelaySettings = false; showWizard = false; showSettings = false"
-                class="flex-1 flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
-                <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
-                  <Bell class="w-3.5 h-3.5 text-text-muted" />
-                </div>
-                <div>
-                  <span class="text-xs font-medium block">{{ t('notifications.settingsLabel') }}</span>
-                  <span class="text-[9px] text-text-muted">{{ t('notifications.settingsDesc') }}</span>
-                </div>
-              </button>
-              <OpenInBrowserButton page="preferences" class="mr-3" />
             </div>
 
             <div class="h-px bg-border" />
 
-            <!-- Security section -->
-            <div class="px-4 pt-2.5 pb-1.5">
-              <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.security') }}</span>
-            </div>
+            <!-- Currency -->
+            <button @click="showCurrencyPicker = true; showSettings = false"
+              class="w-full flex items-center justify-between px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
+              <div class="flex items-center gap-3">
+                <Coins class="w-4 h-4 text-text-muted shrink-0" />
+                <span class="text-xs font-medium">{{ t('settings.currency') }}</span>
+              </div>
+              <span class="text-[11px] text-text-muted font-mono">{{ CURRENCIES.find(c => c.code === fiatCurrency)?.symbol }} {{ fiatCurrency.toUpperCase() }}</span>
+            </button>
+
+            <!-- Language -->
+            <button @click="showLanguagePicker = true; showSettings = false"
+              class="w-full flex items-center justify-between px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
+              <div class="flex items-center gap-3">
+                <Languages class="w-4 h-4 text-text-muted shrink-0" />
+                <span class="text-xs font-medium">{{ t('settings.language') }}</span>
+              </div>
+              <span class="text-[11px] text-text-muted">{{ locales.find(l => l.code === locale)?.native || 'English' }}</span>
+            </button>
+
+            <div class="h-px bg-border" />
+
+            <!-- Lock -->
             <button @click="handleLock"
               class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
-              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center">
-                <Lock class="w-3.5 h-3.5 text-text-muted" />
-              </div>
-              <div>
-                <span class="text-xs font-medium block">{{ t('settings.lockExtension') }}</span>
-                <span class="text-[9px] text-text-muted">{{ t('settings.lockDesc') }}</span>
-              </div>
+              <Lock class="w-4 h-4 text-text-muted shrink-0" />
+              <span class="text-xs font-medium">{{ t('settings.lockExtension') }}</span>
             </button>
 
             <div class="h-px bg-border" />
 
-            <!-- Open full settings -->
-            <div class="px-4 py-2 flex items-center justify-between">
+            <!-- Links to full settings pages -->
+            <div class="px-4 pt-2.5 pb-1.5">
+              <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.more') }}</span>
+            </div>
+            <button @click="showRelaySettings = true; showSettings = false"
+              class="w-full flex items-center justify-between px-4 py-2 hover:bg-surface-elevated transition-all duration-200 text-left">
+              <div class="flex items-center gap-3">
+                <Radio class="w-3.5 h-3.5 text-text-muted shrink-0" />
+                <span class="text-[11px] text-text-secondary">{{ t('settings.relaySettings') }}</span>
+              </div>
+              <OpenInBrowserButton page="relays" />
+            </button>
+            <button @click="showNotificationSettings = true; showSettings = false"
+              class="w-full flex items-center justify-between px-4 py-2 hover:bg-surface-elevated transition-all duration-200 text-left">
+              <div class="flex items-center gap-3">
+                <Bell class="w-3.5 h-3.5 text-text-muted shrink-0" />
+                <span class="text-[11px] text-text-secondary">{{ t('notifications.settingsLabel') }}</span>
+              </div>
               <OpenInBrowserButton page="preferences" />
-              <span class="text-[9px] text-text-muted">{{ t('settings.version', { version: '1.0.0' }) }}</span>
+            </button>
+
+            <!-- Footer -->
+            <div class="px-4 py-2 flex items-center justify-between border-t border-border mt-1">
+              <button @click="openOptionsPage" class="text-[10px] text-brand font-medium hover:underline">
+                {{ t('settings.allSettings') }}
+              </button>
+              <span class="text-[9px] text-text-muted/50">v1.0.0</span>
             </div>
           </div>
         </div>
@@ -1152,21 +1120,71 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 
             <!-- Delete confirmation (bottom sheet) -->
             <BottomSheet :open="!!confirmingDelete" variant="danger" @close="cancelDelete">
-              <template #icon><AlertTriangle class="w-4 h-4 text-error" /></template>
               <template #title>{{ t('account.deleteTitle') }}</template>
-              <template #description>{{ accounts.find(a => a.id === confirmingDelete)?.mode === 'nip46' ? t('account.deleteDescRemote') : t('account.deleteDescLocal') }}</template>
-              <template #actions>
-                <button @click="cancelDelete"
-                  :disabled="deletingAccount"
-                  class="py-2 text-xs rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold disabled:opacity-60">
-                  {{ t('common.cancel') }}
-                </button>
-                <button @click="confirmDelete"
-                  :disabled="deletingAccount"
-                  class="py-2 text-xs rounded-2xl bg-error text-white hover:bg-error/90 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
-                  <Loader2 v-if="deletingAccount" class="w-3 h-3 animate-spin" />
-                  {{ deletingAccount ? t('account.removing') : t('account.deleteForever') }}
-                </button>
+              <template #content>
+                <div class="space-y-4 px-1">
+                  <!-- Account being deleted -->
+                  <div v-if="deletingAccountObj" class="flex items-center gap-3 p-3 rounded-2xl bg-surface-base border border-border">
+                    <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                      :class="deletingAccountObj.mode === 'nip46' ? 'bg-warning/10 text-warning' : 'bg-error/10 text-error'">
+                      {{ (deletingAccountObj.name || '?')[0].toUpperCase() }}
+                    </div>
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold truncate">{{ deletingAccountObj.name }}</p>
+                      <span class="text-[9px] px-1.5 py-px rounded font-medium"
+                        :class="deletingAccountObj.mode === 'nip46' ? 'bg-warning/10 text-warning' : 'bg-surface-elevated text-text-muted'">
+                        {{ deletingAccountObj.mode === 'nip46' ? t('account.external') : t('account.local') }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Warning banner (local keys only) -->
+                  <div v-if="deletingAccountObj?.mode !== 'nip46'" class="flex gap-2.5 p-3 rounded-2xl bg-warning/8 border border-warning/15">
+                    <ShieldAlert class="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                    <div>
+                      <p class="text-[11px] font-semibold text-warning leading-tight">{{ t('account.deleteBackupWarning') }}</p>
+                      <p class="text-[10px] text-text-muted leading-snug mt-1">{{ t('account.deleteBackupHint') }}</p>
+                    </div>
+                  </div>
+
+                  <!-- Remote signer info -->
+                  <div v-else class="flex gap-2.5 p-3 rounded-2xl bg-surface-base border border-border">
+                    <ShieldAlert class="w-4 h-4 text-text-muted shrink-0 mt-0.5" />
+                    <p class="text-[11px] text-text-muted leading-snug">{{ t('account.deleteDescRemote') }}</p>
+                  </div>
+
+                  <!-- Description -->
+                  <p class="text-[11px] text-text-muted leading-relaxed text-center">
+                    {{ deletingAccountObj?.mode === 'nip46' ? t('account.deleteRemoteExplain') : t('account.deleteLocalExplain') }}
+                  </p>
+
+                  <!-- Action buttons -->
+                  <div class="space-y-2">
+                    <!-- Backup CTA (local keys only) -->
+                    <button v-if="deletingAccountObj?.mode !== 'nip46'"
+                      @click="openBackupPage"
+                      class="w-full flex items-center justify-center gap-2 py-2.5 text-xs rounded-2xl bg-surface-elevated hover:bg-surface-hover border border-border transition-all duration-200 font-semibold text-text-primary">
+                      <KeyRound class="w-3.5 h-3.5" />
+                      {{ t('account.deleteBackupCta') }}
+                    </button>
+
+                    <!-- Delete button -->
+                    <button @click="confirmDelete"
+                      :disabled="deletingAccount"
+                      class="w-full py-2.5 text-xs rounded-2xl bg-error text-white hover:bg-error/90 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
+                      <Loader2 v-if="deletingAccount" class="w-3 h-3 animate-spin" />
+                      <Trash2 v-else class="w-3 h-3" />
+                      {{ deletingAccount ? t('account.removing') : t('account.deleteForever') }}
+                    </button>
+
+                    <!-- Cancel -->
+                    <button @click="cancelDelete"
+                      :disabled="deletingAccount"
+                      class="w-full py-2 text-xs rounded-2xl text-text-muted hover:text-text-secondary transition-all duration-200 font-medium disabled:opacity-60">
+                      {{ t('common.cancel') }}
+                    </button>
+                  </div>
+                </div>
               </template>
             </BottomSheet>
 
@@ -1290,5 +1308,33 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 
       </template>
     </template>
+
+    <!-- Language picker bottom sheet -->
+    <BottomSheet :open="showLanguagePicker" @close="showLanguagePicker = false">
+      <template #title>{{ t('settings.language') }}</template>
+      <template #content>
+        <LanguagePicker @select="showLanguagePicker = false" />
+      </template>
+    </BottomSheet>
+
+    <!-- Currency picker bottom sheet -->
+    <BottomSheet :open="showCurrencyPicker" @close="showCurrencyPicker = false">
+      <template #title>{{ t('settings.currency') }}</template>
+      <template #content>
+        <div class="grid grid-cols-2 gap-1">
+          <button v-for="cur in CURRENCIES" :key="cur.code"
+            @click="setFiatCurrency(cur.code); showCurrencyPicker = false"
+            class="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs transition-all duration-200"
+            :class="fiatCurrency === cur.code
+              ? 'bg-brand/10 text-brand font-semibold border border-brand/20'
+              : 'text-text-secondary hover:bg-surface-elevated border border-transparent'"
+          >
+            <span class="font-mono w-4 text-center">{{ cur.symbol }}</span>
+            <span class="flex-1 truncate">{{ cur.code.toUpperCase() }}</span>
+            <Check v-if="fiatCurrency === cur.code" class="w-3 h-3 text-brand shrink-0" />
+          </button>
+        </div>
+      </template>
+    </BottomSheet>
   </div>
 </template>

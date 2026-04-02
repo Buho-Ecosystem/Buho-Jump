@@ -96,8 +96,13 @@
     "currencyDesc": "Default fiat currency for conversions",
     "relaySettings": "Relay settings",
     "relaySettingsDesc": "Configure relay connections",
+    "more": "More",
+    "allSettings": "All settings",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Open in full page"
+    "openFullPage": "Open in full page",
+    "popOut": "Pop out window",
+    "popOutTitle": "Detach window",
+    "popOutDesc": "Keep Buho open as a floating window you can drag anywhere. Browse freely without losing your wallet."
   },
 
   "relay": {
@@ -162,11 +167,16 @@
     "connectedSites": "Connected sites",
     "noSites": "No sites connected yet",
     "noSitesHint": "Sites will appear here when they request access",
-    "deleteTitle": "Delete this account?",
+    "deleteTitle": "Remove identity",
     "deleteDesc": "This removes the account from this extension. Make sure you have your backup key saved.",
     "deleteDescLocal": "This will permanently remove your keys from this extension. Without a backup key, you will lose access to this account forever.",
     "deleteDescRemote": "This will remove the connection to your signer app. Your account is still safe on the signer — you can reconnect anytime.",
-    "deleteForever": "Delete Forever",
+    "deleteBackupWarning": "Back up your key first!",
+    "deleteBackupHint": "Without a backup, removing this identity means losing access to it forever. There is no recovery.",
+    "deleteBackupCta": "Back up key in Settings",
+    "deleteLocalExplain": "This action permanently removes your private key from Buho. All connected sites will lose access to this identity.",
+    "deleteRemoteExplain": "This only disconnects the remote signer. Your key stays safe on the signer device — you can reconnect anytime.",
+    "deleteForever": "Yes, remove this identity",
     "removing": "Removing...",
     "onThisDevice": "Extension",
     "externalSigner": "Remote Signer",
@@ -816,6 +826,7 @@
     "pointCamera": "Point your camera at a QR code",
     "cameraBlocked": "Camera is blocked. Upload a QR code image instead, or allow camera access in your browser settings.",
     "noQrFound": "No QR code found in this image. Try a clearer photo.",
-    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead."
+    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead.",
+    "extensionHint": "Camera is not available in extension popups"
   }
 }
