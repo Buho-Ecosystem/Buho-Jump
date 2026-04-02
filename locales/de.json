@@ -27,7 +27,8 @@
     "settings": "Einstellungen",
     "showingOf": "{shown} von {total} angezeigt",
     "showMore": "Mehr anzeigen",
-    "offline": "Keine Internetverbindung"
+    "offline": "Keine Internetverbindung",
+    "open": "Open"
   },
   "errors": {
     "PERMISSION_DENIED": "Berechtigung verweigert",
@@ -263,7 +264,9 @@
     "doneTitle": "Alles bereit",
     "doneDesc": "Dein Konto ist eingerichtet. Apps können nun Zugriff anfragen — du wirst immer zuerst gefragt.",
     "profileSaved": "Profil erfolgreich gespeichert",
-    "profileSyncLater": "Einige Server waren nicht erreichbar — dein Profil wird später synchronisiert"
+    "profileSyncLater": "Einige Server waren nicht erreichbar — dein Profil wird später synchronisiert",
+    "pinTitle": "Pin Buho Jump to your toolbar",
+    "pinDesc": "Click the puzzle piece icon in your browser toolbar and pin Buho Jump for quick access."
   },
   "prompt": {
     "wantsAccess": "möchte auf dein Konto zugreifen",
@@ -323,6 +326,8 @@
     "payAmountUnknown": "Unbekannter Betrag",
     "confirmPayment": "Zahlung bestätigen",
     "budgetRemaining": "Verbleibendes Budget",
+    "rememberBudget": "Remember and set a budget",
+    "rememberBudgetHint": "Auto-approve future payments within this budget",
     "permDefaultWhat": "Diese App fordert Zugriff auf dein Konto an.",
     "permDefaultRisk": "Berechtigung",
     "kindProfile": "Profilmetadaten",
@@ -412,6 +417,9 @@
     "rateUnavailable": "Wechselkurs nicht verfügbar – gib den Betrag stattdessen in Sats ein",
     "qrFailed": "QR-Code konnte nicht erzeugt werden",
     "receiveTitle": "Zahlung empfangen",
+    "receiveHintCashu": "Create a Lightning invoice or redeem an ecash token",
+    "receiveHintNwc": "Create a Lightning invoice to receive sats",
+    "orRedeemToken": "or redeem a token",
     "shareInvoice": "Rechnung teilen",
     "memo": "Verwendungszweck",
     "memoPlaceholder": "Wofür ist das?",

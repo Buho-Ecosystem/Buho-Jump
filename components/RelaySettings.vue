@@ -4,7 +4,7 @@
  * Each tab shows the relay list with status, add/remove, and reset to defaults.
  * Account tab includes NIP-65 publish/fetch for local accounts.
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRelays } from '../composables/useRelays.js'
 import { useAccounts } from '../composables/useAccounts.js'
@@ -20,7 +20,7 @@ defineProps({ hideBack: { type: Boolean, default: false } })
 const emit = defineEmits(['back'])
 
 const { t } = useI18n()
-const { relayConfig, loading, loadRelays, addRelay, removeRelay, resetPool, setPoolRelays, publishRelayList, fetchRelayList } = useRelays()
+const { relayConfig, loading, loadRelays, addRelay, removeRelay, resetPool, setPoolRelays, publishRelayList, fetchRelayList, getRelayInfo } = useRelays()
 const { activeAccount } = useAccounts()
 const toast = useToast()
 
@@ -48,6 +48,25 @@ const pools = computed(() => [
 const activeRelays = computed(() => relayConfig.value[activePool.value] || [])
 
 const isLocalAccount = computed(() => activeAccount.value?.mode === 'local')
+
+// ── Relay icons (lazy-loaded from NIP-11) ──
+const relayIcons = reactive({}) // url → icon URL or null
+const iconFailed = reactive({}) // url → true if img failed to load
+
+function fetchRelayIcons(urls) {
+  for (const url of urls) {
+    if (url in relayIcons) continue // already fetched or fetching
+    relayIcons[url] = null // mark as fetching
+    getRelayInfo(url).then(info => {
+      relayIcons[url] = info?.icon || false
+    }).catch(() => {
+      relayIcons[url] = false
+    })
+  }
+}
+
+// Fetch icons whenever the relay list changes
+watch(activeRelays, (urls) => { if (urls.length) fetchRelayIcons(urls) }, { immediate: true })
 
 onMounted(() => { loadRelays() })
 
@@ -190,8 +209,15 @@ function relayHostname(url) {
         class="w-full flex items-center justify-between px-3 py-2.5 bg-surface-card rounded-3xl shadow-sm border border-border hover:border-brand/30 transition-all group text-left"
       >
         <div class="flex items-center gap-2.5 min-w-0 flex-1">
-          <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0">
-            <Globe class="w-3.5 h-3.5 text-text-muted" />
+          <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
+            <img
+              v-if="relayIcons[url] && !iconFailed[url]"
+              :src="relayIcons[url]"
+              alt=""
+              class="w-full h-full object-cover"
+              @error="iconFailed[url] = true"
+            />
+            <Globe v-else class="w-3.5 h-3.5 text-text-muted" />
           </div>
           <div class="min-w-0">
             <span class="text-xs font-medium truncate block">{{ relayHostname(url) }}</span>

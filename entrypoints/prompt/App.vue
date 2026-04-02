@@ -15,7 +15,7 @@ import { truncateKey } from '../../lib/utils.js'
 import {
   ShieldCheck, ShieldPlus, Globe, Fingerprint, FileSignature, Lock, Unlock,
   Check, X, Zap, Clock, KeyRound, Eye, EyeOff, AlertTriangle, ShieldOff,
-  Ban, Loader2,
+  Ban, Loader2, Wallet,
 } from 'lucide-vue-next'
 
 useTheme()
@@ -40,6 +40,10 @@ const unlockPassword = ref('')
 const unlockError = ref('')
 const unlockBusy = ref(false)
 const showPassword = ref(false)
+
+// Budget "remember" state (weblnSendPayment only)
+const rememberBudget = ref(false)
+const budgetAmount = ref('')
 
 // Favicon state
 const faviconFailed = ref(false)
@@ -107,7 +111,13 @@ onMounted(async () => {
     try {
       const key = `prompt_event_${requestId.value}`
       const data = await chrome.storage.local.get(key)
-      if (data[key]) eventData.value = data[key]
+      if (data[key]) {
+        eventData.value = data[key]
+        // Default budget to 10x payment amount (Alby pattern)
+        if (method.value === 'weblnSendPayment' && data[key].amountSats) {
+          budgetAmount.value = String(data[key].amountSats * 10)
+        }
+      }
     } catch {}
   }
 
@@ -301,15 +311,23 @@ const unlockFaviconFailed = ref(false)
 async function respond(decision) {
   deciding.value = decision
   try {
+    const payload = {
+      requestId: requestId.value,
+      decision,
+      host: host.value,
+      method: method.value,
+      kind: kind.value || null,
+    }
+
+    // Include budget if user opted in during payment approval
+    if (rememberBudget.value && method.value === 'weblnSendPayment' && decision.startsWith('allow')) {
+      const budget = parseInt(budgetAmount.value) || 0
+      if (budget > 0) payload.setBudget = budget
+    }
+
     await chrome.runtime.sendMessage({
       type: 'PERMISSION_RESPONSE',
-      params: [{
-        requestId: requestId.value,
-        decision,
-        host: host.value,
-        method: method.value,
-        kind: kind.value || null,
-      }],
+      params: [payload],
     })
     window.close()
   } catch {
@@ -664,8 +682,37 @@ async function submitUnlock() {
         <template v-else>
           <div class="space-y-2 stagger-4 animate-fade-in-up">
 
-            <!-- ── Payment prompt: allow_once / deny (no "always allow") ── -->
+            <!-- ── Payment prompt: budget checkbox + allow_once / deny ── -->
             <template v-if="method === 'weblnSendPayment'">
+
+              <!-- Budget "remember" checkbox (Alby BudgetControl pattern) -->
+              <div v-if="!paymentBudget" class="rounded-2xl border border-border bg-surface-card overflow-hidden transition-all duration-200">
+                <label class="flex items-center gap-3 px-3.5 py-2.5 cursor-pointer select-none hover:bg-surface-elevated/50 transition-colors">
+                  <input
+                    v-model="rememberBudget"
+                    type="checkbox"
+                    class="w-4 h-4 rounded border-border text-brand focus:ring-brand/30 accent-[var(--brand-primary)]"
+                  />
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <Wallet class="w-3.5 h-3.5 text-text-muted shrink-0" />
+                    <span class="text-[11px] font-semibold text-text-secondary">{{ t('prompt.rememberBudget') }}</span>
+                  </div>
+                </label>
+                <!-- Budget amount input (revealed on check) -->
+                <div v-if="rememberBudget" class="px-3.5 pb-3 pt-0.5 border-t border-border/50 animate-fade-in">
+                  <div class="flex items-center gap-2">
+                    <input
+                      v-model="budgetAmount"
+                      type="number"
+                      min="1"
+                      class="flex-1 bg-surface-base border border-border rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-brand transition-colors tabular-nums"
+                    />
+                    <span class="text-[10px] text-text-muted font-semibold shrink-0">sats</span>
+                  </div>
+                  <p class="text-[9px] text-text-muted mt-1 px-0.5">{{ t('prompt.rememberBudgetHint') }}</p>
+                </div>
+              </div>
+
               <button
                 @click="respond('allow_once')"
                 :disabled="!!deciding"

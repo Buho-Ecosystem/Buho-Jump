@@ -8,7 +8,7 @@ import {
   KeyRound, Download, Link2, ArrowRight, ArrowLeft, Eye, EyeOff,
   Copy, Check, AlertTriangle, Globe, UserRound, Shield, ScanLine,
   Loader2, Wifi, CheckCircle2, XCircle, ShieldAlert,
-  Sparkles, Info, RotateCcw,
+  Sparkles, Info, RotateCcw, PinIcon, Puzzle,
 } from 'lucide-vue-next'
 import QrScanner from './QrScanner.vue'
 
@@ -903,6 +903,17 @@ onBeforeUnmount(() => {
         </p>
       </div>
 
+      <!-- Pin extension tip -->
+      <div class="bg-surface-card rounded-2xl border border-border p-3.5 flex items-start gap-3">
+        <div class="w-9 h-9 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">
+          <Puzzle class="w-4.5 h-4.5 text-brand" />
+        </div>
+        <div class="min-w-0">
+          <p class="text-[11px] font-semibold text-text-primary leading-snug">{{ t('wizard.pinTitle') }}</p>
+          <p class="text-[10px] text-text-muted mt-0.5 leading-relaxed">{{ t('wizard.pinDesc') }}</p>
+        </div>
+      </div>
+
       <button @click="finish"
         class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all font-bold btn-primary">
         {{ t('common.getStarted') }}
@@ -991,6 +1002,17 @@ onBeforeUnmount(() => {
         <div v-if="publishResult.failed?.length" class="flex items-center gap-2 text-[11px] text-warning font-medium">
           <AlertTriangle class="w-3.5 h-3.5" />
           {{ t('wizard.profileSyncLater') }}
+        </div>
+      </div>
+
+      <!-- Pin extension tip -->
+      <div class="bg-surface-card rounded-2xl border border-border p-3.5 flex items-start gap-3">
+        <div class="w-9 h-9 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">
+          <Puzzle class="w-4.5 h-4.5 text-brand" />
+        </div>
+        <div class="min-w-0">
+          <p class="text-[11px] font-semibold text-text-primary leading-snug">{{ t('wizard.pinTitle') }}</p>
+          <p class="text-[10px] text-text-muted mt-0.5 leading-relaxed">{{ t('wizard.pinDesc') }}</p>
         </div>
       </div>
 

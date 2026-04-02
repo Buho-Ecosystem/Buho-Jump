@@ -27,7 +27,8 @@
     "settings": "Settings",
     "showingOf": "Showing {shown} of {total}",
     "showMore": "Show more",
-    "offline": "No internet connection"
+    "offline": "No internet connection",
+    "open": "Open"
   },
 
   "errors": {
@@ -282,7 +283,9 @@
     "doneTitle": "You're All Set",
     "doneDesc": "Your account is ready. Apps can now ask to use it — you'll always be asked first.",
     "profileSaved": "Profile saved successfully",
-    "profileSyncLater": "Some servers couldn't be reached — your profile will sync later"
+    "profileSyncLater": "Some servers couldn't be reached — your profile will sync later",
+    "pinTitle": "Pin Buho Jump to your toolbar",
+    "pinDesc": "Click the puzzle piece icon in your browser toolbar and pin Buho Jump for quick access."
   },
 
   "prompt": {
@@ -351,6 +354,8 @@
     "payAmountUnknown": "Unknown amount",
     "confirmPayment": "Confirm payment",
     "budgetRemaining": "Budget remaining",
+    "rememberBudget": "Remember and set a budget",
+    "rememberBudgetHint": "Auto-approve future payments within this budget",
 
     "permDefaultWhat": "This app is requesting access to your account.",
     "permDefaultRisk": "Permission",
@@ -443,7 +448,10 @@
     "rateUnavailable": "Exchange rate unavailable — enter amount in sats instead",
 
     "qrFailed": "QR code generation failed",
-    "receiveTitle": "Receive Payment",
+    "receiveTitle": "Receive",
+    "receiveHintCashu": "Create a Lightning invoice or redeem an ecash token",
+    "receiveHintNwc": "Create a Lightning invoice to receive sats",
+    "orRedeemToken": "or redeem a token",
     "shareInvoice": "Share Invoice",
     "memo": "Memo",
     "memoPlaceholder": "What's this for?",

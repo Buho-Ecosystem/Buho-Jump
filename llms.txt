@@ -1,0 +1,33 @@
+# Buho Jump
+
+Canonical site: https://home.mybuho.de/jump/
+Repository: https://github.com/Buho-Ecosystem/Buho-Jump
+License: AGPL-3.0-only
+
+Buho Jump is an open-source browser extension for Nostr identity, encrypted messaging, and Bitcoin Lightning payments. It includes NIP-07 signing, NIP-46 remote signing, WebLN support, NWC wallet connectivity, Cashu wallet support, multi-account handling, and per-site permissions.
+
+## Best entry points
+
+- `/README.md` - product overview, install steps, feature summary, tech stack
+- `/PRIVACY_POLICY.md` - storage, transmission, and privacy model
+- `/FAQ.md` - short answers for users and search/discovery systems
+- `/blog/01-nip46-remote-signing.md` - remote signer architecture and UX
+- `/blog/02-why-another-nostr-extension.md` - product positioning and differentiators
+- `/blog/03-your-keys-your-rules.md` - key storage and encryption model
+- `/blog/04-lightning-in-your-browser.md` - WebLN and Lightning flow
+- `/blog/05-private-messaging.md` - encrypted messaging model
+- `/blog/06-from-nos2x-to-buho.md` - migration guide
+- `/blog/07-built-different.md` - technical architecture
+
+## Topics
+
+- Nostr browser extension
+- Bitcoin Lightning wallet extension
+- WebLN
+- NIP-07
+- NIP-46 remote signing
+- encrypted messaging
+- Cashu wallet
+- Nostr Wallet Connect
+
+For a fuller knowledge dump, see `/llms-full.txt`.

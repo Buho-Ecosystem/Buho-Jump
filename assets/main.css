@@ -419,6 +419,15 @@ button:not(:disabled):active {
   animation: slide-in-right 0.2s ease-out both;
 }
 
+/* Pending transaction: subtle background pulse */
+@keyframes tx-pending {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: var(--warning-surface, rgba(234, 179, 8, 0.06)); }
+}
+.animate-tx-pending {
+  animation: tx-pending 2.5s ease-in-out infinite;
+}
+
 /* Vue transition: fade */
 .fade-enter-active,
 .fade-leave-active {

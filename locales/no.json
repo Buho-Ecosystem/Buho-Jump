@@ -27,7 +27,8 @@
     "settings": "Settings",
     "showingOf": "Showing {shown} of {total}",
     "showMore": "Show more",
-    "offline": "No internet connection"
+    "offline": "No internet connection",
+    "open": "Open"
   },
   "errors": {
     "PERMISSION_DENIED": "Permission denied",
@@ -263,7 +264,9 @@
     "doneTitle": "Alt er Klart",
     "doneDesc": "Kontoen din er klar. Apper kan nå be om å bruke den — du blir alltid spurt først.",
     "profileSaved": "Profil lagret",
-    "profileSyncLater": "Noen servere kunne ikke nås — profilen din synkroniseres senere"
+    "profileSyncLater": "Noen servere kunne ikke nås — profilen din synkroniseres senere",
+    "pinTitle": "Pin Buho Jump to your toolbar",
+    "pinDesc": "Click the puzzle piece icon in your browser toolbar and pin Buho Jump for quick access."
   },
   "prompt": {
     "wantsAccess": "ønsker tilgang til kontoen din",
@@ -323,6 +326,8 @@
     "payAmountUnknown": "Unknown amount",
     "confirmPayment": "Confirm payment",
     "budgetRemaining": "Budget remaining",
+    "rememberBudget": "Remember and set a budget",
+    "rememberBudgetHint": "Auto-approve future payments within this budget",
     "permDefaultWhat": "Denne appen ber om tilgang til kontoen din.",
     "permDefaultRisk": "Tillatelse",
     "kindProfile": "Profildata",
@@ -412,6 +417,9 @@
     "rateUnavailable": "Exchange rate unavailable — enter amount in sats instead",
     "qrFailed": "QR code generation failed",
     "receiveTitle": "Motta Betaling",
+    "receiveHintCashu": "Create a Lightning invoice or redeem an ecash token",
+    "receiveHintNwc": "Create a Lightning invoice to receive sats",
+    "orRedeemToken": "or redeem a token",
     "shareInvoice": "Del Faktura",
     "memo": "Notat",
     "memoPlaceholder": "Hva er dette for?",

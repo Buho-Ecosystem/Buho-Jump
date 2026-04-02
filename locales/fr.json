@@ -27,7 +27,8 @@
     "settings": "Paramètres",
     "showingOf": "{shown} sur {total} affichés",
     "showMore": "Afficher plus",
-    "offline": "Pas de connexion Internet"
+    "offline": "Pas de connexion Internet",
+    "open": "Open"
   },
   "errors": {
     "PERMISSION_DENIED": "Autorisation refusée",
@@ -263,7 +264,9 @@
     "doneTitle": "Tout est prêt",
     "doneDesc": "Votre compte est prêt. Les applications peuvent désormais demander à l'utiliser — on vous demandera toujours votre accord.",
     "profileSaved": "Profil enregistré avec succès",
-    "profileSyncLater": "Certains serveurs n'étaient pas joignables — votre profil se synchronisera plus tard"
+    "profileSyncLater": "Certains serveurs n'étaient pas joignables — votre profil se synchronisera plus tard",
+    "pinTitle": "Pin Buho Jump to your toolbar",
+    "pinDesc": "Click the puzzle piece icon in your browser toolbar and pin Buho Jump for quick access."
   },
   "prompt": {
     "wantsAccess": "souhaite accéder à votre compte",
@@ -323,6 +326,8 @@
     "payAmountUnknown": "Montant inconnu",
     "confirmPayment": "Confirmer le paiement",
     "budgetRemaining": "Budget restant",
+    "rememberBudget": "Remember and set a budget",
+    "rememberBudgetHint": "Auto-approve future payments within this budget",
     "permDefaultWhat": "Cette application demande l'accès à votre compte.",
     "permDefaultRisk": "Autorisation",
     "kindProfile": "Métadonnées du profil",
@@ -412,6 +417,9 @@
     "rateUnavailable": "Taux de change indisponible — saisissez le montant en sats à la place",
     "qrFailed": "Échec de la génération du QR code",
     "receiveTitle": "Recevoir un paiement",
+    "receiveHintCashu": "Create a Lightning invoice or redeem an ecash token",
+    "receiveHintNwc": "Create a Lightning invoice to receive sats",
+    "orRedeemToken": "or redeem a token",
     "shareInvoice": "Partager la facture",
     "memo": "Note",
     "memoPlaceholder": "C'est pour quoi ?",

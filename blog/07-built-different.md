@@ -92,7 +92,7 @@ If we started over, we might use a typed RPC layer between popup and background 
 
 ### Contributing
 
-MIT license. Fork it, read the code, send PRs. The test suite runs in under 2 seconds. The build takes under 3 seconds. There's a `BACKLOG.md` with 151 items tracking everything from the original audit to Phase 5 hardening.
+AGPL-3.0 license. Fork it, read the code, send PRs. The test suite runs in under 2 seconds. The build takes under 3 seconds. There's a `BACKLOG.md` with 151 items tracking everything from the original audit to Phase 5 hardening.
 
 The codebase is intentionally readable. Short functions. Clear naming. Comments explain *why*, not *what*. No abstractions for the sake of abstractions.
 

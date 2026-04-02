@@ -69,5 +69,10 @@
       if (!enabled) return Promise.reject(new Error('WebLN not enabled'))
       return send('webln_getBalance', [])
     },
+
+    keysend: function (args) {
+      if (!enabled) return Promise.reject(new Error('WebLN not enabled'))
+      return send('webln_keysend', [args])
+    },
   }
 })()

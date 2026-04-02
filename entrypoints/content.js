@@ -18,7 +18,7 @@ const NIP07_METHODS = new Set([
 
 const WEBLN_METHODS = new Set([
   'webln_enable', 'webln_getInfo', 'webln_sendPayment',
-  'webln_makeInvoice', 'webln_getBalance',
+  'webln_makeInvoice', 'webln_getBalance', 'webln_keysend',
 ])
 
 const NIP07_METHOD_MAP = {
@@ -37,6 +37,7 @@ const WEBLN_METHOD_MAP = {
   webln_sendPayment: 'WEBLN_SEND_PAYMENT',
   webln_makeInvoice: 'WEBLN_MAKE_INVOICE',
   webln_getBalance: 'WEBLN_GET_BALANCE',
+  webln_keysend: 'WEBLN_KEYSEND',
 }
 
 function injectScript(fileName) {

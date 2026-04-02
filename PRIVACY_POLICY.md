@@ -62,7 +62,7 @@ Permissions are stored locally and can be revoked at any time.
 
 ## Open source
 
-Buho Jump is fully open source under the MIT License. You can audit the code at:
+Buho Jump is fully open source under the AGPL-3.0-only license. You can audit the code at:
 https://github.com/Buho-Ecosystem/Buho-Jump
 
 ## Children's privacy

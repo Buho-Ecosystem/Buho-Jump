@@ -76,28 +76,30 @@ function onScan(val) {
       class="w-full bg-surface-card border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-brand transition-all duration-200 placeholder:text-text-muted"
     />
 
-    <div class="flex items-center justify-end">
-      <button
-        @click="showScanner = !showScanner"
-        class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium"
-      >
-        <ScanLine class="w-3 h-3" />
-        {{ showScanner ? t('common.typeInstead') : t('common.scanQr') }}
-      </button>
-    </div>
-
+    <!-- Scanner overlay -->
     <QrScanner
       v-if="showScanner"
       @scan="onScan"
       @close="showScanner = false"
     />
 
+    <!-- NWC URI input with inline QR adornment -->
     <div v-else class="space-y-1.5">
-      <input
-        v-model="nwcUri"
-        placeholder="nostr+walletconnect://..."
-        class="w-full bg-surface-card border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-brand transition-all duration-200 font-mono placeholder:text-text-muted"
-      />
+      <div class="relative">
+        <input
+          v-model="nwcUri"
+          placeholder="nostr+walletconnect://..."
+          class="w-full bg-surface-card border border-border rounded-lg pl-3 pr-9 py-2 text-sm outline-none focus:border-brand transition-all duration-200 font-mono placeholder:text-text-muted"
+        />
+        <button
+          type="button"
+          @click="showScanner = true"
+          :title="t('common.scanQr')"
+          class="absolute top-1/2 -translate-y-1/2 right-2.5 p-1 rounded-md text-text-muted hover:text-brand hover:bg-brand/10 transition-all duration-150"
+        >
+          <ScanLine class="w-4 h-4" />
+        </button>
+      </div>
       <p class="text-[10px] text-text-muted px-1 leading-relaxed">{{ t('wallet.nwcHelp') }}</p>
     </div>
 

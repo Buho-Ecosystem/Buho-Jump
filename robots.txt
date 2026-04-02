@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://home.mybuho.de/jump/sitemap.xml
+Host: home.mybuho.de

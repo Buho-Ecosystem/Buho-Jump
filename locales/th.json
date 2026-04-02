@@ -27,7 +27,8 @@
     "settings": "ตั้งค่า",
     "showingOf": "แสดง {shown} จาก {total}",
     "showMore": "แสดงเพิ่มเติม",
-    "offline": "ไม่มีการเชื่อมต่ออินเทอร์เน็ต"
+    "offline": "ไม่มีการเชื่อมต่ออินเทอร์เน็ต",
+    "open": "Open"
   },
 
   "errors": {
@@ -282,7 +283,9 @@
     "doneTitle": "พร้อมใช้งานแล้ว",
     "doneDesc": "บัญชีของคุณพร้อมแล้ว แอปสามารถขอใช้งานได้ — คุณจะถูกถามก่อนเสมอ",
     "profileSaved": "บันทึกโปรไฟล์เรียบร้อยแล้ว",
-    "profileSyncLater": "เซิร์ฟเวอร์บางแห่งเชื่อมต่อไม่ได้ — โปรไฟล์ของคุณจะซิงค์ภายหลัง"
+    "profileSyncLater": "เซิร์ฟเวอร์บางแห่งเชื่อมต่อไม่ได้ — โปรไฟล์ของคุณจะซิงค์ภายหลัง",
+    "pinTitle": "Pin Buho Jump to your toolbar",
+    "pinDesc": "Click the puzzle piece icon in your browser toolbar and pin Buho Jump for quick access."
   },
 
   "prompt": {
@@ -351,6 +354,8 @@
     "payAmountUnknown": "จำนวนไม่ทราบ",
     "confirmPayment": "ยืนยันการชำระเงิน",
     "budgetRemaining": "งบประมาณคงเหลือ",
+    "rememberBudget": "Remember and set a budget",
+    "rememberBudgetHint": "Auto-approve future payments within this budget",
 
     "permDefaultWhat": "แอปนี้กำลังขอเข้าถึงบัญชีของคุณ",
     "permDefaultRisk": "สิทธิ์",
@@ -444,6 +449,9 @@
 
     "qrFailed": "สร้าง QR โค้ดไม่สำเร็จ",
     "receiveTitle": "รับการชำระเงิน",
+    "receiveHintCashu": "Create a Lightning invoice or redeem an ecash token",
+    "receiveHintNwc": "Create a Lightning invoice to receive sats",
+    "orRedeemToken": "or redeem a token",
     "shareInvoice": "แชร์ใบแจ้งหนี้",
     "memo": "บันทึก",
     "memoPlaceholder": "นี่สำหรับอะไร?",

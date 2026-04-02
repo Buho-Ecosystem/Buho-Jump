@@ -70,9 +70,13 @@ const subtitle = computed(() => {
   <button
     @click="$emit('click')"
     class="w-full flex items-center gap-3 px-3 py-2.5 rounded-3xl hover:bg-surface-card transition-all duration-200 text-left group"
+    :class="txState === 'pending' ? 'animate-tx-pending' : ''"
   >
     <!-- Direction icon -->
-    <div class="w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0" :class="statusColor">
+    <div
+      class="w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0 transition-opacity"
+      :class="[statusColor, txState === 'pending' ? 'animate-pulse' : '']"
+    >
       <component :is="statusIcon" class="w-4 h-4" />
     </div>
 

@@ -33,7 +33,7 @@ Buho Jump is your all-in-one Nostr companion for the browser. Manage your digita
 - Master password with PBKDF2 key derivation (100k iterations)
 - Session unlocked during browser session, locks on close
 - No analytics, no telemetry, no tracking
-- Fully open source (MIT License)
+- Fully open source (AGPL-3.0 License)
 
 **Built with nostr-core**
 22 Nostr protocol implementations (NIP-02, 04, 05, 06, 07, 11, 17, 19, 24, 28, 29, 42, 44, 46, 47, 50, 51, 57, 59, 65) — all powered by nostr-core.

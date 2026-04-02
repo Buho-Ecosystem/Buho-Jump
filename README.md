@@ -115,4 +115,4 @@ See [PRIVACY_POLICY.md](PRIVACY_POLICY.md) for details.
 
 ## License
 
-[MIT](LICENSE)
+[AGPL-3.0](LICENSE)

@@ -47,7 +47,7 @@ import {
   reEncryptWallets, clearAllWallets, addCashuWallet, updateCashuMints,
 } from '../lib/wallet.js'
 import {
-  getCashuBalance, addProofs as addCashuProofs, clearProofStore,
+  getCashuBalance, getAllProofs as getCashuProofs, addProofs as addCashuProofs, clearProofStore,
   reEncryptProofStore, readProofStore,
 } from '../lib/cashu-store.js'
 import {
@@ -56,10 +56,11 @@ import {
 } from '../lib/cashu-engine.js'
 import {
   publishWalletEvent, publishTokenEvent, publishHistoryEvent,
-  restoreFromRelays,
+  deleteTokenEvents, restoreFromRelays,
 } from '../lib/cashu-sync.js'
 import { exportCashuBackup, importCashuBackup } from '../lib/cashu-backup.js'
-import { recordCashuTx, getCashuTransactions, clearCashuTxHistory } from '../lib/cashu-transactions.js'
+import { fetchLnurlWithdrawParams, executeLnurlWithdraw } from '../lib/lnurl.js'
+import { recordCashuTx, updateCashuTx, getCashuTransactions, clearCashuTxHistory } from '../lib/cashu-transactions.js'
 import { DEFAULT_MINT, DEFAULT_WALLET_NAME } from '../lib/cashu-constants.js'
 import {
   getAllowances, getAllowance, setAllowance,
@@ -176,7 +177,9 @@ async function requestPermission(host, method, kind, eventData, meta) {
     requestCoordinator.register(requestId, resolve)
 
     // Store extra data so the prompt can display context
-    requestCoordinator.setEventData(requestId, eventData).catch(() => {})
+    requestCoordinator.setEventData(requestId, eventData).catch(err =>
+      log.warn('permissions', 'SET_EVENT_DATA_FAILED', { requestId, err: err?.message })
+    )
 
     // Build prompt URL with site metadata from the requesting tab
     const siteTitle = meta?.siteTitle || ''
@@ -384,6 +387,37 @@ async function getActiveWalletType() {
   return wallet.type || 'nwc'
 }
 
+/**
+ * After a Cashu proof mutation, publish updated token state to relays and record history.
+ * Publishes current proofs as a new token event, records history with token event ID,
+ * and optionally deletes old token events for spent proofs.
+ */
+async function syncCashuToRelays(wallet, direction, amountSats, oldTokenEventIds) {
+  try {
+    const account = await getActiveAccount(_cachedPassword)
+    if (!account?.secretHex) return
+    const secretKey = hexToBytes(account.secretHex)
+    const mintUrl = getCashuMint(wallet)
+
+    // Publish current proof state as a new token event
+    const currentProofs = await getCashuProofs(wallet.id, _cachedPassword)
+    const tokenEventId = currentProofs.length > 0
+      ? await publishTokenEvent(secretKey, mintUrl, currentProofs, account.pubkey, oldTokenEventIds || [])
+      : null
+
+    // Record history with the new token event ID
+    const tokenIds = tokenEventId ? [tokenEventId] : []
+    await publishHistoryEvent(secretKey, direction, amountSats, tokenIds, account.pubkey)
+
+    // Delete old spent token events from relays
+    if (oldTokenEventIds?.length > 0) {
+      await deleteTokenEvents(secretKey, oldTokenEventIds, account.pubkey)
+    }
+  } catch (err) {
+    log.warn('cashu', 'RELAY_SYNC_FAILED', { direction, err: err?.message })
+  }
+}
+
 function getCashuMint(wallet) {
   if (!wallet.mints?.length) throw new Error('No mint configured for this wallet')
   return wallet.mints[0]
@@ -394,14 +428,31 @@ async function walletPayInvoice(invoice, amountSats) {
   if (!wallet) throw new Error('No wallet connected')
   if (wallet.type === 'cashu') {
     const mintUrl = getCashuMint(wallet)
-    const result = await meltTokens(mintUrl, invoice, wallet.id, _cachedPassword)
     const amount = amountSats || 0
-    recordCashuTx(wallet.id, { direction: 'out', amount, description: 'Lightning payment' }).catch(() => {})
-    const account = await getActiveAccount(_cachedPassword)
-    if (account?.secretHex) {
-      publishHistoryEvent(hexToBytes(account.secretHex), 'out', amount, [], account.pubkey).catch(() => {})
+
+    // Record pending tx BEFORE attempting payment
+    const txId = await recordCashuTx(wallet.id, {
+      direction: 'out', amount, description: 'Lightning payment', state: 'pending',
+    })
+
+    try {
+      const result = await meltTokens(mintUrl, invoice, wallet.id, _cachedPassword)
+      // Mark settled on success
+      await updateCashuTx(wallet.id, txId, { state: 'settled' }).catch(err =>
+        log.warn('cashu', 'TX_UPDATE_FAILED', { txId, err: err?.message })
+      )
+      // Sync proof state to relays (fire-and-forget)
+      syncCashuToRelays(wallet, 'out', amount).catch(err =>
+        log.warn('cashu', 'RELAY_SYNC_FAILED', { err: err?.message })
+      )
+      return result
+    } catch (err) {
+      // Mark failed so user sees it in history
+      await updateCashuTx(wallet.id, txId, { state: 'failed' }).catch(updErr =>
+        log.warn('cashu', 'TX_UPDATE_FAILED', { txId, err: updErr?.message })
+      )
+      throw err
     }
-    return result
   }
   return await withNwcRetry(nwc => nwc.payInvoice(invoice, amountSats ? amountSats * 1000 : undefined))
 }
@@ -522,7 +573,7 @@ async function handleWeblnGetInfo(sender) {
     const wType = await getActiveWalletType()
     if (wType === 'cashu') {
       const w = await getActiveWallet(_cachedPassword)
-      return { result: { alias: w?.name || 'Buho', methods: ['pay_invoice', 'make_invoice', 'get_balance'] } }
+      return { result: { alias: w?.name || 'Buho', methods: ['pay_invoice', 'make_invoice', 'get_balance', 'pay_keysend'] } }
     }
     const nwc = await ensureNWC()
     return { result: await nwc.getInfo() }
@@ -575,6 +626,57 @@ async function handleWeblnGetBalance(sender) {
   } catch (err) { return { error: classifyError(err) } }
 }
 
+async function handleWeblnKeysend(params, sender) {
+  const host = new URL(sender.url).hostname
+  await requireUnlocked(host)
+
+  const args = params[0] || {}
+  const { destination, amount, customRecords } = args
+  if (!destination || !amount) return { error: 'Missing destination or amount' }
+
+  const amountSats = typeof amount === 'string' ? parseInt(amount, 10) : amount
+  if (!amountSats || amountSats <= 0) return { error: 'Invalid amount' }
+
+  // Permission check + budget (same flow as sendPayment)
+  if (await checkBudget(host, amountSats)) {
+    try {
+      const result = await walletKeysend(destination, amountSats, customRecords)
+      await recordSpend(host, amountSats)
+      return { result }
+    } catch (err) { return { error: classifyError(err) } }
+  }
+
+  const allowance = await getAllowance(host)
+  const paymentMeta = { amountSats, budgetSats: allowance?.budget || null, spentSats: allowance?.spent || 0 }
+  const allowed = await requestPermission(host, 'weblnKeysend', null, paymentMeta, getSiteMeta(sender))
+  if (!allowed) return { error: 'PERMISSION_DENIED' }
+  try {
+    const result = await walletKeysend(destination, amountSats, customRecords)
+    await recordSpend(host, amountSats)
+    return { result }
+  } catch (err) { return { error: classifyError(err) } }
+}
+
+async function walletKeysend(destination, amountSats, customRecords) {
+  const wType = await getActiveWalletType()
+  if (wType === 'cashu') {
+    throw new Error('Keysend is not supported with Cashu wallets')
+  }
+  const nwc = await ensureNWC()
+  // Convert WebLN customRecords (string keys → int, string values) to NWC tlv_records
+  const tlvRecords = customRecords
+    ? Object.entries(customRecords).map(([k, v]) => ({
+        type: parseInt(k, 10),
+        value: v,
+      }))
+    : undefined
+  return await nwc.payKeysend({
+    pubkey: destination,
+    amount: amountSats * 1000, // sats → msats
+    tlv_records: tlvRecords,
+  })
+}
+
 // ── Public routes — callable from content scripts (web pages) ────
 const PUBLIC_HANDLERS = {
   NIP07_GET_PUBLIC_KEY: (params, sender) => handleGetPublicKey(sender),
@@ -589,6 +691,7 @@ const PUBLIC_HANDLERS = {
   WEBLN_SEND_PAYMENT: (params, sender) => handleWeblnSendPayment(params, sender),
   WEBLN_MAKE_INVOICE: (params, sender) => handleWeblnMakeInvoice(params, sender),
   WEBLN_GET_BALANCE: (params, sender) => handleWeblnGetBalance(sender),
+  WEBLN_KEYSEND: (params, sender) => handleWeblnKeysend(params, sender),
   NOSTR_CONNECT_LINK: async (params) => {
     // Intercepted nostrconnect: link from a web page — open popup or handle directly
     const [href] = params
@@ -1171,7 +1274,7 @@ export default defineBackground(() => {
               const walletPrivkey = bytesToHex(randomBytes(32))
               publishWalletEvent(
                 hexToBytes(account.secretHex), walletPrivkey, [DEFAULT_MINT], account.pubkey,
-              ).catch(() => {})
+              ).catch(err => log.warn('cashu', 'WALLET_EVENT_PUBLISH_FAILED', { err: err?.message }))
             }
             log.info('cashu', 'AUTO_CREATED', { walletId })
             return { result: { walletId } }
@@ -1181,11 +1284,12 @@ export default defineBackground(() => {
             const wallet = await getActiveWallet(_cachedPassword)
             if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
             const result = await mintTokens(mintUrl, amountSats, quoteId, wallet.id, _cachedPassword)
-            recordCashuTx(wallet.id, { direction: 'in', amount: result.amountSats, description: 'Received via Lightning' }).catch(() => {})
-            const account = await getActiveAccount(_cachedPassword)
-            if (account?.secretHex) {
-              publishHistoryEvent(hexToBytes(account.secretHex), 'in', result.amountSats, [], account.pubkey).catch(() => {})
-            }
+            await recordCashuTx(wallet.id, {
+              direction: 'in', amount: result.amountSats, description: 'Received via Lightning', state: 'settled',
+            }).catch(err => log.warn('cashu', 'TX_RECORD_FAILED', { err: err?.message }))
+            syncCashuToRelays(wallet, 'in', result.amountSats).catch(err =>
+              log.warn('cashu', 'RELAY_SYNC_FAILED', { err: err?.message })
+            )
             return { result: { amountSats: result.amountSats } }
           }
           case 'CASHU_CHECK_MINT_QUOTE': {
@@ -1198,7 +1302,12 @@ export default defineBackground(() => {
             const wallet = await getActiveWallet(_cachedPassword)
             if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
             const result = await createEcashToken(getCashuMint(wallet), amountSats, wallet.id, _cachedPassword, memo)
-            recordCashuTx(wallet.id, { direction: 'out', amount: result.amountSats, description: memo || 'Sent token' }).catch(() => {})
+            await recordCashuTx(wallet.id, {
+              direction: 'out', amount: result.amountSats, description: memo || 'Sent token', state: 'settled',
+            }).catch(err => log.warn('cashu', 'TX_RECORD_FAILED', { err: err?.message }))
+            syncCashuToRelays(wallet, 'out', result.amountSats).catch(err =>
+              log.warn('cashu', 'RELAY_SYNC_FAILED', { err: err?.message })
+            )
             return { result }
           }
           case 'CASHU_RECEIVE_TOKEN': {
@@ -1206,7 +1315,12 @@ export default defineBackground(() => {
             const wallet = await getActiveWallet(_cachedPassword)
             if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
             const result = await receiveEcashToken(tokenStr, wallet.id, _cachedPassword)
-            recordCashuTx(wallet.id, { direction: 'in', amount: result.amountSats, description: 'Redeemed token' }).catch(() => {})
+            await recordCashuTx(wallet.id, {
+              direction: 'in', amount: result.amountSats, description: 'Redeemed token', state: 'settled',
+            }).catch(err => log.warn('cashu', 'TX_RECORD_FAILED', { err: err?.message }))
+            syncCashuToRelays(wallet, 'in', result.amountSats).catch(err =>
+              log.warn('cashu', 'RELAY_SYNC_FAILED', { err: err?.message })
+            )
             return { result }
           }
           case 'CASHU_GET_MINT_INFO': {
@@ -1286,6 +1400,33 @@ export default defineBackground(() => {
               const inv = await fetchInvoice(lightningAddress, amountSats)
               const payResult = await walletPayInvoice(inv.invoice, amountSats)
               return { result: { preimage: payResult.preimage, nip57: false } }
+            } catch (err) {
+              return { error: classifyError(err) }
+            }
+          }
+
+          // ── LNURL-withdraw (LUD-03) ──
+          case 'LNURL_FETCH_WITHDRAW': {
+            const [input] = params || []
+            if (!input) return { error: 'No LNURL input provided' }
+            try {
+              const withdrawParams = await fetchLnurlWithdrawParams(input)
+              return { result: withdrawParams }
+            } catch (err) {
+              return { error: classifyError(err) }
+            }
+          }
+          case 'LNURL_EXECUTE_WITHDRAW': {
+            const [withdrawParams, amountSats] = params || []
+            if (!withdrawParams || !amountSats) return { error: 'Missing parameters' }
+            try {
+              // Generate an invoice from our wallet for the service to pay
+              const invoiceResult = await walletMakeInvoice(amountSats, withdrawParams.defaultDescription || 'LNURL Withdraw')
+              const invoice = invoiceResult.invoice || invoiceResult.request
+              if (!invoice) throw new Error('Failed to create invoice')
+              // Submit invoice to the LNURL service
+              await executeLnurlWithdraw(withdrawParams, invoice)
+              return { result: { invoice, amountSats } }
             } catch (err) {
               return { error: classifyError(err) }
             }
@@ -1532,7 +1673,7 @@ export default defineBackground(() => {
 
           // ── Permission prompt response ──
           case 'PERMISSION_RESPONSE': {
-            const { requestId, decision, host, method, kind } = params?.[0] || {}
+            const { requestId, decision, host, method, kind, setBudget } = params?.[0] || {}
             if (!requestCoordinator.has(requestId)) return { error: 'Unknown request' }
             // Clean up stored event data
             await requestCoordinator.clearEventData(requestId)
@@ -1556,6 +1697,17 @@ export default defineBackground(() => {
             } else {
               await requestCoordinator.resolve(requestId, decision === 'allow_once')
             }
+
+            // Set budget if user opted in during payment approval
+            if (setBudget && setBudget > 0 && host && decision.startsWith('allow')) {
+              try {
+                await setAllowance(host, { budget: setBudget, spent: 0 })
+                log.info('permissions', 'BUDGET_SET_FROM_PROMPT', { host, budget: setBudget })
+              } catch (err) {
+                log.warn('permissions', 'BUDGET_SET_FAILED', { host, err: err?.message })
+              }
+            }
+
             return { result: { ok: true } }
           }
 
