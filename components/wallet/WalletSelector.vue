@@ -131,7 +131,7 @@ function handleAdd() {
               <img v-if="WALLET_LOGOS[activeWallet.type]"
                 :src="WALLET_LOGOS[activeWallet.type]"
                 :alt="activeWallet.type"
-                class="w-5 h-5 object-contain"
+                class="w-full h-full object-cover rounded-xl"
               />
               <Zap v-else class="w-4 h-4 text-brand" />
             </div>
@@ -201,7 +201,7 @@ function handleAdd() {
                 <img v-else-if="WALLET_LOGOS[w.type]"
                   :src="WALLET_LOGOS[w.type]"
                   :alt="w.type"
-                  class="w-5 h-5 object-contain"
+                  class="w-full h-full object-cover rounded-xl"
                 />
                 <Wallet v-else class="w-4 h-4 text-text-muted" />
               </div>

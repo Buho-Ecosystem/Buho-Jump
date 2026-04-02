@@ -84,12 +84,12 @@ let nwcPollTimer = null
 onMounted(() => {
   loadTransactions()
   loadRate()
-  // Load wallet-side budget (NWC only — Cashu has no budget concept)
-  if (walletType.value !== 'cashu') {
+  // Load wallet-side budget (NWC only — Cashu/LNbits have no budget concept)
+  if (walletType.value === 'nwc') {
     getBudget().then(b => { walletBudget.value = b }).catch(() => {})
   }
-  // Poll NWC connection status (skip for Cashu — always "connected")
-  if (walletType.value !== 'cashu') {
+  // Poll NWC connection status (only for NWC — Cashu/LNbits are always "connected")
+  if (walletType.value === 'nwc') {
     const checkNwc = () => {
       chrome.runtime.sendMessage({ type: 'GET_NWC_STATUS' })
         .then(res => { nwcConnected.value = res?.result?.connected !== false })
@@ -173,7 +173,7 @@ onBeforeUnmount(() => {
         </button>
 
         <!-- Wallet-side budget (NWC only) -->
-        <div v-if="walletType !== 'cashu' && walletBudget?.used_budget != null" class="text-center mb-1">
+        <div v-if="walletType === 'nwc' && walletBudget?.used_budget != null" class="text-center mb-1">
           <span class="text-[9px] text-text-muted">
             {{ t('wallet.nwcBudget', {
               used: formatSats(Math.floor((walletBudget.used_budget || 0) / 1000)),

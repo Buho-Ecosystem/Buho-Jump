@@ -8,26 +8,30 @@ import { useI18n } from 'vue-i18n'
 import { useWallet } from '../../composables/useWallet.js'
 import { useToast } from '../../composables/useToast.js'
 import CashuBackupSection from './CashuBackupSection.vue'
+import CashuMintSection from './CashuMintSection.vue'
 import { formatSats } from '../../lib/utils.js'
 import BottomSheet from '../BottomSheet.vue'
-import QrScanner from '../QrScanner.vue'
 import {
-  Zap, Wallet, Plus, Pencil, Trash2, Check, X,
-  Link, ScanLine, Loader2, AlertTriangle, RefreshCw,
+  Wallet, Plus, Pencil, Trash2, Check, X,
+  Loader2, AlertTriangle, RefreshCw,
 } from 'lucide-vue-next'
+import WalletConnect from '../wallet/WalletConnect.vue'
+
+const WALLET_LOGOS = {
+  nwc: '/nwc/nwc-logo.svg',
+  cashu: '/cashu/cashuu.png',
+  lnbits: '/lnbits/lnbits.svg',
+}
 
 const { t } = useI18n()
 const {
   status, wallets, walletType, connecting, switching,
-  loadStatus, loadWallets, connect, disconnect, switchWallet, rename,
+  loadStatus, loadWallets, disconnect, switchWallet, rename,
 } = useWallet()
 const toast = useToast()
 
 // Connect form
 const showConnectForm = ref(false)
-const nwcUri = ref('')
-const walletName = ref('')
-const showScanner = ref(false)
 
 // Rename
 const renamingId = ref(null)
@@ -44,22 +48,9 @@ onMounted(async () => {
   await Promise.all([loadStatus(), loadWallets()])
 })
 
-async function handleConnect() {
-  if (!nwcUri.value.trim()) return
-  try {
-    await connect(nwcUri.value.trim(), walletName.value.trim() || undefined)
-    nwcUri.value = ''
-    walletName.value = ''
-    showConnectForm.value = false
-    toast.success(t('wallet.walletConnected'))
-  } catch (err) {
-    toast.error(err.message || t('wallet.connectFailedDetail'))
-  }
-}
-
-function onScan(val) {
-  nwcUri.value = val
-  showScanner.value = false
+function onWalletConnected() {
+  showConnectForm.value = false
+  Promise.all([loadStatus(), loadWallets()])
 }
 
 function startRename(wallet) {
@@ -129,8 +120,13 @@ async function handleRefresh() {
     <div v-if="activeWallet" class="bg-surface-card rounded-3xl border border-brand/20 shadow-sm overflow-hidden">
       <div class="px-5 py-4">
         <div class="flex items-center gap-3">
-          <div class="w-11 h-11 rounded-2xl bg-brand/10 flex items-center justify-center shrink-0">
-            <Zap class="w-5 h-5 text-brand" />
+          <div class="w-11 h-11 rounded-2xl bg-brand/10 flex items-center justify-center shrink-0 overflow-hidden">
+            <img v-if="WALLET_LOGOS[activeWallet.type]"
+              :src="WALLET_LOGOS[activeWallet.type]"
+              :alt="activeWallet.type"
+              class="w-full h-full object-cover rounded-2xl"
+            />
+            <Wallet v-else class="w-5 h-5 text-brand" />
           </div>
           <div class="flex-1 min-w-0">
             <!-- Rename mode -->
@@ -190,8 +186,13 @@ async function handleRefresh() {
         :disabled="switching"
         class="w-full flex items-center gap-3 px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm hover:border-brand/30 transition-all duration-200 text-left group disabled:opacity-50"
       >
-        <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center shrink-0">
+        <div class="w-10 h-10 rounded-[10px] bg-surface-elevated flex items-center justify-center shrink-0 overflow-hidden">
           <Loader2 v-if="switching" class="w-4 h-4 text-text-muted animate-spin" />
+          <img v-else-if="WALLET_LOGOS[w.type]"
+            :src="WALLET_LOGOS[w.type]"
+            :alt="w.type"
+            class="w-full h-full object-cover rounded-[10px]"
+          />
           <Wallet v-else class="w-4 h-4 text-text-muted" />
         </div>
         <span class="flex-1 text-sm font-medium text-text-secondary truncate">{{ w.name }}</span>
@@ -210,7 +211,7 @@ async function handleRefresh() {
     <div v-if="wallets.length === 0 && !showConnectForm"
       class="bg-surface-card rounded-3xl border border-border shadow-sm p-8 text-center">
       <div class="w-14 h-14 rounded-2xl bg-brand/10 flex items-center justify-center mx-auto mb-3">
-        <img src="/nwc/nwc-logo.svg" alt="NWC" class="w-8 h-8" />
+        <Wallet class="w-7 h-7 text-brand" />
       </div>
       <p class="text-sm font-extrabold mb-1">{{ t('wallet.noWallets') }}</p>
       <p class="text-xs text-text-muted mb-4">{{ t('wallet.noWalletHomeDesc') }}</p>
@@ -218,7 +219,7 @@ async function handleRefresh() {
         @click="showConnectForm = true"
         class="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-brand text-surface-base text-xs font-semibold hover:bg-brand-hover transition-colors btn-primary"
       >
-        <Link class="w-3.5 h-3.5" />
+        <Plus class="w-3.5 h-3.5" />
         {{ t('wallet.connectWallet') }}
       </button>
     </div>
@@ -233,50 +234,9 @@ async function handleRefresh() {
       {{ t('wallet.addWallet') }}
     </button>
 
-    <!-- Connect form -->
-    <div v-if="showConnectForm" class="bg-surface-card rounded-3xl border border-border shadow-sm p-5 space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-sm font-extrabold">{{ t('wallet.addWallet') }}</h2>
-        <button @click="showConnectForm = false; nwcUri = ''; walletName = ''"
-          class="p-1 rounded-lg hover:bg-surface-elevated transition-colors">
-          <X class="w-4 h-4 text-text-muted" />
-        </button>
-      </div>
-
-      <input
-        v-model="walletName"
-        :placeholder="t('wallet.walletName')"
-        class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted"
-      />
-
-      <div class="flex items-center justify-end">
-        <button @click="showScanner = !showScanner"
-          class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-colors font-medium">
-          <ScanLine class="w-3 h-3" />
-          {{ showScanner ? t('common.typeInstead') : t('common.scanQr') }}
-        </button>
-      </div>
-
-      <QrScanner v-if="showScanner" @scan="onScan" @close="showScanner = false" />
-
-      <div v-else class="space-y-1.5">
-        <input
-          v-model="nwcUri"
-          placeholder="nostr+walletconnect://..."
-          class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors font-mono placeholder:text-text-muted"
-        />
-        <p class="text-[10px] text-text-muted px-1 leading-relaxed">{{ t('wallet.nwcHelp') }}</p>
-      </div>
-
-      <button
-        @click="handleConnect"
-        :disabled="!nwcUri.trim() || connecting"
-        class="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 font-semibold btn-primary"
-      >
-        <Loader2 v-if="connecting" class="w-4 h-4 animate-spin" />
-        <Link v-else class="w-4 h-4" />
-        {{ connecting ? t('wallet.connecting') : t('wallet.connectWallet') }}
-      </button>
+    <!-- Connect form — reuses the shared WalletConnect component -->
+    <div v-if="showConnectForm" class="bg-surface-card rounded-3xl border border-border shadow-sm p-5">
+      <WalletConnect @back="onWalletConnected" />
     </div>
 
     <!-- Remove confirmation -->
@@ -299,7 +259,10 @@ async function handleRefresh() {
       </template>
     </BottomSheet>
 
-    <!-- Cashu backup section (only when Cashu wallet is active) -->
-    <CashuBackupSection v-if="walletType === 'cashu'" class="mt-8" />
+    <!-- Cashu sections (only when Cashu wallet is active) -->
+    <template v-if="walletType === 'cashu'">
+      <CashuMintSection class="mt-8" />
+      <CashuBackupSection class="mt-6" />
+    </template>
   </div>
 </template>

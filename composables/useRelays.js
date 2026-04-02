@@ -80,6 +80,23 @@ export function useRelays() {
     return info
   }
 
+  /**
+   * Check connectivity for a single relay URL.
+   * Opens a WebSocket, waits for open/error, then closes.
+   * Returns 'connected' | 'unreachable'.
+   */
+  function checkRelayStatus(url) {
+    return new Promise((resolve) => {
+      const wsUrl = url.replace(/^wss?:\/\//, (m) => m)
+      const timeout = setTimeout(() => { resolve('unreachable') }, 5000)
+      try {
+        const ws = new WebSocket(wsUrl)
+        ws.onopen = () => { clearTimeout(timeout); ws.close(); resolve('connected') }
+        ws.onerror = () => { clearTimeout(timeout); resolve('unreachable') }
+      } catch { clearTimeout(timeout); resolve('unreachable') }
+    })
+  }
+
   return {
     relayConfig,
     loading,
@@ -92,5 +109,6 @@ export function useRelays() {
     publishRelayList,
     fetchRelayList,
     getRelayInfo,
+    checkRelayStatus,
   }
 }

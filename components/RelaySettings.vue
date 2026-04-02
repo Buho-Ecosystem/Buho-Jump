@@ -13,14 +13,14 @@ import RelayInfoSheet from './RelayInfoSheet.vue'
 import BottomSheet from './BottomSheet.vue'
 import {
   ArrowLeft, Plus, Trash2, RotateCcw, Loader2,
-  AlertTriangle, Upload, Download, Globe,
+  AlertTriangle, Upload, Download, Globe, RefreshCw,
 } from 'lucide-vue-next'
 
 defineProps({ hideBack: { type: Boolean, default: false } })
 const emit = defineEmits(['back'])
 
 const { t } = useI18n()
-const { relayConfig, loading, loadRelays, addRelay, removeRelay, resetPool, setPoolRelays, publishRelayList, fetchRelayList, getRelayInfo } = useRelays()
+const { relayConfig, loading, loadRelays, addRelay, removeRelay, resetPool, setPoolRelays, publishRelayList, fetchRelayList, getRelayInfo, checkRelayStatus } = useRelays()
 const { activeAccount } = useAccounts()
 const toast = useToast()
 
@@ -49,6 +49,21 @@ const activeRelays = computed(() => relayConfig.value[activePool.value] || [])
 
 const isLocalAccount = computed(() => activeAccount.value?.mode === 'local')
 
+// ── Relay status (connected / unreachable) ──
+const relayStatus = reactive({}) // url → 'checking' | 'connected' | 'unreachable'
+const checkingAll = ref(false)
+
+async function checkAllStatuses() {
+  const urls = activeRelays.value
+  if (!urls.length) return
+  checkingAll.value = true
+  for (const url of urls) relayStatus[url] = 'checking'
+  await Promise.all(urls.map(async (url) => {
+    relayStatus[url] = await checkRelayStatus(url)
+  }))
+  checkingAll.value = false
+}
+
 // ── Relay icons (lazy-loaded from NIP-11) ──
 const relayIcons = reactive({}) // url → icon URL or null
 const iconFailed = reactive({}) // url → true if img failed to load
@@ -65,10 +80,18 @@ function fetchRelayIcons(urls) {
   }
 }
 
-// Fetch icons whenever the relay list changes
-watch(activeRelays, (urls) => { if (urls.length) fetchRelayIcons(urls) }, { immediate: true })
+// Fetch icons and check status whenever the relay list changes
+watch(activeRelays, (urls) => {
+  if (urls.length) {
+    fetchRelayIcons(urls)
+    checkAllStatuses()
+  }
+}, { immediate: true })
 
-onMounted(() => { loadRelays() })
+onMounted(async () => {
+  await loadRelays()
+  checkAllStatuses()
+})
 
 async function handleAdd() {
   const url = newRelayUrl.value.trim()
@@ -170,7 +193,15 @@ function relayHostname(url) {
       <button v-if="!hideBack" @click="emit('back')" :aria-label="t('common.back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
-      <span class="text-sm font-semibold">{{ t('relay.title') }}</span>
+      <span class="text-sm font-semibold flex-1">{{ t('relay.title') }}</span>
+      <button
+        @click="checkAllStatuses"
+        :disabled="checkingAll"
+        class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200"
+        :title="t('relay.refreshStatus')"
+      >
+        <RefreshCw class="w-3.5 h-3.5 text-text-muted" :class="checkingAll ? 'animate-spin' : ''" />
+      </button>
     </div>
 
     <!-- Warning banner -->
@@ -220,7 +251,15 @@ function relayHostname(url) {
             <Globe v-else class="w-3.5 h-3.5 text-text-muted" />
           </div>
           <div class="min-w-0">
-            <span class="text-xs font-medium truncate block">{{ relayHostname(url) }}</span>
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-medium truncate">{{ relayHostname(url) }}</span>
+              <!-- Status indicator -->
+              <Loader2 v-if="relayStatus[url] === 'checking'" class="w-2.5 h-2.5 text-text-muted animate-spin shrink-0" />
+              <span v-else-if="relayStatus[url] === 'connected'"
+                class="w-2 h-2 rounded-full bg-success shrink-0" :title="t('relay.statusConnected')" />
+              <span v-else-if="relayStatus[url] === 'unreachable'"
+                class="w-2 h-2 rounded-full bg-error shrink-0" :title="t('relay.statusUnreachable')" />
+            </div>
             <span class="text-[9px] text-text-muted truncate block">{{ url }}</span>
           </div>
         </div>
@@ -358,6 +397,7 @@ function relayHostname(url) {
       <RelayInfoSheet
         v-if="infoRelayUrl"
         :url="infoRelayUrl"
+        :connected="relayStatus[infoRelayUrl] === 'connected'"
         @close="infoRelayUrl = null"
       />
     </Teleport>

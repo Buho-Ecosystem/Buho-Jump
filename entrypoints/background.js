@@ -594,7 +594,7 @@ async function handleWeblnEnable(sender) {
   if (!allowed) return { error: 'PERMISSION_DENIED' }
   try {
     const wType = await getActiveWalletType()
-    if (wType === 'cashu') return { result: { enabled: true } }
+    if (wType === 'cashu' || wType === 'lnbits') return { result: { enabled: true } }
     await ensureNWC()
     return { result: { enabled: true } }
   } catch (err) { return { error: classifyError(err) } }
@@ -607,7 +607,11 @@ async function handleWeblnGetInfo(sender) {
     const wType = await getActiveWalletType()
     if (wType === 'cashu') {
       const w = await getActiveWallet(_cachedPassword)
-      return { result: { alias: w?.name || 'Buho', methods: ['pay_invoice', 'make_invoice', 'get_balance', 'pay_keysend'] } }
+      return { result: { alias: w?.name || 'Buho', methods: ['pay_invoice', 'make_invoice', 'get_balance'] } }
+    }
+    if (wType === 'lnbits') {
+      const w = await getActiveWallet(_cachedPassword)
+      return { result: { alias: w?.name || 'LNbits', methods: ['pay_invoice', 'make_invoice', 'get_balance', 'list_transactions'] } }
     }
     const nwc = await ensureNWC()
     return { result: await nwc.getInfo() }
@@ -1335,12 +1339,16 @@ export default defineBackground(() => {
           }
           case 'WALLET_PAY_KEYSEND': {
             const [keysendParams] = params || []
+            const wType = await getActiveWalletType()
+            if (wType !== 'nwc') return { error: 'NOT_SUPPORTED' }
             const nwc = await ensureNWC()
             const ksResult = await nwc.payKeysend(keysendParams)
             return { result: ksResult }
           }
           case 'WALLET_SIGN_MESSAGE': {
             const [msg] = params || []
+            const wType = await getActiveWalletType()
+            if (wType !== 'nwc') return { error: 'NOT_SUPPORTED' }
             const nwc = await ensureNWC()
             const sigResult = await nwc.signMessage(msg)
             return { result: sigResult }
@@ -1436,6 +1444,13 @@ export default defineBackground(() => {
               await addCashuProofs(wallet.id, restored.proofs, _cachedPassword)
             }
             return { result: { proofCount: restored.proofs.length, mints: restored.walletData?.mints || [] } }
+          }
+          case 'GET_CASHU_MINT_URL': {
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (wallet?.type === 'cashu' && wallet.mints?.length) {
+              return { result: wallet.mints[0] }
+            }
+            return { result: null }
           }
           case 'CASHU_UPDATE_MINTS': {
             const [walletId, mints] = params || []
