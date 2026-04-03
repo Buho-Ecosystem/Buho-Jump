@@ -16,6 +16,35 @@ const contacts = ref([])
 const loading = ref(false)
 const error = ref(null)  // i18n key or null — set when loadFollowList fails
 let loadedForPubkey = null
+let profileCacheLoaded = false
+
+// ── Profile cache persistence ──
+
+async function loadProfileCache() {
+  if (profileCacheLoaded) return
+  profileCacheLoaded = true
+  try {
+    const data = await chrome.storage.local.get('profileCache')
+    if (data.profileCache) {
+      for (const [pk, profile] of Object.entries(data.profileCache)) {
+        if (!profileCache.has(pk)) profileCache.set(pk, profile)
+      }
+    }
+  } catch { /* storage read failed */ }
+}
+
+let persistProfileTimer = null
+function persistProfileCache() {
+  if (persistProfileTimer) return // debounce
+  persistProfileTimer = setTimeout(async () => {
+    persistProfileTimer = null
+    try {
+      const obj = {}
+      for (const [pk, profile] of profileCache) obj[pk] = profile
+      await chrome.storage.local.set({ profileCache: obj })
+    } catch { /* storage write failed */ }
+  }, 2000)
+}
 
 export function useContacts() {
   /**
@@ -24,6 +53,7 @@ export function useContacts() {
   async function loadFollowList(pubkey) {
     if (loading.value) return // prevent concurrent loads
     loading.value = true
+    await loadProfileCache() // Restore cached profiles from storage
     error.value = null
     loadedForPubkey = pubkey
     try {
@@ -87,6 +117,7 @@ export function useContacts() {
           profileCache.set(pk, JSON.parse(e.content))
         } catch { /* malformed profile */ }
       }
+      persistProfileCache()
     } catch { /* relay error */ }
   }
 
@@ -94,6 +125,7 @@ export function useContacts() {
    * Get a single profile (cached or fetched).
    */
   async function fetchProfile(pubkey) {
+    await loadProfileCache()
     if (profileCache.has(pubkey)) return profileCache.get(pubkey)
     await fetchProfiles([pubkey])
     return profileCache.get(pubkey) || null
@@ -103,6 +135,8 @@ export function useContacts() {
    * Get a cached profile synchronously (no fetch).
    */
   function getCachedProfile(pubkey) {
+    // Note: loadProfileCache is async; on first call before load, returns null.
+    // Callers should use fetchProfile() for guaranteed results.
     return profileCache.get(pubkey) || null
   }
 

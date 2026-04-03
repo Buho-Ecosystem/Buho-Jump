@@ -9,7 +9,7 @@
  * - Profile publishing/fetching
  */
 
-import { finalizeEvent, getPublicKey, hexToBytes, bytesToHex, randomBytes, nip19, nip42, nip57, nip09, createReactionEvent, createHttpAuthEvent, getAuthorizationHeader, NWC, createSecretKeySigner, fetchPayRequest, fetchInvoice, decodeBolt11 } from 'nostr-core'
+import { finalizeEvent, getPublicKey, hexToBytes, bytesToHex, randomBytes, nip19, nip42, nip57, nip59, nip09, nip25, createReactionEvent, createHttpAuthEvent, getAuthorizationHeader, NWC, createSecretKeySigner, fetchPayRequest, fetchInvoice, decodeBolt11 } from 'nostr-core'
 import {
   getActiveAccount,
   getAccounts,
@@ -82,6 +82,7 @@ import {
 import { getPool, setAuthHandler } from '../lib/relayPool.js'
 import { connectBunker, createNostrConnectURI, awaitNostrConnect, parseConnectionURI } from '../lib/nip46-bridge.js'
 import { openPromptWindow } from '../lib/browser/capabilities.js'
+import { buildNutbitsDeepLink, NUTBITS_CALLBACK_URL } from '../lib/nutbits.js'
 import { notifyDm, notifyPayment, notifyGroup, setupNotificationClickHandler } from '../lib/notifications.js'
 import { startNotificationPoller } from '../lib/notificationPoller.js'
 import { saveSession, getSession, clearSession } from '../lib/session.js'
@@ -1163,6 +1164,60 @@ export default defineBackground(() => {
           }
 
           // ── Wallet ──
+          case 'NUTBITS_CONNECT': {
+            // Open NUTbits deep link — intercept callback redirect asynchronously.
+            // NUTbits API serves GET /connect (animated HTML page) which POSTs to
+            // create a dedicated NWC connection, then redirects to our callback URL.
+            // Chrome blocks web→chrome-extension:// redirects, so we use a dummy
+            // HTTP callback and intercept via tabs.onUpdated before it loads.
+            const deepLink = buildNutbitsDeepLink()
+            const tab = await chrome.tabs.create({ url: deepLink })
+
+            const cleanup = () => {
+              chrome.tabs.onUpdated.removeListener(onUpdated)
+              chrome.tabs.onRemoved.removeListener(onRemoved)
+              clearTimeout(timeoutId)
+            }
+
+            const onUpdated = async (tabId, changeInfo) => {
+              if (tabId !== tab.id || !changeInfo.url) return
+              if (!changeInfo.url.startsWith(NUTBITS_CALLBACK_URL)) return
+              cleanup()
+              try {
+                const url = new URL(changeInfo.url)
+                const raw = url.searchParams.get('value')
+                if (!raw) {
+                  chrome.tabs.update(tabId, { url: chrome.runtime.getURL('nwc-callback.html?error=no_value') })
+                  return
+                }
+                const nwcString = decodeURIComponent(raw)
+                if (!nwcString.startsWith('nostr+walletconnect://')) {
+                  chrome.tabs.update(tabId, { url: chrome.runtime.getURL('nwc-callback.html?error=invalid') })
+                  return
+                }
+                await addWallet(nwcString, 'NUTbits', _cachedPassword)
+                teardownNwc()
+                await ensureNWC()
+                chrome.tabs.update(tabId, { url: chrome.runtime.getURL('nwc-callback.html?success=1') })
+              } catch (err) {
+                console.error('NUTbits connect failed:', err)
+                chrome.tabs.update(tabId, { url: chrome.runtime.getURL('nwc-callback.html?error=connect_failed') })
+              }
+            }
+
+            const onRemoved = (tabId) => {
+              if (tabId !== tab.id) return
+              cleanup()
+            }
+
+            // Safety: clean up listeners after 2 minutes if nothing happened
+            const timeoutId = setTimeout(cleanup, 120_000)
+
+            chrome.tabs.onUpdated.addListener(onUpdated)
+            chrome.tabs.onRemoved.addListener(onRemoved)
+            return { result: { opened: true } }
+          }
+          case 'NWC_DEEPLINK_CONNECT':
           case 'CONNECT_WALLET': {
             const [uri, walletName] = params || []
             await addWallet(uri, walletName || null, _cachedPassword)
@@ -1622,30 +1677,70 @@ export default defineBackground(() => {
 
           // ── Reactions (NIP-25) ──
           case 'SEND_REACTION': {
-            const [targetEventId, targetPubkey, emoji] = params || []
-            if (!targetEventId) return { error: 'No target event' }
+            const [targetEventId, recipientPubkey, emoji] = params || []
+            if (!targetEventId || !recipientPubkey) return { error: 'Missing parameters' }
             const account = await getActiveAccount(_cachedPassword)
             if (!account || account.mode !== 'local') return { error: 'LOCAL_ACCOUNT_REQUIRED' }
             const secretKey = hexToBytes(account.secretHex)
-            const reaction = createReactionEvent(
-              { targetEventId, targetPubkey, reaction: emoji || '+' },
-              secretKey
-            )
-            const relays = await getPoolRelays(account.pubkey, 'account')
+
+            // Create kind 7 reaction as a rumor, then gift-wrap for DM privacy
+            const reactionTemplate = {
+              kind: 7,
+              content: emoji || '+',
+              tags: [['e', targetEventId], ['p', recipientPubkey]],
+              created_at: Math.floor(Date.now() / 1000),
+            }
+            const rumor = nip59.createRumor(reactionTemplate, account.pubkey)
+            // Wrap for recipient
+            const sealR = nip59.createSeal(rumor, secretKey, recipientPubkey)
+            const wrapR = nip59.createWrap(sealR, recipientPubkey)
+            // Self-copy
+            const sealS = nip59.createSeal(rumor, secretKey, account.pubkey)
+            const wrapS = nip59.createWrap(sealS, account.pubkey)
+
+            const chatRelays = await getPoolRelays(account.pubkey, 'chat').catch(() => [])
             const pool = getPool()
-            await Promise.allSettled(relays.map(url => pool.publish([url], reaction)))
-            return { result: { sent: true } }
+            await Promise.allSettled([
+              ...chatRelays.map(url => pool.publish([url], wrapR)),
+              ...chatRelays.map(url => pool.publish([url], wrapS)),
+            ])
+            return { result: { sent: true, reactionId: rumor.id } }
           }
 
-          // ── Event deletion (NIP-09) ──
+          // ── Event deletion (NIP-09, gift-wrapped for DM privacy) ──
           case 'DELETE_EVENT': {
-            const [eventId, reason] = params || []
+            const [eventId, recipientPubkey, reason] = params || []
             if (!eventId) return { error: 'No event ID' }
             const account = await getActiveAccount(_cachedPassword)
             if (!account || account.mode !== 'local') return { error: 'LOCAL_ACCOUNT_REQUIRED' }
             const secretKey = hexToBytes(account.secretHex)
+
+            // If recipientPubkey provided, send as gift-wrapped rumor (DM context)
+            if (recipientPubkey) {
+              const deletionTemplate = {
+                kind: 5,
+                content: reason || '',
+                tags: [['e', eventId]],
+                created_at: Math.floor(Date.now() / 1000),
+              }
+              const rumor = nip59.createRumor(deletionTemplate, account.pubkey)
+              const sealR = nip59.createSeal(rumor, secretKey, recipientPubkey)
+              const wrapR = nip59.createWrap(sealR, recipientPubkey)
+              const sealS = nip59.createSeal(rumor, secretKey, account.pubkey)
+              const wrapS = nip59.createWrap(sealS, account.pubkey)
+
+              const chatRelays = await getPoolRelays(account.pubkey, 'chat').catch(() => [])
+              const pool = getPool()
+              await Promise.allSettled([
+                ...chatRelays.map(url => pool.publish([url], wrapR)),
+                ...chatRelays.map(url => pool.publish([url], wrapS)),
+              ])
+              return { result: { deleted: true, eventId } }
+            }
+
+            // Public deletion (non-DM context)
             const deletion = nip09.createDeletionEvent(
-              { eventIds: [eventId], reason: reason || '' },
+              { targets: [{ type: 'event', id: eventId }], reason: reason || '' },
               secretKey
             )
             const relays = await getPoolRelays(account.pubkey, 'account')

@@ -1,14 +1,14 @@
 <script setup>
 /**
- * Group message bubble — shows sender name/avatar for first-in-group,
- * reply context, and message content. Similar to ChatBubble but with
- * multi-sender support.
+ * Group message bubble — sender name/avatar for first-in-group,
+ * reply context, reactions, deletion, and long-press action menu.
  */
-import { computed } from 'vue'
+import { computed, ref, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContacts } from '../../composables/useContacts.js'
 import { getAvatarColor } from '../../lib/avatarColor.js'
-import { Loader2, AlertCircle, Check, CornerDownRight } from 'lucide-vue-next'
+import MessageActions from './MessageActions.vue'
+import { Loader2, AlertCircle, Check, CornerDownRight, AlertTriangle } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -19,9 +19,11 @@ const props = defineProps({
   isLastInGroup: { type: Boolean, default: true },
   replyContent: { type: String, default: '' },
   replySenderName: { type: String, default: '' },
+  reactions: { type: Array, default: () => [] },
+  deleted: { type: Boolean, default: false },
 })
 
-defineEmits(['retry', 'reply'])
+const emit = defineEmits(['retry', 'reply', 'react', 'delete', 'forward'])
 
 const { getCachedProfile } = useContacts()
 
@@ -37,6 +39,31 @@ const isSending = computed(() => props.message.status === 'sending')
 const timeStr = computed(() => {
   const d = new Date(props.message.created_at * 1000)
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+})
+
+// Long-press action menu
+const showActions = ref(false)
+let pressTimer = null
+
+function onPointerDown() {
+  pressTimer = setTimeout(() => { showActions.value = true }, 500)
+}
+function onPointerUp() { clearTimeout(pressTimer) }
+function onPointerLeave() { clearTimeout(pressTimer) }
+
+onBeforeUnmount(() => clearTimeout(pressTimer))
+
+// Grouped reactions for display
+const groupedReactions = computed(() => {
+  if (!props.reactions.length) return []
+  const map = new Map()
+  for (const r of props.reactions) {
+    if (!map.has(r.emoji)) map.set(r.emoji, { emoji: r.emoji, count: 0, hasMine: false })
+    const g = map.get(r.emoji)
+    g.count++
+    if (r.sender === 'me') g.hasMine = true
+  }
+  return [...map.values()]
 })
 </script>
 
@@ -59,16 +86,28 @@ const timeStr = computed(() => {
 
     <!-- Bubble -->
     <div
-      class="max-w-[80%] relative group"
+      class="max-w-[80%] relative"
       :class="isFailed ? 'opacity-60' : ''"
     >
+      <!-- Action menu (long-press) -->
+      <MessageActions
+        v-if="showActions && !deleted"
+        :message="message"
+        :is-sent="isMe"
+        @react="(emoji) => emit('react', { messageId: message.id, emoji })"
+        @reply="emit('reply', message)"
+        @delete="emit('delete', message)"
+        @forward="emit('forward', message)"
+        @close="showActions = false"
+      />
+
       <!-- Sender name (received, first in group) -->
       <div v-if="!isMe && isFirstInGroup" class="text-[10px] font-semibold mb-0.5 px-1" :style="{ color: senderColor }">
         {{ senderName }}
       </div>
 
       <!-- Reply context -->
-      <div v-if="replyContent"
+      <div v-if="replyContent && !deleted"
         class="flex items-center gap-1 text-[10px] text-text-muted px-3 py-1 mb-0.5 rounded-t-xl border-l-2 border-brand/40 bg-surface-elevated/50">
         <CornerDownRight class="w-2.5 h-2.5 shrink-0" />
         <span class="font-semibold">{{ replySenderName }}</span>
@@ -76,18 +115,31 @@ const timeStr = computed(() => {
       </div>
 
       <div
-        @click="isFailed ? $emit('retry', message.id) : $emit('reply', message)"
-        class="px-3 py-1.5 text-[13px] leading-relaxed break-words"
+        @pointerdown="onPointerDown"
+        @pointerup="onPointerUp"
+        @pointerleave="onPointerLeave"
+        @contextmenu.prevent="showActions = true"
+        class="px-3 py-1.5 text-[13px] leading-relaxed break-words select-none"
         :class="[
           isMe
             ? 'bg-brand text-surface-base rounded-2xl'
             : 'bg-surface-card border border-border text-text-primary rounded-2xl',
           isMe && isLastInGroup ? 'rounded-br-[4px]' : '',
           !isMe && isLastInGroup ? 'rounded-bl-[4px]' : '',
-          isFailed ? 'cursor-pointer' : '',
         ]"
       >
-        {{ message.content }}
+        <!-- Deleted message -->
+        <template v-if="deleted">
+          <span class="inline-flex items-center gap-1 opacity-60 italic text-xs">
+            <AlertTriangle class="w-3 h-3" />
+            {{ t('chat.messageDeletedLabel') }}
+          </span>
+        </template>
+
+        <!-- Normal content -->
+        <template v-else>
+          {{ message.content }}
+        </template>
 
         <!-- Timestamp + status -->
         <span class="inline-flex items-center gap-0.5 ml-2 align-bottom text-[10px] opacity-60 select-none">
@@ -99,10 +151,27 @@ const timeStr = computed(() => {
       </div>
 
       <!-- Retry hint -->
-      <button v-if="isFailed" @click="$emit('retry', message.id)"
+      <button v-if="isFailed" @click="emit('retry', message.id)"
         class="text-[10px] text-error font-medium mt-0.5 px-1">
         {{ t('chat.tapToRetry') }}
       </button>
     </div>
+  </div>
+
+  <!-- Reaction chips -->
+  <div v-if="groupedReactions.length > 0 && !deleted"
+    class="flex gap-1 mt-0.5 px-1"
+    :class="isMe ? 'justify-end' : 'justify-start pl-8'"
+  >
+    <span
+      v-for="r in groupedReactions" :key="r.emoji"
+      class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] border transition-colors cursor-default"
+      :class="r.hasMine
+        ? 'bg-brand/10 border-brand/20 text-brand'
+        : 'bg-surface-elevated border-border text-text-secondary'"
+    >
+      <span>{{ r.emoji }}</span>
+      <span v-if="r.count > 1" class="font-semibold tabular-nums">{{ r.count }}</span>
+    </span>
   </div>
 </template>

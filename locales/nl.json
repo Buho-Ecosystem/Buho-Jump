@@ -28,7 +28,8 @@
     "showingOf": "Showing {shown} of {total}",
     "showMore": "Show more",
     "offline": "No internet connection",
-    "open": "Open"
+    "open": "Open",
+    "validating": "Valideren..."
   },
   "errors": {
     "PERMISSION_DENIED": "Permission denied",
@@ -93,7 +94,12 @@
     "relaySettings": "Relay-instellingen",
     "relaySettingsDesc": "Beheer je relay-verbindingen",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Open in full page"
+    "openFullPage": "Open in full page",
+    "more": "Meer",
+    "allSettings": "Alle instellingen",
+    "popOut": "Zwevend venster",
+    "popOutTitle": "Venster losmaken",
+    "popOutDesc": "Houd Buho open als een zwevend venster dat je overal naartoe kunt slepen. Blader vrij zonder je wallet te verliezen."
   },
   "relay": {
     "title": "Relay-instellingen",
@@ -138,7 +144,10 @@
     "infoOperator": "Beheerder",
     "infoContact": "Contact",
     "infoYes": "Ja",
-    "infoNo": "Nee"
+    "infoNo": "Nee",
+    "statusConnected": "Relay is bereikbaar",
+    "statusUnreachable": "Relay is onbereikbaar",
+    "refreshStatus": "Relay-verbinding controleren"
   },
   "account": {
     "activeDesc": "Actief account — apps gebruiken dit profiel",
@@ -171,7 +180,12 @@
     "showQr": "Show QR code",
     "connectedRelays": "Connected relays",
     "relayCount": "{count} relay | {count} relays",
-    "noRelays": "No relays configured"
+    "noRelays": "No relays configured",
+    "deleteBackupWarning": "Maak eerst een backup van je sleutel!",
+    "deleteBackupHint": "Zonder backup betekent het verwijderen van deze identiteit dat je de toegang voorgoed verliest. Er is geen herstel.",
+    "deleteBackupCta": "Sleutel backuppen in Instellingen",
+    "deleteLocalExplain": "Deze actie verwijdert je privésleutel permanent uit Buho. Alle verbonden sites verliezen de toegang tot deze identiteit.",
+    "deleteRemoteExplain": "Dit verbreekt alleen de verbinding met de externe ondertekenaar. Je sleutel blijft veilig op het ondertekenaar-apparaat — je kunt op elk moment opnieuw verbinden."
   },
   "wizard": {
     "addAccount": "Account Toevoegen",
@@ -340,9 +354,7 @@
     "kindRelayList": "Servervoorkeuren",
     "kindArticle": "Lang artikel",
     "kindAppData": "App-gegevens",
-    "kindGeneric": "Eventtype {kind}",
-    "moreOptions": "Meer opties",
-    "fewerOptions": "Minder opties"
+    "kindGeneric": "Eventtype {kind}"
   },
   "wallet": {
     "balance": "Saldo",
@@ -507,7 +519,13 @@
     "removeWalletWarning": "This will permanently delete all funds in this wallet. Make sure you have a backup.",
     "lightningReady": "Lightning-ready",
     "invoiceCopied": "Invoice copied",
-    "fileTooLarge": "File too large (max 10 MB)"
+    "fileTooLarge": "File too large (max 10 MB)",
+    "chooseType": "Kies hoe je je wallet wilt verbinden",
+    "nwcDesc": "Verbinding via Nostr-relay — werkt met Alby, Buho, LNbits, Coinos en meer",
+    "lnbitsDesc": "Verbind rechtstreeks met je LNbits-instantie via REST API",
+    "lnbitsHelp": "Vind je URL en Admin Key in je LNbits wallet-instellingen onder API-info.",
+    "lnbitsUrl": "LNbits URL",
+    "lnbitsAdminKey": "Admin Key"
   },
   "sites": {
     "title": "Site Details",
@@ -624,7 +642,8 @@
     "filterAll": "All",
     "filterDms": "DMs",
     "filterGroups": "Groups",
-    "joinOrCreate": "Join or create a group"
+    "joinOrCreate": "Join or create a group",
+    "messageDeletedLabel": "Dit bericht is verwijderd"
   },
   "group": {
     "title": "Groups",
@@ -698,7 +717,20 @@
     "searchMembers": "Search contacts...",
     "channelJoinDesc": "Paste a channel link to join a public conversation.",
     "serverHintOptional": "Optional — leave empty to use your default relays",
-    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave."
+    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave.",
+    "copyInviteLink": "Uitnodigingslink kopiëren",
+    "linkCopied": "Uitnodigingslink gekopieerd",
+    "previewGroup": "Groep bekijken",
+    "muteGroup": "Meldingen dempen",
+    "unmuteGroup": "Meldingen inschakelen",
+    "muted": "Meldingen gedempt",
+    "unmuted": "Meldingen ingeschakeld",
+    "checkingRelay": "Server controleren...",
+    "relayOnline": "Server is online en bereikbaar",
+    "relayUnreachable": "Server is mogelijk offline — je kunt het toch proberen",
+    "inviteCount": "{count} uitnodigen",
+    "usersInvited": "{count} leden uitgenodigd",
+    "inviteManualPlaceholder": "npub, NIP-05 of hex pubkey"
   },
   "notifications": {
     "title": "Notifications",
@@ -767,6 +799,47 @@
     "pointCamera": "Richt je camera op een QR-code",
     "cameraBlocked": "Camera is blocked. Upload a QR code image instead, or allow camera access in your browser settings.",
     "noQrFound": "No QR code found in this image. Try a clearer photo.",
-    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead."
+    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead.",
+    "extensionHint": "Camera is niet beschikbaar in extensie-popups"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "De mint bewaart je ecash-saldo en verwerkt Lightning-betalingen namens jou.",
+    "mintExplainer": "Buho Jump maakt een instant ecash-wallet voor elk account zodat je direct Bitcoin kunt ontvangen — geen configuratie nodig.",
+    "whatsAMint": "Wat is een mint?",
+    "mintExplainerIntro": "Een mint is een betrouwbare server in het ecash-ecosysteem. Het bewaart je saldo als ecash-tokens en verwerkt Lightning-betalingen voor je — ontworpen om snel te beginnen.",
+    "mintTooltipGood": "Waarom het geweldig is",
+    "mintTooltipKnow": "Goed om te weten",
+    "mintBulletInstant": "Ontvang Bitcoin direct, geen node nodig",
+    "mintBulletNoSetup": "Werkt direct voor elk account",
+    "mintBulletPrivacy": "Ecash biedt sterke transactieprivacy",
+    "mintBulletCustodial": "Custodiaal — de mint bewaart je fondsen",
+    "mintBulletSmall": "Ideaal voor kleine bedragen, niet voor langetermijnopslag",
+    "mintBulletAdvanced": "Alleen wijzigen als je je eigen mint beheert",
+    "changeWarningInline": "Dit is een geavanceerde instelling. Wijzig de mint alleen als je weet wat je doet. Je bestaande saldo blijft op de huidige mint.",
+    "mintInfo": "Mint-details",
+    "mintInfoFailed": "Kon mint-informatie niet laden",
+    "mintUnreachable": "Kon deze mint niet bereiken. Controleer de URL en probeer opnieuw.",
+    "changeMint": "Mint wijzigen",
+    "newMint": "Nieuwe Mint-URL",
+    "validateMint": "Valideren en voorbeeld",
+    "confirmChangeTitle": "Cashu Mint wijzigen?",
+    "confirmChangeDesc": "Je bestaande saldo blijft op de huidige mint en wordt niet automatisch overgedragen. Alleen nieuwe transacties gebruiken de nieuwe mint.",
+    "confirmChange": "Mint wijzigen",
+    "mintChanged": "Mint succesvol bijgewerkt",
+    "version": "Versie",
+    "contact": "Contact",
+    "supportedNuts": "Ondersteunde NUTs"
+  },
+  "nutbits": {
+    "oneClick": "1-klik",
+    "connectDesc": "Eigen wallet met één klik — vul aan via NUTbits",
+    "callbackSuccess": "Wallet verbonden!",
+    "callbackSuccessDesc": "Je eigen NUTbits-wallet is gekoppeld. Vul deze aan via NUTbits om betalingen te versturen.",
+    "callbackClosing": "Dit tabblad wordt automatisch gesloten...",
+    "callbackFailed": "Verbinding mislukt",
+    "callbackNoValue": "Geen verbindingsstring ontvangen van NUTbits.",
+    "callbackInvalid": "Ongeldige verbindingsstring ontvangen. NWC URI verwacht.",
+    "callbackConnectFailed": "Walletverbinding kon niet worden opgeslagen. Probeer het opnieuw."
   }
 }

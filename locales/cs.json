@@ -28,7 +28,8 @@
     "showingOf": "Showing {shown} of {total}",
     "showMore": "Show more",
     "offline": "No internet connection",
-    "open": "Open"
+    "open": "Open",
+    "validating": "Ověřování..."
   },
   "errors": {
     "PERMISSION_DENIED": "Permission denied",
@@ -93,7 +94,12 @@
     "relaySettings": "Nastavení relay",
     "relaySettingsDesc": "Spravujte svá relay připojení",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Open in full page"
+    "openFullPage": "Open in full page",
+    "more": "Více",
+    "allSettings": "Všechna nastavení",
+    "popOut": "Odpojit okno",
+    "popOutTitle": "Odpojit okno",
+    "popOutDesc": "Nechte Buho otevřené jako plovoucí okno, které můžete přetáhnout kamkoli. Procházejte svobodně bez ztráty peněženky."
   },
   "relay": {
     "title": "Nastavení relay",
@@ -138,7 +144,10 @@
     "infoOperator": "Provozovatel",
     "infoContact": "Kontakt",
     "infoYes": "Ano",
-    "infoNo": "Ne"
+    "infoNo": "Ne",
+    "statusConnected": "Relay je dostupné",
+    "statusUnreachable": "Relay je nedostupné",
+    "refreshStatus": "Zkontrolovat připojení relay"
   },
   "account": {
     "activeDesc": "Aktivní účet — aplikace budou používat tento profil",
@@ -171,7 +180,12 @@
     "showQr": "Show QR code",
     "connectedRelays": "Connected relays",
     "relayCount": "{count} relay | {count} relays",
-    "noRelays": "No relays configured"
+    "noRelays": "No relays configured",
+    "deleteBackupWarning": "Nejdříve si zálohujte klíč!",
+    "deleteBackupHint": "Bez zálohy znamená odstranění této identity trvalou ztrátu přístupu. Neexistuje žádné obnovení.",
+    "deleteBackupCta": "Zálohovat klíč v Nastavení",
+    "deleteLocalExplain": "Tato akce trvale odstraní váš soukromý klíč z Buho. Všechny propojené stránky ztratí přístup k této identitě.",
+    "deleteRemoteExplain": "Toto pouze odpojí vzdáleného podepisovatele. Váš klíč zůstává v bezpečí na zařízení podepisovatele — můžete se kdykoli znovu připojit."
   },
   "wizard": {
     "addAccount": "Přidat účet",
@@ -340,9 +354,7 @@
     "kindRelayList": "Nastavení serverů",
     "kindArticle": "Dlouhý článek",
     "kindAppData": "Data aplikace",
-    "kindGeneric": "Typ události {kind}",
-    "moreOptions": "Více možností",
-    "fewerOptions": "Méně možností"
+    "kindGeneric": "Typ události {kind}"
   },
   "wallet": {
     "balance": "Zůstatek",
@@ -507,7 +519,13 @@
     "removeWalletWarning": "This will permanently delete all funds in this wallet. Make sure you have a backup.",
     "lightningReady": "Lightning-ready",
     "invoiceCopied": "Invoice copied",
-    "fileTooLarge": "File too large (max 10 MB)"
+    "fileTooLarge": "File too large (max 10 MB)",
+    "chooseType": "Vyberte způsob připojení peněženky",
+    "nwcDesc": "Připojení přes Nostr relay — funguje s Alby, Buho, LNbits, Coinos a dalšími",
+    "lnbitsDesc": "Přímé připojení k vaší instanci LNbits přes REST API",
+    "lnbitsHelp": "Najděte svou URL a Admin Key v nastavení peněženky LNbits pod API info.",
+    "lnbitsUrl": "LNbits URL",
+    "lnbitsAdminKey": "Admin Key"
   },
   "sites": {
     "title": "Site Details",
@@ -624,7 +642,8 @@
     "filterAll": "All",
     "filterDms": "DMs",
     "filterGroups": "Groups",
-    "joinOrCreate": "Join or create a group"
+    "joinOrCreate": "Join or create a group",
+    "messageDeletedLabel": "Tato zpráva byla smazána"
   },
   "group": {
     "title": "Groups",
@@ -698,7 +717,20 @@
     "searchMembers": "Search contacts...",
     "channelJoinDesc": "Paste a channel link to join a public conversation.",
     "serverHintOptional": "Optional — leave empty to use your default relays",
-    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave."
+    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave.",
+    "copyInviteLink": "Kopírovat odkaz na pozvánku",
+    "linkCopied": "Odkaz na pozvánku zkopírován",
+    "previewGroup": "Náhled skupiny",
+    "muteGroup": "Ztlumit oznámení",
+    "unmuteGroup": "Zapnout oznámení",
+    "muted": "Oznámení ztlumena",
+    "unmuted": "Oznámení zapnuta",
+    "checkingRelay": "Kontrola serveru...",
+    "relayOnline": "Server je online a dostupný",
+    "relayUnreachable": "Server může být offline — můžete to zkusit",
+    "inviteCount": "Pozvat {count}",
+    "usersInvited": "{count} členů pozváno",
+    "inviteManualPlaceholder": "npub, NIP-05 nebo hex pubkey"
   },
   "notifications": {
     "title": "Notifications",
@@ -767,6 +799,47 @@
     "pointCamera": "Namiřte kameru na QR kód",
     "cameraBlocked": "Camera is blocked. Upload a QR code image instead, or allow camera access in your browser settings.",
     "noQrFound": "No QR code found in this image. Try a clearer photo.",
-    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead."
+    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead.",
+    "extensionHint": "Kamera není k dispozici ve vyskakovacích oknech rozšíření"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "Mint uchovává váš zůstatek ecash a zpracovává platby Lightning vaším jménem.",
+    "mintExplainer": "Buho Jump vytvoří okamžitou ecash peněženku pro každý účet, abyste mohli přijímat Bitcoin ihned — bez nastavení.",
+    "whatsAMint": "Co je mint?",
+    "mintExplainerIntro": "Mint je spolehlivý server v ekosystému ecash. Uchovává váš zůstatek jako ecash tokeny a zpracovává platby Lightning za vás — navrženo pro rychlý začátek.",
+    "mintTooltipGood": "Proč je to skvělé",
+    "mintTooltipKnow": "Dobré vědět",
+    "mintBulletInstant": "Přijímejte Bitcoin okamžitě, bez nutnosti uzlu",
+    "mintBulletNoSetup": "Funguje hned pro každý účet",
+    "mintBulletPrivacy": "Ecash nabízí silné soukromí transakcí",
+    "mintBulletCustodial": "Kustodialní — mint drží vaše prostředky",
+    "mintBulletSmall": "Nejlepší pro malé částky, ne pro dlouhodobé uložení",
+    "mintBulletAdvanced": "Měňte pouze pokud provozujete vlastní mint",
+    "changeWarningInline": "Toto je pokročilé nastavení. Měňte mint pouze pokud víte, co děláte. Váš stávající zůstatek zůstane na aktuálním mintu.",
+    "mintInfo": "Podrobnosti mintu",
+    "mintInfoFailed": "Nepodařilo se načíst informace o mintu",
+    "mintUnreachable": "Nepodařilo se kontaktovat tento mint. Zkontrolujte URL a zkuste to znovu.",
+    "changeMint": "Změnit mint",
+    "newMint": "Nová URL mintu",
+    "validateMint": "Ověřit a náhled",
+    "confirmChangeTitle": "Změnit Cashu Mint?",
+    "confirmChangeDesc": "Váš stávající zůstatek zůstane na aktuálním mintu a nebude automaticky převeden. Pouze nové transakce budou používat nový mint.",
+    "confirmChange": "Změnit mint",
+    "mintChanged": "Mint úspěšně aktualizován",
+    "version": "Verze",
+    "contact": "Kontakt",
+    "supportedNuts": "Podporované NUTs"
+  },
+  "nutbits": {
+    "oneClick": "1-klik",
+    "connectDesc": "Dedikovaná peněženka jedním klikem — financujte ji přes NUTbits",
+    "callbackSuccess": "Peněženka připojena!",
+    "callbackSuccessDesc": "Vaše dedikovaná NUTbits peněženka je propojena. Financujte ji přes NUTbits a začněte odesílat platby.",
+    "callbackClosing": "Tato karta se automaticky zavře...",
+    "callbackFailed": "Připojení selhalo",
+    "callbackNoValue": "Od NUTbits nebyl přijat žádný připojovací řetězec.",
+    "callbackInvalid": "Přijat neplatný připojovací řetězec. Očekáván NWC URI.",
+    "callbackConnectFailed": "Nepodařilo se uložit připojení peněženky. Zkuste to znovu."
   }
 }

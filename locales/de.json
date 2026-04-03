@@ -28,7 +28,8 @@
     "showingOf": "{shown} von {total} angezeigt",
     "showMore": "Mehr anzeigen",
     "offline": "Keine Internetverbindung",
-    "open": "Open"
+    "open": "Open",
+    "validating": "Wird überprüft..."
   },
   "errors": {
     "PERMISSION_DENIED": "Berechtigung verweigert",
@@ -93,7 +94,12 @@
     "relaySettings": "Relay-Einstellungen",
     "relaySettingsDesc": "Verwalte deine Relay-Verbindungen",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Auf ganzer Seite öffnen"
+    "openFullPage": "Auf ganzer Seite öffnen",
+    "more": "Mehr",
+    "allSettings": "Alle Einstellungen",
+    "popOut": "Fenster lösen",
+    "popOutTitle": "Fenster lösen",
+    "popOutDesc": "Halte Buho als schwebendes Fenster offen, das du überall hinziehen kannst. Surfe frei, ohne dein Wallet zu verlieren."
   },
   "relay": {
     "title": "Relay-Einstellungen",
@@ -138,7 +144,10 @@
     "infoOperator": "Betreiber",
     "infoContact": "Kontakt",
     "infoYes": "Ja",
-    "infoNo": "Nein"
+    "infoNo": "Nein",
+    "statusConnected": "Relay ist erreichbar",
+    "statusUnreachable": "Relay ist nicht erreichbar",
+    "refreshStatus": "Relay-Verbindung prüfen"
   },
   "account": {
     "activeDesc": "Aktives Konto — Apps verwenden dieses Profil",
@@ -171,7 +180,12 @@
     "showQr": "QR-Code anzeigen",
     "connectedRelays": "Verbundene Relays",
     "relayCount": "{count} Relay | {count} Relays",
-    "noRelays": "Keine Relays konfiguriert"
+    "noRelays": "Keine Relays konfiguriert",
+    "deleteBackupWarning": "Sichere zuerst deinen Schlüssel!",
+    "deleteBackupHint": "Ohne Backup bedeutet das Entfernen dieser Identität, dass der Zugang für immer verloren geht. Es gibt keine Wiederherstellung.",
+    "deleteBackupCta": "Schlüssel in Einstellungen sichern",
+    "deleteLocalExplain": "Diese Aktion entfernt deinen privaten Schlüssel dauerhaft aus Buho. Alle verbundenen Seiten verlieren den Zugriff auf diese Identität.",
+    "deleteRemoteExplain": "Dies trennt nur die Verbindung zum Remote-Signer. Dein Schlüssel bleibt sicher auf dem Signer-Gerät — du kannst dich jederzeit neu verbinden."
   },
   "wizard": {
     "addAccount": "Konto hinzufügen",
@@ -340,9 +354,7 @@
     "kindRelayList": "Server-Einstellungen",
     "kindArticle": "Langer Artikel",
     "kindAppData": "App-Daten",
-    "kindGeneric": "Ereignistyp {kind}",
-    "moreOptions": "Weitere Optionen",
-    "fewerOptions": "Weniger Optionen"
+    "kindGeneric": "Ereignistyp {kind}"
   },
   "wallet": {
     "balance": "Guthaben",
@@ -507,7 +519,13 @@
     "removeWalletWarning": "Durch das Entfernen dieser Wallet werden nur die lokalen Verbindungsdaten gelöscht, nicht die Wallet selbst.",
     "lightningReady": "Lightning ist bereit",
     "invoiceCopied": "Invoice copied",
-    "fileTooLarge": "File too large (max 10 MB)"
+    "fileTooLarge": "File too large (max 10 MB)",
+    "chooseType": "Wähle, wie du dein Wallet verbinden möchtest",
+    "nwcDesc": "Verbindung über Nostr-Relay — funktioniert mit Alby, Buho, LNbits, Coinos und mehr",
+    "lnbitsDesc": "Direkt mit deiner LNbits-Instanz über REST-API verbinden",
+    "lnbitsHelp": "Du findest deine URL und den Admin-Key in deinen LNbits-Wallet-Einstellungen unter API-Info.",
+    "lnbitsUrl": "LNbits-URL",
+    "lnbitsAdminKey": "Admin-Key"
   },
   "sites": {
     "title": "Seitendetails",
@@ -624,7 +642,8 @@
     "filterAll": "Alle",
     "filterDms": "DMs",
     "filterGroups": "Gruppen",
-    "joinOrCreate": "Gruppe beitreten oder erstellen"
+    "joinOrCreate": "Gruppe beitreten oder erstellen",
+    "messageDeletedLabel": "Diese Nachricht wurde gelöscht"
   },
   "group": {
     "title": "Gruppen",
@@ -698,7 +717,20 @@
     "searchMembers": "Kontakte durchsuchen...",
     "channelJoinDesc": "Füge einen Kanal-Link ein, um einer öffentlichen Unterhaltung beizutreten.",
     "serverHintOptional": "Optional – leer lassen, um deine Standard-Relays zu verwenden",
-    "soleAdminWarning": "Du bist der einzige Admin. Wenn du gehst, hat die Gruppe keinen Admin mehr."
+    "soleAdminWarning": "Du bist der einzige Admin. Wenn du gehst, hat die Gruppe keinen Admin mehr.",
+    "copyInviteLink": "Einladungslink kopieren",
+    "linkCopied": "Einladungslink kopiert",
+    "previewGroup": "Gruppe ansehen",
+    "muteGroup": "Benachrichtigungen stumm",
+    "unmuteGroup": "Benachrichtigungen aktivieren",
+    "muted": "Benachrichtigungen stummgeschaltet",
+    "unmuted": "Benachrichtigungen aktiviert",
+    "checkingRelay": "Server wird überprüft...",
+    "relayOnline": "Server ist online und erreichbar",
+    "relayUnreachable": "Server ist möglicherweise offline — du kannst es trotzdem versuchen",
+    "inviteCount": "{count} einladen",
+    "usersInvited": "{count} Mitglieder eingeladen",
+    "inviteManualPlaceholder": "npub, NIP-05 oder Hex-Pubkey"
   },
   "notifications": {
     "title": "Benachrichtigungen",
@@ -767,6 +799,47 @@
     "pointCamera": "Richte die Kamera auf einen QR-Code",
     "cameraBlocked": "Die Kamera ist blockiert. Lade stattdessen ein QR-Code-Bild hoch oder erlaube den Kamerazugriff in deinen Browser-Einstellungen.",
     "noQrFound": "Kein QR-Code in diesem Bild gefunden. Versuche ein klareres Foto.",
-    "cameraFailed": "Die Kamera konnte nicht gestartet werden. Versuche stattdessen, ein QR-Code-Bild hochzuladen."
+    "cameraFailed": "Die Kamera konnte nicht gestartet werden. Versuche stattdessen, ein QR-Code-Bild hochzuladen.",
+    "extensionHint": "Kamera ist in Erweiterungs-Popups nicht verfügbar"
+  },
+  "cashu": {
+    "mintTitle": "Cashu-Mint",
+    "mintDesc": "Der Mint verwahrt dein Ecash-Guthaben und verarbeitet Lightning-Zahlungen in deinem Auftrag.",
+    "mintExplainer": "Buho Jump erstellt für jedes Konto ein sofortiges Ecash-Wallet, damit du Bitcoin sofort empfangen kannst — ohne Einrichtung.",
+    "whatsAMint": "Was ist ein Mint?",
+    "mintExplainerIntro": "Ein Mint ist ein zuverlässiger Server im Ecash-Ökosystem. Er verwahrt dein Guthaben als Ecash-Tokens und verarbeitet Lightning-Zahlungen für dich — entwickelt, um dir den schnellen Einstieg zu ermöglichen.",
+    "mintTooltipGood": "Darum ist es großartig",
+    "mintTooltipKnow": "Gut zu wissen",
+    "mintBulletInstant": "Bitcoin sofort empfangen, kein Node nötig",
+    "mintBulletNoSetup": "Funktioniert sofort für jedes Konto",
+    "mintBulletPrivacy": "Ecash bietet starken Transaktions-Datenschutz",
+    "mintBulletCustodial": "Verwahrt — der Mint hält deine Mittel",
+    "mintBulletSmall": "Am besten für kleine Beträge, nicht zur Langzeitaufbewahrung",
+    "mintBulletAdvanced": "Nur ändern, wenn du deinen eigenen Mint betreibst",
+    "changeWarningInline": "Dies ist eine erweiterte Einstellung. Ändere den Mint nur, wenn du weißt, was du tust. Dein bestehendes Guthaben bleibt auf dem aktuellen Mint.",
+    "mintInfo": "Mint-Details",
+    "mintInfoFailed": "Mint-Informationen konnten nicht geladen werden",
+    "mintUnreachable": "Dieser Mint ist nicht erreichbar. Überprüfe die URL und versuche es erneut.",
+    "changeMint": "Mint ändern",
+    "newMint": "Neue Mint-URL",
+    "validateMint": "Validieren & Vorschau",
+    "confirmChangeTitle": "Cashu-Mint wechseln?",
+    "confirmChangeDesc": "Dein bestehendes Guthaben bleibt auf dem aktuellen Mint und wird nicht automatisch übertragen. Nur neue Transaktionen verwenden den neuen Mint.",
+    "confirmChange": "Mint wechseln",
+    "mintChanged": "Mint erfolgreich aktualisiert",
+    "version": "Version",
+    "contact": "Kontakt",
+    "supportedNuts": "Unterstützte NUTs"
+  },
+  "nutbits": {
+    "oneClick": "1-Klick",
+    "connectDesc": "Dediziertes Wallet mit einem Klick — über NUTbits aufladen",
+    "callbackSuccess": "Wallet verbunden!",
+    "callbackSuccessDesc": "Dein dediziertes NUTbits-Wallet ist verknüpft. Lade es über NUTbits auf, um Zahlungen zu senden.",
+    "callbackClosing": "Dieser Tab wird automatisch geschlossen...",
+    "callbackFailed": "Verbindung fehlgeschlagen",
+    "callbackNoValue": "Kein Verbindungsstring von NUTbits erhalten.",
+    "callbackInvalid": "Ungültiger Verbindungsstring erhalten. NWC URI erwartet.",
+    "callbackConnectFailed": "Wallet-Verbindung konnte nicht gespeichert werden. Bitte erneut versuchen."
   }
 }

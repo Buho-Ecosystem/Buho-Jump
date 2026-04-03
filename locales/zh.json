@@ -28,7 +28,8 @@
     "showingOf": "Showing {shown} of {total}",
     "showMore": "Show more",
     "offline": "No internet connection",
-    "open": "Open"
+    "open": "Open",
+    "validating": "验证中..."
   },
   "errors": {
     "PERMISSION_DENIED": "Permission denied",
@@ -93,7 +94,12 @@
     "relaySettings": "中继设置",
     "relaySettingsDesc": "管理账户、钱包和聊天的中继",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Open in full page"
+    "openFullPage": "Open in full page",
+    "more": "更多",
+    "allSettings": "所有设置",
+    "popOut": "弹出窗口",
+    "popOutTitle": "分离窗口",
+    "popOutDesc": "将Buho保持为可拖动到任何位置的浮动窗口。自由浏览而不会丢失钱包。"
   },
   "relay": {
     "title": "中继设置",
@@ -138,7 +144,10 @@
     "infoOperator": "运营者",
     "infoContact": "联系方式",
     "infoYes": "是",
-    "infoNo": "否"
+    "infoNo": "否",
+    "statusConnected": "中继可达",
+    "statusUnreachable": "中继不可达",
+    "refreshStatus": "检查中继连接"
   },
   "account": {
     "activeDesc": "当前活跃账户——应用将使用此身份",
@@ -171,7 +180,12 @@
     "showQr": "Show QR code",
     "connectedRelays": "Connected relays",
     "relayCount": "{count} relay | {count} relays",
-    "noRelays": "No relays configured"
+    "noRelays": "No relays configured",
+    "deleteBackupWarning": "请先备份密钥！",
+    "deleteBackupHint": "没有备份，删除此身份意味着永久失去访问权限。无法恢复。",
+    "deleteBackupCta": "在设置中备份密钥",
+    "deleteLocalExplain": "此操作将永久从Buho中删除您的私钥。所有已连接的站点将失去对此身份的访问权限。",
+    "deleteRemoteExplain": "这只是断开远程签名器的连接。您的密钥在签名设备上仍然安全——您可以随时重新连接。"
   },
   "wizard": {
     "addAccount": "添加账户",
@@ -340,9 +354,7 @@
     "kindRelayList": "服务器偏好",
     "kindArticle": "长文章",
     "kindAppData": "应用数据",
-    "kindGeneric": "事件类型 {kind}",
-    "moreOptions": "更多选项",
-    "fewerOptions": "收起选项"
+    "kindGeneric": "事件类型 {kind}"
   },
   "wallet": {
     "balance": "余额",
@@ -507,7 +519,13 @@
     "removeWalletWarning": "This will permanently delete all funds in this wallet. Make sure you have a backup.",
     "lightningReady": "Lightning-ready",
     "invoiceCopied": "Invoice copied",
-    "fileTooLarge": "File too large (max 10 MB)"
+    "fileTooLarge": "File too large (max 10 MB)",
+    "chooseType": "选择连接钱包的方式",
+    "nwcDesc": "通过Nostr中继连接——支持Alby、Buho、LNbits、Coinos等",
+    "lnbitsDesc": "通过REST API直接连接到您的LNbits实例",
+    "lnbitsHelp": "在LNbits钱包设置的API信息中找到您的URL和Admin Key。",
+    "lnbitsUrl": "LNbits URL",
+    "lnbitsAdminKey": "Admin Key"
   },
   "sites": {
     "title": "Site Details",
@@ -624,7 +642,8 @@
     "filterAll": "All",
     "filterDms": "DMs",
     "filterGroups": "Groups",
-    "joinOrCreate": "Join or create a group"
+    "joinOrCreate": "Join or create a group",
+    "messageDeletedLabel": "此消息已被删除"
   },
   "group": {
     "title": "Groups",
@@ -698,7 +717,20 @@
     "searchMembers": "Search contacts...",
     "channelJoinDesc": "Paste a channel link to join a public conversation.",
     "serverHintOptional": "Optional — leave empty to use your default relays",
-    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave."
+    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave.",
+    "copyInviteLink": "复制邀请链接",
+    "linkCopied": "邀请链接已复制",
+    "previewGroup": "预览群组",
+    "muteGroup": "静音通知",
+    "unmuteGroup": "取消静音通知",
+    "muted": "通知已静音",
+    "unmuted": "通知已取消静音",
+    "checkingRelay": "正在检查服务器...",
+    "relayOnline": "服务器在线且可达",
+    "relayUnreachable": "服务器可能离线 — 您仍可以尝试",
+    "inviteCount": "邀请 {count}",
+    "usersInvited": "已邀请 {count} 位成员",
+    "inviteManualPlaceholder": "npub、NIP-05 或 hex 公钥"
   },
   "notifications": {
     "title": "Notifications",
@@ -767,6 +799,47 @@
     "pointCamera": "将摄像头对准二维码",
     "cameraBlocked": "Camera is blocked. Upload a QR code image instead, or allow camera access in your browser settings.",
     "noQrFound": "No QR code found in this image. Try a clearer photo.",
-    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead."
+    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead.",
+    "extensionHint": "扩展弹出窗口中无法使用摄像头"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "Mint托管您的ecash余额并代您处理Lightning支付。",
+    "mintExplainer": "Buho Jump为每个账户创建即时ecash钱包，让您无需设置即可立即接收比特币。",
+    "whatsAMint": "什么是Mint？",
+    "mintExplainerIntro": "Mint是ecash生态系统中可靠的服务器。它将您的余额作为ecash代币保管，并为您处理Lightning支付——旨在让您快速入门。",
+    "mintTooltipGood": "优势所在",
+    "mintTooltipKnow": "须知事项",
+    "mintBulletInstant": "无需节点即可即时接收比特币",
+    "mintBulletNoSetup": "每个账户开箱即用",
+    "mintBulletPrivacy": "ecash提供强大的交易隐私",
+    "mintBulletCustodial": "托管式——Mint持有您的资金",
+    "mintBulletSmall": "适合小额资金，不适合长期存储",
+    "mintBulletAdvanced": "仅在运营自己的Mint时才更改",
+    "changeWarningInline": "这是高级设置。仅在了解操作内容时才更改Mint。您现有的余额将保留在当前Mint上。",
+    "mintInfo": "Mint详情",
+    "mintInfoFailed": "无法加载Mint信息",
+    "mintUnreachable": "无法连接此Mint。请检查URL后重试。",
+    "changeMint": "更改Mint",
+    "newMint": "新Mint URL",
+    "validateMint": "验证并预览",
+    "confirmChangeTitle": "更改Cashu Mint？",
+    "confirmChangeDesc": "您现有的余额保留在当前Mint上，不会自动转移。只有新交易将使用新Mint。",
+    "confirmChange": "更改Mint",
+    "mintChanged": "Mint更新成功",
+    "version": "版本",
+    "contact": "联系方式",
+    "supportedNuts": "支持的NUT"
+  },
+  "nutbits": {
+    "oneClick": "一键",
+    "connectDesc": "一键专属钱包 — 通过NUTbits充值",
+    "callbackSuccess": "钱包已连接！",
+    "callbackSuccessDesc": "您的专属NUTbits钱包已关联。通过NUTbits充值即可开始付款。",
+    "callbackClosing": "此标签页将自动关闭...",
+    "callbackFailed": "连接失败",
+    "callbackNoValue": "未从NUTbits收到连接字符串。",
+    "callbackInvalid": "收到无效的连接字符串。需要NWC URI。",
+    "callbackConnectFailed": "无法保存钱包连接。请重试。"
   }
 }

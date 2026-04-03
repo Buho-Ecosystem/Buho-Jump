@@ -28,7 +28,8 @@
     "showingOf": "Showing {shown} of {total}",
     "showMore": "Show more",
     "offline": "No internet connection",
-    "open": "Open"
+    "open": "Open",
+    "validating": "Проверка..."
   },
   "errors": {
     "PERMISSION_DENIED": "Permission denied",
@@ -93,7 +94,12 @@
     "relaySettings": "Настройки реле",
     "relaySettingsDesc": "Управление реле для аккаунта, кошелька и чата",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Open in full page"
+    "openFullPage": "Open in full page",
+    "more": "Ещё",
+    "allSettings": "Все настройки",
+    "popOut": "Открепить окно",
+    "popOutTitle": "Открепить окно",
+    "popOutDesc": "Держите Buho открытым как плавающее окно, которое можно перетащить куда угодно. Свободно просматривайте сайты, не теряя кошелёк."
   },
   "relay": {
     "title": "Настройки реле",
@@ -138,7 +144,10 @@
     "infoOperator": "Оператор",
     "infoContact": "Контакт",
     "infoYes": "Да",
-    "infoNo": "Нет"
+    "infoNo": "Нет",
+    "statusConnected": "Реле доступно",
+    "statusUnreachable": "Реле недоступно",
+    "refreshStatus": "Проверить подключение к реле"
   },
   "account": {
     "activeDesc": "Активный аккаунт — приложения будут использовать этот профиль",
@@ -171,7 +180,12 @@
     "showQr": "Show QR code",
     "connectedRelays": "Connected relays",
     "relayCount": "{count} relay | {count} relays",
-    "noRelays": "No relays configured"
+    "noRelays": "No relays configured",
+    "deleteBackupWarning": "Сначала сохраните резервную копию ключа!",
+    "deleteBackupHint": "Без резервной копии удаление этой личности означает потерю доступа навсегда. Восстановление невозможно.",
+    "deleteBackupCta": "Сохранить ключ в Настройках",
+    "deleteLocalExplain": "Это действие навсегда удаляет ваш закрытый ключ из Buho. Все подключённые сайты потеряют доступ к этой личности.",
+    "deleteRemoteExplain": "Это только отключает удалённый подписант. Ваш ключ остаётся в безопасности на устройстве подписанта — вы можете переподключиться в любое время."
   },
   "wizard": {
     "addAccount": "Добавить аккаунт",
@@ -340,9 +354,7 @@
     "kindRelayList": "Настройки серверов",
     "kindArticle": "Длинная статья",
     "kindAppData": "Данные приложения",
-    "kindGeneric": "Тип события {kind}",
-    "moreOptions": "Больше вариантов",
-    "fewerOptions": "Меньше вариантов"
+    "kindGeneric": "Тип события {kind}"
   },
   "wallet": {
     "balance": "Баланс",
@@ -507,7 +519,13 @@
     "removeWalletWarning": "This will permanently delete all funds in this wallet. Make sure you have a backup.",
     "lightningReady": "Lightning-ready",
     "invoiceCopied": "Invoice copied",
-    "fileTooLarge": "File too large (max 10 MB)"
+    "fileTooLarge": "File too large (max 10 MB)",
+    "chooseType": "Выберите способ подключения кошелька",
+    "nwcDesc": "Подключение через реле Nostr — работает с Alby, Buho, LNbits, Coinos и другими",
+    "lnbitsDesc": "Прямое подключение к вашему экземпляру LNbits через REST API",
+    "lnbitsHelp": "Найдите URL и ключ администратора в настройках кошелька LNbits в разделе API.",
+    "lnbitsUrl": "URL LNbits",
+    "lnbitsAdminKey": "Ключ администратора"
   },
   "sites": {
     "title": "Site Details",
@@ -624,7 +642,8 @@
     "filterAll": "All",
     "filterDms": "DMs",
     "filterGroups": "Groups",
-    "joinOrCreate": "Join or create a group"
+    "joinOrCreate": "Join or create a group",
+    "messageDeletedLabel": "Это сообщение было удалено"
   },
   "group": {
     "title": "Groups",
@@ -698,7 +717,20 @@
     "searchMembers": "Search contacts...",
     "channelJoinDesc": "Paste a channel link to join a public conversation.",
     "serverHintOptional": "Optional — leave empty to use your default relays",
-    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave."
+    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave.",
+    "copyInviteLink": "Копировать ссылку-приглашение",
+    "linkCopied": "Ссылка-приглашение скопирована",
+    "previewGroup": "Просмотр группы",
+    "muteGroup": "Отключить уведомления",
+    "unmuteGroup": "Включить уведомления",
+    "muted": "Уведомления отключены",
+    "unmuted": "Уведомления включены",
+    "checkingRelay": "Проверка сервера...",
+    "relayOnline": "Сервер онлайн и доступен",
+    "relayUnreachable": "Сервер может быть недоступен — можно попробовать",
+    "inviteCount": "Пригласить {count}",
+    "usersInvited": "{count} участников приглашено",
+    "inviteManualPlaceholder": "npub, NIP-05 или hex pubkey"
   },
   "notifications": {
     "title": "Notifications",
@@ -767,6 +799,47 @@
     "pointCamera": "Наведите камеру на QR-код",
     "cameraBlocked": "Camera is blocked. Upload a QR code image instead, or allow camera access in your browser settings.",
     "noQrFound": "No QR code found in this image. Try a clearer photo.",
-    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead."
+    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead.",
+    "extensionHint": "Камера недоступна во всплывающих окнах расширения"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "Минт хранит ваш баланс ecash и обрабатывает платежи Lightning от вашего имени.",
+    "mintExplainer": "Buho Jump создаёт мгновенный ecash-кошелёк для каждого аккаунта, чтобы вы могли получать Bitcoin сразу — без настройки.",
+    "whatsAMint": "Что такое минт?",
+    "mintExplainerIntro": "Минт — это надёжный сервер в экосистеме ecash. Он хранит ваш баланс в виде токенов ecash и обрабатывает платежи Lightning за вас — создан для быстрого старта.",
+    "mintTooltipGood": "Почему это отлично",
+    "mintTooltipKnow": "Полезно знать",
+    "mintBulletInstant": "Получайте Bitcoin мгновенно, без узла",
+    "mintBulletNoSetup": "Работает сразу для каждого аккаунта",
+    "mintBulletPrivacy": "Ecash обеспечивает надёжную конфиденциальность транзакций",
+    "mintBulletCustodial": "Кастодиальный — минт хранит ваши средства",
+    "mintBulletSmall": "Лучше для небольших сумм, не для долгосрочного хранения",
+    "mintBulletAdvanced": "Меняйте только если вы управляете своим минтом",
+    "changeWarningInline": "Это расширенная настройка. Меняйте минт только если знаете, что делаете. Ваш существующий баланс останется на текущем минте.",
+    "mintInfo": "Данные минта",
+    "mintInfoFailed": "Не удалось загрузить информацию о минте",
+    "mintUnreachable": "Не удалось связаться с этим минтом. Проверьте URL и попробуйте снова.",
+    "changeMint": "Сменить минт",
+    "newMint": "Новый URL минта",
+    "validateMint": "Проверить и просмотреть",
+    "confirmChangeTitle": "Сменить Cashu Mint?",
+    "confirmChangeDesc": "Ваш существующий баланс останется на текущем минте и не будет автоматически перенесён. Только новые транзакции будут использовать новый минт.",
+    "confirmChange": "Сменить минт",
+    "mintChanged": "Минт успешно обновлён",
+    "version": "Версия",
+    "contact": "Контакт",
+    "supportedNuts": "Поддерживаемые NUT"
+  },
+  "nutbits": {
+    "oneClick": "1-клик",
+    "connectDesc": "Выделенный кошелёк в один клик — пополняйте через NUTbits",
+    "callbackSuccess": "Кошелёк подключён!",
+    "callbackSuccessDesc": "Ваш выделенный кошелёк NUTbits привязан. Пополните его через NUTbits, чтобы начать отправлять платежи.",
+    "callbackClosing": "Эта вкладка закроется автоматически...",
+    "callbackFailed": "Ошибка подключения",
+    "callbackNoValue": "Строка подключения не получена от NUTbits.",
+    "callbackInvalid": "Получена недопустимая строка подключения. Ожидался NWC URI.",
+    "callbackConnectFailed": "Не удалось сохранить подключение кошелька. Попробуйте снова."
   }
 }

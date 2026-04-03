@@ -22,7 +22,7 @@ const { groupConversations, init: initGroups, initialized: groupsInitialized, er
 const { getCachedProfile, fetchProfiles } = useContacts()
 
 const connectionError = computed(() => chatError.value || groupError.value)
-const { isMuted, load: loadMuteList } = useMuteList()
+const { isMuted, isGroupMuted, load: loadMuteList } = useMuteList()
 
 const search = ref('')
 const showMuted = ref(false)
@@ -39,8 +39,9 @@ const unified = computed(() => {
     .filter(c => !isMuted(c.pubkey))
     .map(c => ({ ...c, type: 'dm' }))
 
-  // Groups
+  // Groups (filter out muted)
   let grps = groupConversations.value
+    .filter(c => !isGroupMuted(c.groupKey))
     .map(c => ({ ...c, type: 'group' }))
 
   // Search filter
@@ -79,7 +80,11 @@ const hasAnyContent = computed(() =>
 )
 
 const dmCount = computed(() => conversations.value.filter(c => !isMuted(c.pubkey)).length)
-const groupCount = computed(() => groupConversations.value.length)
+const groupCount = computed(() => groupConversations.value.filter(c => !isGroupMuted(c.groupKey)).length)
+
+const mutedGroupConversations = computed(() =>
+  groupConversations.value.filter(c => isGroupMuted(c.groupKey))
+)
 
 function tabLabel(f) {
   const label = t(`chat.filter${f[0].toUpperCase() + f.slice(1)}`)

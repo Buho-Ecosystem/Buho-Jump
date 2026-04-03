@@ -11,6 +11,7 @@ import { getPool } from '../lib/relayPool.js'
 import { getPoolRelays, DEFAULT_ACCOUNT_RELAYS } from '../lib/relays.js'
 
 const mutedPubkeys = ref([])
+const mutedGroups = ref([])  // group keys (gkey format)
 let loadedForPubkey = null
 
 export function useMuteList() {
@@ -18,16 +19,23 @@ export function useMuteList() {
     return `muteList_${accountPubkey}`
   }
 
+  function groupStorageKey(accountPubkey) {
+    return `muteGroups_${accountPubkey}`
+  }
+
   async function load(accountPubkey) {
-    if (!accountPubkey) { mutedPubkeys.value = []; return }
+    if (!accountPubkey) { mutedPubkeys.value = []; mutedGroups.value = []; return }
     if (accountPubkey === loadedForPubkey) return
     loadedForPubkey = accountPubkey
     try {
       const key = storageKey(accountPubkey)
-      const data = await chrome.storage.local.get(key)
+      const gKey = groupStorageKey(accountPubkey)
+      const data = await chrome.storage.local.get([key, gKey])
       mutedPubkeys.value = data[key] || []
+      mutedGroups.value = data[gKey] || []
     } catch {
       mutedPubkeys.value = []
+      mutedGroups.value = []
     }
   }
 
@@ -53,8 +61,24 @@ export function useMuteList() {
     return mutedPubkeys.value.includes(pubkey)
   }
 
+  async function muteGroup(accountPubkey, groupKey) {
+    if (mutedGroups.value.includes(groupKey)) return
+    mutedGroups.value = [...mutedGroups.value, groupKey]
+    await chrome.storage.local.set({ [groupStorageKey(accountPubkey)]: [...mutedGroups.value] })
+  }
+
+  async function unmuteGroup(accountPubkey, groupKey) {
+    mutedGroups.value = mutedGroups.value.filter(k => k !== groupKey)
+    await chrome.storage.local.set({ [groupStorageKey(accountPubkey)]: [...mutedGroups.value] })
+  }
+
+  function isGroupMuted(groupKey) {
+    return mutedGroups.value.includes(groupKey)
+  }
+
   function reset() {
     mutedPubkeys.value = []
+    mutedGroups.value = []
     loadedForPubkey = null
   }
 
@@ -117,10 +141,14 @@ export function useMuteList() {
 
   return {
     mutedPubkeys,
+    mutedGroups,
     load,
     mute,
     unmute,
     isMuted,
+    muteGroup,
+    unmuteGroup,
+    isGroupMuted,
     reset,
     publishToRelays,
     fetchFromRelays,

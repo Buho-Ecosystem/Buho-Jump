@@ -24,10 +24,15 @@
 import { ref, computed } from 'vue'
 import {
   nip28, nip29, nip59,
-  finalizeEvent, hexToBytes, getPublicKey,
+  finalizeEvent, hexToBytes, bytesToHex, getPublicKey,
 } from 'nostr-core'
 import { useMessaging } from './useMessaging.js'
 import { getPool } from '../lib/relayPool.js'
+import {
+  createGroupIdentity, createEpoch, createEpochTicketsForMembers,
+  encryptEpochPrivkey, decryptEpochPrivkey,
+  parseEpochTicket, buildEpochMessageTags, parseGroupMessageTags,
+} from '../lib/epoch.js'
 
 /**
  * Get the active account from the background service worker.
@@ -43,11 +48,17 @@ import { getPoolRelays, getOutboxRelays, getInboxRelays, DEFAULT_CHAT_RELAYS } f
 
 const groups = ref([])
 // Group shape: { id, type: 'private'|'relay'|'channel', relay?, name, about, picture,
-//   isOpen?, isPublic?, members?: string[], joinedAt }
+//   isOpen?, isPublic?, members?: string[], joinedAt,
+//   // Epoch fields (private groups only):
+//   groupPubkey?, groupPrivkeyEncrypted?, epochs?: [{ number, pubkey, privkeyEncrypted }],
+//   currentEpoch?: number }
 
 const messages = ref({})          // { [groupKey]: Message[] }
 const lastRead = ref({})          // { [groupKey]: timestamp }
 const invitations = ref([])       // { groupId, relay, inviterPubkey, type, timestamp }
+
+// Relay group member/admin cache: { [groupKey]: { members, admins, fetchedAt } }
+const memberCache = {}
 const initialized = ref(false)
 const error = ref(null)      // i18n key or null — set on init/subscribe failure
 const currentAccountPubkey = ref(null)
@@ -282,19 +293,22 @@ export function useGroups() {
     })
 
     try {
-      // Build p-tags for all members
-      const memberTags = (group.members || []).map(pk => ['p', pk])
-      const tags = [...memberTags, ['subject', group.name || group.id]]
-      if (replyTo) tags.push(['e', replyTo, '', 'reply'])
+      const currentEpochEntry = group.epochs?.find(e => e.number === group.currentEpoch)
+      if (!currentEpochEntry) throw new Error('No epoch key available')
+
+      const tags = buildEpochMessageTags({
+        epochPubkey: currentEpochEntry.pubkey,
+        groupPubkey: group.groupPubkey || group.id,
+        epochNumber: group.currentEpoch,
+        replyTo,
+      })
 
       const rumor = nip59.createRumor({
-        kind: 14,
-        content,
-        tags,
-        created_at: now,
+        kind: 14, content, tags, created_at: now,
       }, senderPubkey)
 
-      // Gift-wrap to every member (including self for self-copy)
+      // Gift-wrap to EACH member individually (standard NIP-17 pattern).
+      // Each member decrypts with their own account key.
       const allRecipients = [...new Set([...(group.members || []), senderPubkey])]
       const chatRelays = await getPoolRelays(senderPubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
 
@@ -405,37 +419,147 @@ export function useGroups() {
 
   // ── Create private group (local, no relay involved for creation) ──
 
-  function createPrivateGroup(name, about, memberPubkeys) {
-    const id = `priv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  /**
+   * Create a new epoch-based private group.
+   * Generates group identity + epoch 0 + sends tickets to all members.
+   */
+  async function createPrivateGroup(name, about, memberPubkeys) {
+    const account = await getActiveAccount()
+    if (!account?.secretHex) throw new Error('Private groups require a local account')
+
+    const secretKey = hexToBytes(account.secretHex)
+    const { groupPrivkey, groupPubkey, epoch } = createGroupIdentity()
+
+    // Encrypt group privkey and epoch privkey for storage
+    const groupPrivkeyEncrypted = encryptEpochPrivkey(groupPrivkey, secretKey)
+    const epochPrivkeyEncrypted = encryptEpochPrivkey(epoch.privkey, secretKey)
+
     const group = {
-      id, type: 'private', name, about: about || '',
-      picture: '', members: memberPubkeys,
+      id: groupPubkey, // group identity IS the ID
+      type: 'private',
+      name,
+      about: about || '',
+      picture: '',
+      members: memberPubkeys,
       joinedAt: Math.floor(Date.now() / 1000),
+      // Epoch fields
+      groupPubkey,
+      groupPrivkeyEncrypted,
+      epochs: [{ number: epoch.number, pubkey: epoch.pubkey, privkeyEncrypted: epochPrivkeyEncrypted }],
+      currentEpoch: epoch.number,
     }
+
+    // Send epoch tickets to all members + self
+    const allRecipients = [...new Set([...memberPubkeys, account.pubkey])]
+    const chatRelays = await getPoolRelays(account.pubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
+    const tickets = createEpochTicketsForMembers({
+      groupPrivkey, groupPubkey,
+      epochNumber: epoch.number,
+      epochPrivkey: epoch.privkey,
+      memberPubkeys: allRecipients,
+      senderSecretKey: secretKey,
+    })
+
+    const pool = getPool()
+    await Promise.allSettled(tickets.map(t => pool.publish(chatRelays, t.wrap)))
+
     groups.value = [...groups.value, group]
     persistMeta()
     subscribePrivateGroup(group)
     return group
   }
 
-  function addMemberToPrivateGroup(groupId, pubkey) {
+  /**
+   * Add a member to a private group.
+   * Sends the current epoch ticket to the new member (no rotation needed).
+   */
+  async function addMemberToPrivateGroup(groupId, pubkey) {
     const idx = groups.value.findIndex(g => g.id === groupId && g.type === 'private')
     if (idx === -1) return
     const group = groups.value[idx]
     if (group.members?.includes(pubkey)) return
+
+    const account = await getActiveAccount()
+    if (!account?.secretHex || !group.groupPrivkeyEncrypted) return
+
+    const secretKey = hexToBytes(account.secretHex)
+    const currentEpochEntry = group.epochs?.find(e => e.number === group.currentEpoch)
+    if (!currentEpochEntry) return
+
+    // Decrypt group privkey and epoch privkey to create ticket
+    const groupPrivkey = decryptEpochPrivkey(group.groupPrivkeyEncrypted, group.groupPubkey, secretKey)
+    const epochPrivkey = decryptEpochPrivkey(currentEpochEntry.privkeyEncrypted, currentEpochEntry.pubkey, secretKey)
+
+    const tickets = createEpochTicketsForMembers({
+      groupPrivkey, groupPubkey: group.groupPubkey,
+      epochNumber: group.currentEpoch,
+      epochPrivkey,
+      memberPubkeys: [pubkey],
+      senderSecretKey: secretKey,
+    })
+
+    const chatRelays = await getPoolRelays(account.pubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
+    const pool = getPool()
+    await Promise.allSettled(tickets.map(t => pool.publish(chatRelays, t.wrap)))
+
+    // Update local member list
     groups.value = groups.value.map((g, i) =>
       i === idx ? { ...g, members: [...(g.members || []), pubkey] } : g
     )
     persistMeta()
   }
 
-  function removeMemberFromPrivateGroup(groupId, pubkey) {
+  /**
+   * Remove a member from a private group.
+   * ROTATES the epoch — generates new key, sends to remaining members only.
+   * The removed member cannot decrypt future messages.
+   */
+  async function removeMemberFromPrivateGroup(groupId, pubkey) {
     const idx = groups.value.findIndex(g => g.id === groupId && g.type === 'private')
     if (idx === -1) return
+    const group = groups.value[idx]
+
+    const account = await getActiveAccount()
+    if (!account?.secretHex || !group.groupPrivkeyEncrypted) return
+
+    const secretKey = hexToBytes(account.secretHex)
+    const groupPrivkey = decryptEpochPrivkey(group.groupPrivkeyEncrypted, group.groupPubkey, secretKey)
+
+    // Generate new epoch
+    const newEpochNumber = (group.currentEpoch || 0) + 1
+    const newEpoch = createEpoch(newEpochNumber)
+    const newEpochPrivkeyEncrypted = encryptEpochPrivkey(newEpoch.privkey, secretKey)
+
+    // Remove member from list
+    const remainingMembers = (group.members || []).filter(pk => pk !== pubkey)
+
+    // Send new epoch tickets to remaining members + self (NOT the removed member)
+    const allRecipients = [...new Set([...remainingMembers, account.pubkey])]
+    const tickets = createEpochTicketsForMembers({
+      groupPrivkey, groupPubkey: group.groupPubkey,
+      epochNumber: newEpoch.number,
+      epochPrivkey: newEpoch.privkey,
+      memberPubkeys: allRecipients,
+      senderSecretKey: secretKey,
+    })
+
+    const chatRelays = await getPoolRelays(account.pubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
+    const pool = getPool()
+    await Promise.allSettled(tickets.map(t => pool.publish(chatRelays, t.wrap)))
+
+    // Update local state
+    const updatedEpochs = [
+      ...(group.epochs || []),
+      { number: newEpoch.number, pubkey: newEpoch.pubkey, privkeyEncrypted: newEpochPrivkeyEncrypted },
+    ]
     groups.value = groups.value.map((g, i) =>
-      i === idx ? { ...g, members: (g.members || []).filter(pk => pk !== pubkey) } : g
+      i === idx ? { ...g, members: remainingMembers, epochs: updatedEpochs, currentEpoch: newEpoch.number } : g
     )
     persistMeta()
+
+    // Re-subscribe with the updated group object (not stale reference)
+    const updatedGroup = groups.value[idx]
+    resubscribePrivateGroup(updatedGroup)
   }
 
   // ── Join relay group (NIP-29) ──
@@ -527,7 +651,16 @@ export function useGroups() {
 
   // ── Fetch relay group info (NIP-29 kinds 39000/39001/39002) ──
 
-  async function fetchRelayGroupInfo(groupId, relay) {
+  async function fetchRelayGroupInfo(groupId, relay, opts = {}) {
+    const cacheKey = `relay||${groupId}||${relay}`
+    const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+    // Return cached data if fresh enough (unless force refresh)
+    if (!opts.force && memberCache[cacheKey]) {
+      const cached = memberCache[cacheKey]
+      if (Date.now() - cached.fetchedAt < CACHE_TTL) return cached.data
+    }
+
     const pool = getPool()
     const events = await pool.querySync([relay], {
       kinds: [39000, 39001, 39002],
@@ -540,7 +673,10 @@ export function useGroups() {
       else if (event.kind === 39002) members = nip29.parseGroupMembers(event)
       else if (event.kind === 39001) admins = nip29.parseGroupAdmins(event)
     }
-    return { metadata, members, admins }
+
+    const data = { metadata, members, admins }
+    memberCache[cacheKey] = { data, fetchedAt: Date.now() }
+    return data
   }
 
   // ── Admin actions (NIP-29) ──
@@ -559,6 +695,65 @@ export function useGroups() {
       signed = await send('CHAT_SIGN', template)
     }
     await pool.publish([relay], signed)
+  }
+
+  /**
+   * Update channel metadata (NIP-28 kind 41).
+   */
+  async function updateChannelMetadata(channelId, metadata, relay) {
+    const account = await getActiveAccount()
+    if (!account) throw new Error('No active account')
+
+    const template = nip28.createChannelMetadataEventTemplate(channelId, metadata, relay)
+    let signed
+    if (account.secretHex) {
+      signed = finalizeEvent(template, hexToBytes(account.secretHex))
+    } else {
+      const { send } = useMessaging()
+      signed = await send('CHAT_SIGN', template)
+    }
+
+    const pool = getPool()
+    const relays = relay ? [relay] : DEFAULT_CHAT_RELAYS
+    await pool.publish(relays, signed)
+
+    // Update local group metadata
+    const group = groups.value.find(g => g.id === channelId)
+    if (group) {
+      if (metadata.name) group.name = metadata.name
+      if (metadata.about !== undefined) group.about = metadata.about
+      if (metadata.picture !== undefined) group.picture = metadata.picture
+      groups.value = [...groups.value]
+      persistMeta()
+    }
+  }
+
+  /**
+   * Delete a message in a relay group (NIP-29 kind 9005).
+   */
+  async function deleteGroupMessage(groupId, relay, eventId) {
+    await adminAction(groupId, relay, { type: 'delete-event', eventId })
+  }
+
+  /**
+   * Hide a message in a channel (NIP-28 kind 43).
+   */
+  async function hideChannelMessage(messageId, reason, relay) {
+    const account = await getActiveAccount()
+    if (!account) throw new Error('No active account')
+
+    const template = nip28.createChannelHideMessageEventTemplate(messageId, reason)
+    let signed
+    if (account.secretHex) {
+      signed = finalizeEvent(template, hexToBytes(account.secretHex))
+    } else {
+      const { send } = useMessaging()
+      signed = await send('CHAT_SIGN', template)
+    }
+
+    const pool = getPool()
+    const relays = relay ? [relay] : DEFAULT_CHAT_RELAYS
+    await pool.publish(relays, signed)
   }
 
   // ── Invitations ──
@@ -599,6 +794,26 @@ export function useGroups() {
   // onGroupEose is set per subscribe() call — see subscribe() below
   let onGroupEose = () => {}
 
+  // Track active private group subscriptions by group key for cleanup
+  const privateGroupSubs = {} // { [groupKey]: subscription }
+
+  /**
+   * Close and re-create subscription for a private group.
+   * Ensures no duplicate subscriptions exist.
+   */
+  function resubscribePrivateGroup(group) {
+    const key = gkey(group)
+    // Close existing subscription for this group
+    if (privateGroupSubs[key]) {
+      privateGroupSubs[key].close()
+      // Remove from global subscriptions array
+      const idx = subscriptions.indexOf(privateGroupSubs[key])
+      if (idx !== -1) subscriptions.splice(idx, 1)
+      delete privateGroupSubs[key]
+    }
+    subscribePrivateGroup(group)
+  }
+
   function subscribePrivateGroup(group) {
     const account = getActiveAccountSync()
     if (!account?.secretHex) return
@@ -608,10 +823,10 @@ export function useGroups() {
     const myPubkey = account.pubkey
     const key = gkey(group)
     const chatRelays = getChatRelaysSync()
-
     const since = getGroupSince(key)
+    const groupId = group.groupPubkey || group.id
 
-    // Listen for gift wraps addressed to us
+    // Listen on own pubkey only — messages are wrapped to each member individually
     const sub = pool.subscribe(chatRelays, {
       kinds: [1059],
       '#p': [myPubkey],
@@ -621,14 +836,28 @@ export function useGroups() {
       onevent(event) {
         try {
           const rumor = nip59.unwrap(event, secretKey)
-          // Check if this message belongs to this private group
-          // Private group messages have a 'subject' tag matching the group name/id
-          const subjectTag = rumor.tags?.find(t => t[0] === 'subject')
-          if (!subjectTag || (subjectTag[1] !== group.name && subjectTag[1] !== group.id)) return
 
-          const pTags = rumor.tags?.filter(t => t[0] === 'p').map(t => t[1]) || []
-          // Verify this is a group message (multiple p-tags = group, single p-tag = DM)
-          if (pTags.length <= 1) return
+          // ── Kind 1014: Epoch ticket ──
+          if (rumor.kind === 1014) {
+            const ticket = parseEpochTicket(rumor, groupId)
+            if (!ticket) return
+            handleIncomingEpochTicket(groupId, ticket, secretKey)
+            return
+          }
+
+          // ── Kind 14: Group message ──
+          if (rumor.kind !== 14) return
+
+          const groupTags = parseGroupMessageTags(rumor.tags)
+          if (!groupTags || groupTags.groupPubkey !== groupId) return
+
+          // Validate epoch number is known (if present)
+          if (groupTags.epochNumber != null && group.epochs) {
+            const knownEpoch = group.epochs.some(e => e.number === groupTags.epochNumber)
+            if (!knownEpoch) {
+              console.debug(`[groups] Message from unknown epoch ${groupTags.epochNumber} in ${groupId.slice(0, 8)}`)
+            }
+          }
 
           const replyTag = rumor.tags?.find(t => t[0] === 'e' && t[3] === 'reply')
           addMessage(key, {
@@ -638,11 +867,46 @@ export function useGroups() {
             created_at: rumor.created_at,
             groupId: group.id,
             replyTo: replyTag?.[1],
+            epochNumber: groupTags.epochNumber,
           })
         } catch { /* not for us or decrypt failed */ }
       },
     })
+
+    // Track for cleanup
+    privateGroupSubs[key] = sub
     subscriptions.push(sub)
+  }
+
+  /**
+   * Handle an incoming epoch ticket — store the new epoch key.
+   * Uses group pubkey as identifier (not stale group object reference).
+   */
+  function handleIncomingEpochTicket(groupPubkey, ticket, accountSecretKey) {
+    const idx = groups.value.findIndex(g => (g.groupPubkey || g.id) === groupPubkey)
+    if (idx === -1) return
+
+    const g = groups.value[idx]
+    const existingEpoch = g.epochs?.find(e => e.number === ticket.epochNumber)
+    if (existingEpoch) return // Already have this epoch — dedup
+
+    const privkeyEncrypted = encryptEpochPrivkey(ticket.epochPrivkey, accountSecretKey)
+    const updatedEpochs = [
+      ...(g.epochs || []),
+      { number: ticket.epochNumber, pubkey: ticket.epochPubkey, privkeyEncrypted },
+    ]
+    const isNewer = ticket.epochNumber > (g.currentEpoch || 0)
+
+    groups.value = groups.value.map((gr, i) =>
+      i === idx ? {
+        ...gr,
+        epochs: updatedEpochs,
+        currentEpoch: isNewer ? ticket.epochNumber : gr.currentEpoch,
+      } : gr
+    )
+    persistMeta()
+
+    // No re-subscribe needed — messages are wrapped to member pubkey, not epoch pubkey
   }
 
   function subscribeRelayGroup(group) {
@@ -831,6 +1095,7 @@ export function useGroups() {
     // Clear performance caches
     for (const k of Object.keys(groupIdSets)) delete groupIdSets[k]
     for (const k of Object.keys(groupLatestTs)) delete groupLatestTs[k]
+    for (const k of Object.keys(privateGroupSubs)) delete privateGroupSubs[k]
     dirtyGroupKeys.clear()
     dirtyMeta = false
     if (persistTimer) { clearTimeout(persistTimer); persistTimer = null }
@@ -866,6 +1131,9 @@ export function useGroups() {
     fetchRelayGroupInfo,
     adminAction,
     inviteUser,
+    updateChannelMetadata,
+    deleteGroupMessage,
+    hideChannelMessage,
     // Invitations
     acceptInvitation,
     declineInvitation,

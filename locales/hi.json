@@ -28,9 +28,9 @@
     "showingOf": "{total} में से {shown} दिखाए जा रहे हैं",
     "showMore": "और दिखाएँ",
     "offline": "इंटरनेट कनेक्शन नहीं है",
-    "open": "Open"
+    "open": "Open",
+    "validating": "सत्यापन हो रहा है..."
   },
-
   "errors": {
     "PERMISSION_DENIED": "अनुमति नहीं है",
     "NO_SIGNER": "कोई साइनर उपलब्ध नहीं है",
@@ -45,7 +45,6 @@
     "TIMEOUT": "अनुरोध का समय समाप्त हो गया",
     "INSUFFICIENT_BALANCE": "बैलेंस कम है"
   },
-
   "lock": {
     "createTitle": "पासवर्ड बनाएँ",
     "unlockTitle": "वापस आपका स्वागत है",
@@ -71,13 +70,11 @@
     "stayUnlocked": "अनलॉक रहें",
     "backupReminder": "एक्सेस न खोने के लिए अपनी अकाउंट की बैकअप लें"
   },
-
   "tabs": {
     "account": "अकाउंट",
     "wallet": "वॉलेट",
     "chat": "चैट"
   },
-
   "settings": {
     "appearance": "दिखावट",
     "lightMode": "लाइट मोड",
@@ -97,9 +94,13 @@
     "relaySettings": "रिले सेटिंग्स",
     "relaySettingsDesc": "रिले कनेक्शन कॉन्फ़िगर करें",
     "version": "Buho Jump v{version}",
-    "openFullPage": "पूरे पेज में खोलें"
+    "openFullPage": "पूरे पेज में खोलें",
+    "more": "और",
+    "allSettings": "सभी सेटिंग्स",
+    "popOut": "फ्लोटिंग विंडो",
+    "popOutTitle": "विंडो अलग करें",
+    "popOutDesc": "Buho को फ्लोटिंग विंडो के रूप में खुला रखें जिसे आप कहीं भी खींच सकते हैं। अपना वॉलेट खोए बिना स्वतंत्र रूप से ब्राउज़ करें।"
   },
-
   "relay": {
     "title": "रिले सेटिंग्स",
     "warning": "चेतावनी: इन सेटिंग्स को बदलने से आपका अनुभव प्रभावित हो सकता है",
@@ -143,9 +144,11 @@
     "infoOperator": "ऑपरेटर",
     "infoContact": "संपर्क",
     "infoYes": "हाँ",
-    "infoNo": "नहीं"
+    "infoNo": "नहीं",
+    "statusConnected": "रिले उपलब्ध है",
+    "statusUnreachable": "रिले अनुपलब्ध है",
+    "refreshStatus": "रिले कनेक्शन जांचें"
   },
-
   "account": {
     "activeDesc": "सक्रिय अकाउंट — ऐप्स इस प्रोफ़ाइल का उपयोग करेंगे",
     "appPermissions": "ऐप अनुमतियाँ",
@@ -177,14 +180,17 @@
     "showQr": "QR कोड दिखाएँ",
     "connectedRelays": "कनेक्टेड रिले",
     "relayCount": "{count} रिले | {count} रिले",
-    "noRelays": "कोई रिले कॉन्फ़िगर नहीं है"
+    "noRelays": "कोई रिले कॉन्फ़िगर नहीं है",
+    "deleteBackupWarning": "पहले अपनी कुंजी का बैकअप लें!",
+    "deleteBackupHint": "बैकअप के बिना, इस पहचान को हटाने का मतलब है हमेशा के लिए पहुंच खो देना। कोई रिकवरी नहीं है।",
+    "deleteBackupCta": "सेटिंग्स में कुंजी बैकअप करें",
+    "deleteLocalExplain": "यह क्रिया Buho से आपकी निजी कुंजी को स्थायी रूप से हटा देती है। सभी जुड़ी साइटें इस पहचान तक पहुंच खो देंगी।",
+    "deleteRemoteExplain": "यह केवल रिमोट साइनर को डिस्कनेक्ट करता है। आपकी कुंजी साइनर डिवाइस पर सुरक्षित रहती है — आप कभी भी फिर से कनेक्ट कर सकते हैं।"
   },
-
   "wizard": {
     "addAccount": "अकाउंट जोड़ें",
     "addAccountDesc": "आपका अकाउंट आपको ऐप्स में लॉग इन करने, पोस्ट करने और मैसेज भेजने देता है — बिना किसी सेंट्रल सर्वर के।",
     "recommended": "सुझाया गया",
-
     "modeNewTitle": "नया अकाउंट बनाएँ",
     "modeNewDesc": "एक नई की-पेयर बनाएँ जिसमें 12 शब्दों का रिकवरी फ़्रेज़ होगा जिसका बैकअप ले सकते हैं।",
     "modeImportTitle": "मेरे पास पहले से अकाउंट है",
@@ -192,7 +198,6 @@
     "modeSignerTitle": "एक्सटर्नल साइनर",
     "modeSignerDesc": "आपकी कीज़ साइनर ऐप (nsec.app, Amber, Primal) पर रहती हैं। सबसे सुरक्षित विकल्प।",
     "advancedOptions": "और विकल्प",
-
     "stepSetup": "सेटअप",
     "stepName": "नाम",
     "stepImport": "इम्पोर्ट",
@@ -200,14 +205,12 @@
     "stepBackup": "बैकअप",
     "stepProfile": "प्रोफ़ाइल",
     "stepDone": "हो गया",
-
     "chooseName": "नाम चुनें",
     "chooseNameDesc": "एक ऐसा नाम चुनें जो लोग आपसे बात करते समय देखेंगे। आप इसे कभी भी बदल सकते हैं।",
     "importAccount": "अपना अकाउंट इम्पोर्ट करें",
     "importAccountDesc": "अपने मौजूदा अकाउंट की बैकअप की डालकर उसे यहाँ रिस्टोर करें।",
     "connectSigner": "अपना साइनर कनेक्ट करें",
     "connectSignerDesc": "अपने साइनर ऐप से कनेक्शन लिंक पेस्ट करें।",
-
     "displayName": "डिस्प्ले नाम",
     "namePlaceholder": "जैसे satoshi, alice, आपका_नाम",
     "nameHint": "दूसरे लोग आपको ऐसे देखेंगे। अपना असली नाम, निकनेम, या जो चाहें वो रखें।",
@@ -227,11 +230,9 @@
     "copyUri": "URI कॉपी करें",
     "waitingForSigner": "साइनर के कनेक्ट होने का इंतज़ार…",
     "connectExpired": "कनेक्शन टाइम आउट हो गया — फिर कोशिश करें",
-
     "createAccount": "अकाउंट बनाएँ",
     "importAccountBtn": "अकाउंट इम्पोर्ट करें",
     "connect": "कनेक्ट करें",
-
     "connectPreparing": "तैयारी हो रही है...",
     "connectConnecting": "आपके साइनर से कनेक्ट हो रहा है...",
     "connectFetchingProfile": "आपकी प्रोफ़ाइल लोड हो रही है...",
@@ -240,7 +241,6 @@
     "progressSecureConnection": "सुरक्षित कनेक्शन बन रहा है",
     "progressConnecting": "आपके साइनर ऐप से कनेक्ट हो रहा है",
     "progressLoadingProfile": "आपकी प्रोफ़ाइल लोड हो रही है",
-
     "backupTitle": "अपनी रिकवरी की सेव करें",
     "backupDesc": "अपना अकाउंट रिकवर करने का यही एकमात्र तरीका है। अगर आप इसे खो दें, तो कोई मदद नहीं कर सकता — हम भी नहीं।",
     "backupWarning": "इसे कभी किसी के साथ शेयर न करें — यह आपके पूरे अकाउंट को कंट्रोल करती है",
@@ -249,7 +249,6 @@
     "downloadFile": "फ़ाइल डाउनलोड करें",
     "backupConfirm": "मैंने अपनी रिकवरी की सुरक्षित जगह सेव कर ली है",
     "backupConfirmHint": "पासवर्ड मैनेजर (1Password, Bitwarden), एन्क्रिप्टेड नोट्स, या कागज़ पर लिखकर सुरक्षित रखें।",
-
     "profileTitle": "आपकी प्रोफ़ाइल",
     "profileDesc": "अपनी प्रोफ़ाइल जानकारी देखें। आप इसे कभी भी अपडेट कर सकते हैं।",
     "completeProfile": "अपनी प्रोफ़ाइल पूरी करें",
@@ -258,13 +257,11 @@
     "aboutPlaceholder": "दुनिया को अपने बारे में बताएँ...",
     "saveProfile": "प्रोफ़ाइल सेव करें",
     "saving": "सेव हो रहा है...",
-
     "connectedTitle": "कनेक्ट हो गया",
     "connectedDesc": "आपका साइनर लिंक हो गया है और इस्तेमाल के लिए तैयार है",
     "connectedBadge": "लाइव",
     "signerExplainer": "आपकी कीज़ साइनर ऐप पर सुरक्षित रहती हैं। जब किसी ऐप को आपकी तरफ़ से काम करना होता है, तो अनुरोध आपके साइनर को मंज़ूरी के लिए भेजा जाता है।",
     "howItWorks": "यह कैसे काम करता है:",
-
     "modeRecoverTitle": "शब्दों से रिकवर करें",
     "modeRecoverDesc": "अपने सेव किए हुए 12 रिकवरी शब्दों से अकाउंट रिस्टोर करें।",
     "stepRecover": "रिकवर",
@@ -274,12 +271,10 @@
     "recoveryWords": "रिकवरी शब्द",
     "recoveryWordsPlaceholder": "अपने 12 शब्द स्पेस से अलग करके डालें",
     "recoveryWordsHint": "शब्दों को ठीक उसी क्रम में डालें जिसमें आपको मिले थे।",
-
     "mnemonicWarning": "इन शब्दों को लिख लें — अपना अकाउंट रिकवर करने का यही एकमात्र तरीका है",
     "copyWords": "शब्द कॉपी करें",
     "backupMnemonicTitle": "अपने रिकवरी शब्द सेव करें",
     "backupMnemonicDesc": "ये 12 शब्द आपके अकाउंट को रिकवर करने का एकमात्र तरीका हैं। इन्हें लिखकर सुरक्षित रखें।",
-
     "doneTitle": "सब तैयार है",
     "doneDesc": "आपका अकाउंट तैयार है। ऐप्स अब इसे इस्तेमाल करने के लिए कह सकते हैं — आपसे हमेशा पहले पूछा जाएगा।",
     "profileSaved": "प्रोफ़ाइल सफलतापूर्वक सेव हो गई",
@@ -287,7 +282,6 @@
     "pinTitle": "Pin Buho Jump to your toolbar",
     "pinDesc": "Click the puzzle piece icon in your browser toolbar and pin Buho Jump for quick access."
   },
-
   "prompt": {
     "wantsAccess": "आपके अकाउंट की एक्सेस चाहता है",
     "yourAccount": "आपका अकाउंट",
@@ -309,20 +303,16 @@
     "allowAllExclude": "पेमेंट के लिए हमेशा आपकी मंज़ूरी ज़रूरी होगी",
     "decideSeparately": "हर बार अलग से तय करें",
     "decideSeparatelyDesc": "हर बार आपसे पूछा जाएगा",
-
     "lockedTitle": "जारी रखने के लिए अनलॉक करें",
     "lockedDesc": "जारी रखने के लिए अपना पासवर्ड डालें।",
     "lockedRequestedBy": "अनुरोध किया",
     "showPassword": "दिखाएँ",
     "hidePassword": "छिपाएँ",
-
     "httpWarning": "यह साइट सुरक्षित नहीं है — आपका डेटा इंटरसेप्ट हो सकता है",
-
     "permPublicLabel": "आपकी पब्लिक प्रोफ़ाइल देखें",
     "permPublicWhat": "ऐप जानना चाहता है कि आप कौन हैं — जैसे आपका प्रोफ़ाइल कार्ड दिखाना।",
     "permPublicDetail": "यह सिर्फ़ आपकी पब्लिक जानकारी शेयर करता है। यह आपकी तरफ़ से पोस्ट या कोई कार्रवाई नहीं कर सकता।",
     "permPublicRisk": "सिर्फ़ पढ़ने की अनुमति",
-
     "permSignLabel": "आपकी तरफ़ से पोस्ट या कार्रवाई करें",
     "permSignWhat": "ऐप आपके अकाउंट से कुछ पब्लिश करना चाहता है — जैसे पोस्ट, रिएक्शन, या एक्शन।",
     "permSignDetail": "यह \"भेजें\" दबाने जैसा है। कंटेंट दूसरों को दिखेगा।",
@@ -330,22 +320,18 @@
     "httpAuth": "HTTP प्रमाणीकरण",
     "viewEvent": "इवेंट डेटा देखें",
     "hideEvent": "इवेंट डेटा छिपाएँ",
-
     "permEncryptLabel": "मैसेज एन्क्रिप्ट करें",
     "permEncryptWhat": "ऐप एक प्राइवेट मैसेज भेजना चाहता है जो सिर्फ़ प्राप्तकर्ता पढ़ सके।",
     "permEncryptDetail": "मैसेज भेजने से पहले एन्क्रिप्ट किया जाएगा।",
     "permEncryptRisk": "मैसेजिंग",
-
     "permDecryptLabel": "प्राइवेट मैसेज पढ़ें",
     "permDecryptWhat": "ऐप आपको भेजा गया प्राइवेट मैसेज खोलना चाहता है।",
     "permDecryptDetail": "डिक्रिप्ट किया गया मैसेज ऐप को दिखेगा।",
     "permDecryptRisk": "मैसेजिंग",
-
     "permWeblnLabel": "अपना वॉलेट कनेक्ट करें",
     "permWeblnWhat": "ऐप आपके Lightning वॉलेट से इंटरैक्ट करना चाहता है — बैलेंस चेक करना और इनवॉइस बनाना।",
     "permWeblnDetail": "इससे ऐप को आपकी मंज़ूरी के बिना पेमेंट भेजने की अनुमति नहीं मिलती।",
     "permWeblnRisk": "वॉलेट एक्सेस",
-
     "permWeblnPayLabel": "पेमेंट भेजें",
     "permWeblnPayWhat": "ऐप आपके वॉलेट से एक Lightning इनवॉइस का भुगतान करना चाहता है।",
     "permWeblnPayDetail": "sats आपके वॉलेट से जाएँगे। सिर्फ़ तभी अनुमति दें जब आप इस ऐप पर भरोसा करते हैं और इस पेमेंट की उम्मीद थी।",
@@ -356,10 +342,8 @@
     "budgetRemaining": "बजट शेष",
     "rememberBudget": "Remember and set a budget",
     "rememberBudgetHint": "Auto-approve future payments within this budget",
-
     "permDefaultWhat": "यह ऐप आपके अकाउंट की एक्सेस का अनुरोध कर रहा है।",
     "permDefaultRisk": "अनुमति",
-
     "kindProfile": "प्रोफ़ाइल मेटाडेटा",
     "kindNote": "छोटा टेक्स्ट नोट",
     "kindContacts": "संपर्क सूची",
@@ -372,7 +356,6 @@
     "kindAppData": "ऐप डेटा",
     "kindGeneric": "इवेंट टाइप {kind}"
   },
-
   "wallet": {
     "balance": "बैलेंस",
     "reconnecting": "फिर से कनेक्ट हो रहा है…",
@@ -394,7 +377,6 @@
     "failedRefresh": "रिफ़्रेश नहीं हो सका",
     "walletConnected": "वॉलेट कनेक्ट हो गया",
     "connectFailed": "वॉलेट कनेक्ट नहीं हो सका",
-
     "noWallet": "कोई वॉलेट कनेक्ट नहीं है",
     "noWalletDesc": "पेमेंट चालू करने के लिए अपने वॉलेट ऐप से कनेक्शन लिंक पेस्ट करें।",
     "noWalletHomeDesc": "तुरंत sats भेजने और प्राप्त करने के लिए Lightning वॉलेट कनेक्ट करें।",
@@ -417,7 +399,6 @@
     "removeWallet": "हटाएँ",
     "noWallets": "कोई वॉलेट कनेक्ट नहीं है",
     "connectPrompt": "वॉलेट कनेक्ट करें",
-
     "sendTitle": "पेमेंट भेजें",
     "sendResult": "पेमेंट का नतीजा",
     "invoiceLabel": "इनवॉइस या पता",
@@ -446,7 +427,6 @@
     "hideInvoiceDetails": "इनवॉइस विवरण छिपाएँ",
     "sendAnother": "एक और पेमेंट भेजें",
     "rateUnavailable": "एक्सचेंज रेट उपलब्ध नहीं — इसके बजाय sats में राशि डालें",
-
     "qrFailed": "QR कोड बनाने में विफल",
     "receiveTitle": "पेमेंट प्राप्त करें",
     "receiveHintCashu": "Create a Lightning invoice or redeem an ecash token",
@@ -459,12 +439,10 @@
     "creating": "बन रहा है...",
     "requesting": "अनुरोध कर रहे हैं",
     "newInvoice": "नया इनवॉइस",
-
     "historyTitle": "ट्रांज़ैक्शन हिस्ट्री",
     "loadMore": "और लोड करें",
     "noResults": "कोई ट्रांज़ैक्शन नहीं मिली",
     "noResultsHint": "जब आप पेमेंट भेजेंगे या प्राप्त करेंगे तो ट्रांज़ैक्शन यहाँ दिखेंगी",
-
     "detailTitle": "ट्रांज़ैक्शन विवरण",
     "description": "विवरण",
     "noDescription": "कोई विवरण नहीं",
@@ -473,7 +451,6 @@
     "feesNone": "कोई शुल्क नहीं",
     "technicalDetails": "तकनीकी विवरण",
     "paymentHash": "पेमेंट हैश",
-
     "statusPending": "लंबित",
     "statusExpired": "एक्सपायर हो गया",
     "statusFailed": "विफल",
@@ -486,7 +463,6 @@
     "filterSent": "भेजे गए",
     "groupToday": "आज",
     "groupYesterday": "कल",
-
     "merchantPayment": "रिटेल पेमेंट",
     "merchantDetected": "रिटेल QR पहचाना गया",
     "merchantPaying": "यहाँ भुगतान",
@@ -507,7 +483,6 @@
     "addressResolveFailed": "यह पता रिज़ॉल्व नहीं हो सका। सही है कि नहीं जाँचें और फिर कोशिश करें।",
     "lnurlFailed": "यह अनुरोध पूरा नहीं हो सका। सर्विस अस्थायी रूप से अनुपलब्ध हो सकती है।",
     "connectFailedDetail": "वॉलेट से कनेक्ट नहीं हो सका। सुनिश्चित करें कि आपका कनेक्शन लिंक सही है और एक्सपायर नहीं हुआ है।",
-
     "withdrawTitle": "पेमेंट क्लेम करें",
     "withdrawDesc": "कोई आपको sats भेज रहा है",
     "withdrawClaiming": "क्लेम हो रहा है...",
@@ -517,11 +492,9 @@
     "withdrawFailed": "यह पेमेंट क्लेम नहीं हो सका। लिंक एक्सपायर हो गया हो सकता है या पहले ही इस्तेमाल हो चुका हो।",
     "withdrawMin": "न्यूनतम: {min} sats",
     "withdrawMax": "अधिकतम: {max} sats",
-
     "successActionMessage": "भेजने वाले का मैसेज",
     "successActionUrl": "भेजने वाले का लिंक",
     "successActionSecret": "गुप्त मैसेज",
-
     "lightning": "Lightning",
     "token": "टोकन",
     "pasteToken": "पेमेंट टोकन पेस्ट करें",
@@ -531,7 +504,6 @@
     "receivedSats": "{amount} sats प्राप्त हुए",
     "waitingForPayment": "पेमेंट का इंतज़ार...",
     "ecashTokenDetected": "पेमेंट टोकन मिला",
-
     "backupWallet": "वॉलेट बैकअप",
     "backupDesc": "अपने वॉलेट का एन्क्रिप्टेड बैकअप डाउनलोड करें।",
     "backupExport": "बैकअप डाउनलोड करें",
@@ -544,13 +516,17 @@
     "backupImported": "बैकअप इम्पोर्ट हो गया",
     "backupExported": "बैकअप डाउनलोड हो गया",
     "backupWarning": "इस फ़ाइल के ज़रिए कोई भी ये फ़ंड खर्च कर सकता है। इसे सुरक्षित रखें।",
-
     "removeWalletWarning": "इससे इस वॉलेट के सभी फ़ंड स्थायी रूप से हट जाएँगे। सुनिश्चित करें कि आपके पास बैकअप है।",
     "lightningReady": "Lightning तैयार",
     "invoiceCopied": "इनवॉइस कॉपी हो गया",
-    "fileTooLarge": "फ़ाइल बहुत बड़ी है (अधिकतम 10 MB)"
+    "fileTooLarge": "फ़ाइल बहुत बड़ी है (अधिकतम 10 MB)",
+    "chooseType": "अपना वॉलेट कनेक्ट करने का तरीका चुनें",
+    "nwcDesc": "Nostr रिले के माध्यम से कनेक्ट — Alby, Buho, LNbits, Coinos और अन्य के साथ काम करता है",
+    "lnbitsDesc": "REST API के माध्यम से सीधे अपने LNbits इंस्टेंस से कनेक्ट करें",
+    "lnbitsHelp": "API जानकारी के तहत अपने LNbits वॉलेट सेटिंग्स में अपना URL और Admin Key खोजें।",
+    "lnbitsUrl": "LNbits URL",
+    "lnbitsAdminKey": "Admin Key"
   },
-
   "sites": {
     "title": "साइट विवरण",
     "permissionsGranted": "अनुमतियाँ",
@@ -569,7 +545,6 @@
     "removeBudget": "बजट हटाएँ",
     "revokeAll": "सारी एक्सेस रद्द करें",
     "revokeAllConfirm": "{host} की सभी अनुमतियाँ और बजट हटाएँ?",
-
     "methodLabel_getPublicKey": "पब्लिक पहचान देखें",
     "methodLabel_signEvent": "पोस्ट और एक्शन साइन करें",
     "methodLabel_nip04_encrypt": "मैसेज एन्क्रिप्ट करें",
@@ -579,7 +554,6 @@
     "methodLabel_weblnEnable": "वॉलेट कनेक्ट करें",
     "methodLabel_weblnSendPayment": "पेमेंट भेजें"
   },
-
   "toast": {
     "accountReady": "अकाउंट तैयार है",
     "switchedTo": "{name} पर स्विच हो गया",
@@ -591,7 +565,6 @@
     "failedRevoke": "एक्सेस हटाने में विफल",
     "failedPublish": "प्रोफ़ाइल सेव नहीं हो सकी"
   },
-
   "chat": {
     "title": "मैसेज",
     "newChat": "नई चैट",
@@ -669,9 +642,9 @@
     "filterAll": "सभी",
     "filterDms": "DMs",
     "filterGroups": "ग्रुप्स",
-    "joinOrCreate": "ग्रुप बनाएँ या जॉइन करें"
+    "joinOrCreate": "ग्रुप बनाएँ या जॉइन करें",
+    "messageDeletedLabel": "यह संदेश हटा दिया गया"
   },
-
   "group": {
     "title": "ग्रुप्स",
     "createGroup": "ग्रुप बनाएँ",
@@ -744,9 +717,21 @@
     "searchMembers": "संपर्क खोजें...",
     "channelJoinDesc": "पब्लिक बातचीत में शामिल होने के लिए चैनल लिंक पेस्ट करें।",
     "serverHintOptional": "वैकल्पिक — अपने डिफ़ॉल्ट रिले इस्तेमाल करने के लिए खाली छोड़ें",
-    "soleAdminWarning": "आप अकेले एडमिन हैं। अगर आप छोड़ेंगे तो ग्रुप में कोई एडमिन नहीं रहेगा।"
+    "soleAdminWarning": "आप अकेले एडमिन हैं। अगर आप छोड़ेंगे तो ग्रुप में कोई एडमिन नहीं रहेगा।",
+    "copyInviteLink": "आमंत्रण लिंक कॉपी करें",
+    "linkCopied": "आमंत्रण लिंक कॉपी किया गया",
+    "previewGroup": "समूह पूर्वावलोकन",
+    "muteGroup": "सूचनाएं म्यूट करें",
+    "unmuteGroup": "सूचनाएं अनम्यूट करें",
+    "muted": "सूचनाएं म्यूट की गईं",
+    "unmuted": "सूचनाएं अनम्यूट की गईं",
+    "checkingRelay": "सर्वर जांच हो रही है...",
+    "relayOnline": "सर्वर ऑनलाइन और पहुंच योग्य है",
+    "relayUnreachable": "सर्वर ऑफ़लाइन हो सकता है — आप फिर भी कोशिश कर सकते हैं",
+    "inviteCount": "{count} को आमंत्रित करें",
+    "usersInvited": "{count} सदस्य आमंत्रित",
+    "inviteManualPlaceholder": "npub, NIP-05 या hex pubkey"
   },
-
   "notifications": {
     "title": "सूचनाएँ",
     "desc": "चुनें कि आप कौन सी ब्राउज़र सूचनाएँ पाना चाहते हैं। आप इन्हें कभी भी बदल सकते हैं।",
@@ -768,7 +753,6 @@
     "settingsLabel": "सूचनाएँ",
     "settingsDesc": "ब्राउज़र अलर्ट प्रबंधित करें"
   },
-
   "options": {
     "openInTab": "पूरे टैब में खोलें",
     "sites": "कनेक्टेड साइट्स",
@@ -807,7 +791,6 @@
     "messaging": "मैसेजिंग",
     "messagingDesc": "बातचीत, ग्रुप्स और संपर्क"
   },
-
   "qr": {
     "scanTitle": "QR कोड स्कैन करें",
     "startingCamera": "कैमरा शुरू हो रहा है...",
@@ -816,6 +799,47 @@
     "pointCamera": "अपना कैमरा QR कोड की तरफ़ करें",
     "cameraBlocked": "कैमरा ब्लॉक है। इसके बजाय QR कोड इमेज अपलोड करें, या अपनी ब्राउज़र सेटिंग्स में कैमरा एक्सेस की अनुमति दें।",
     "noQrFound": "इस इमेज में कोई QR कोड नहीं मिला। साफ़ फ़ोटो से कोशिश करें।",
-    "cameraFailed": "कैमरा शुरू नहीं हो सका। इसके बजाय QR कोड इमेज अपलोड करें।"
+    "cameraFailed": "कैमरा शुरू नहीं हो सका। इसके बजाय QR कोड इमेज अपलोड करें।",
+    "extensionHint": "एक्सटेंशन पॉपअप में कैमरा उपलब्ध नहीं है"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "मिंट आपके ecash बैलेंस को रखता है और आपकी ओर से Lightning भुगतान प्रोसेस करता है।",
+    "mintExplainer": "Buho Jump हर खाते के लिए एक तत्काल ecash वॉलेट बनाता है ताकि आप तुरंत Bitcoin प्राप्त कर सकें — कोई सेटअप नहीं।",
+    "whatsAMint": "मिंट क्या है?",
+    "mintExplainerIntro": "मिंट ecash इकोसिस्टम में एक विश्वसनीय सर्वर है। यह आपके बैलेंस को ecash टोकन के रूप में रखता है और आपके लिए Lightning भुगतान संभालता है — जल्दी शुरू करने के लिए बनाया गया।",
+    "mintTooltipGood": "यह क्यों बढ़िया है",
+    "mintTooltipKnow": "जानना ज़रूरी",
+    "mintBulletInstant": "तुरंत Bitcoin प्राप्त करें, कोई नोड नहीं चाहिए",
+    "mintBulletNoSetup": "हर खाते के लिए तुरंत काम करता है",
+    "mintBulletPrivacy": "Ecash मजबूत लेनदेन गोपनीयता प्रदान करता है",
+    "mintBulletCustodial": "कस्टोडियल — मिंट आपके फंड रखता है",
+    "mintBulletSmall": "छोटी राशि के लिए सबसे अच्छा, लंबी अवधि के भंडारण के लिए नहीं",
+    "mintBulletAdvanced": "केवल तभी बदलें जब आप अपना खुद का मिंट चलाते हैं",
+    "changeWarningInline": "यह एक उन्नत सेटिंग है। मिंट तभी बदलें जब आपको पता हो कि आप क्या कर रहे हैं। आपका मौजूदा बैलेंस वर्तमान मिंट पर रहेगा।",
+    "mintInfo": "मिंट विवरण",
+    "mintInfoFailed": "मिंट जानकारी लोड नहीं हो सकी",
+    "mintUnreachable": "इस मिंट तक नहीं पहुंचा जा सका। URL जांचें और फिर से प्रयास करें।",
+    "changeMint": "मिंट बदलें",
+    "newMint": "नई मिंट URL",
+    "validateMint": "सत्यापित करें और पूर्वावलोकन",
+    "confirmChangeTitle": "Cashu Mint बदलें?",
+    "confirmChangeDesc": "आपका मौजूदा बैलेंस वर्तमान मिंट पर रहता है और स्वचालित रूप से स्थानांतरित नहीं होगा। केवल नए लेनदेन नए मिंट का उपयोग करेंगे।",
+    "confirmChange": "मिंट बदलें",
+    "mintChanged": "मिंट सफलतापूर्वक अपडेट हुआ",
+    "version": "संस्करण",
+    "contact": "संपर्क",
+    "supportedNuts": "समर्थित NUTs"
+  },
+  "nutbits": {
+    "oneClick": "1-क्लिक",
+    "connectDesc": "एक क्लिक में समर्पित वॉलेट — NUTbits के माध्यम से फंड करें",
+    "callbackSuccess": "वॉलेट कनेक्ट हो गया!",
+    "callbackSuccessDesc": "आपका समर्पित NUTbits वॉलेट लिंक हो गया है। भुगतान भेजने के लिए NUTbits के माध्यम से फंड करें।",
+    "callbackClosing": "यह टैब स्वचालित रूप से बंद हो जाएगा...",
+    "callbackFailed": "कनेक्शन विफल",
+    "callbackNoValue": "NUTbits से कोई कनेक्शन स्ट्रिंग प्राप्त नहीं हुई।",
+    "callbackInvalid": "अमान्य कनेक्शन स्ट्रिंग प्राप्त हुई। NWC URI अपेक्षित था।",
+    "callbackConnectFailed": "वॉलेट कनेक्शन सहेजा नहीं जा सका। कृपया पुनः प्रयास करें।"
   }
 }
