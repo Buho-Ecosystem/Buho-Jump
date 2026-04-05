@@ -89,7 +89,11 @@ function checkRelayHealth() {
 }
 
 function parseJoinLink() {
-  const val = joinLink.value.trim()
+  let val = joinLink.value.trim()
+  // Auto-prepend wss:// if user pastes bare domain (e.g. "groups.example.com/my-group")
+  if (val && !val.startsWith('wss://') && !val.startsWith('ws://') && val.includes('/')) {
+    val = 'wss://' + val
+  }
   const urlMatch = val.match(/^(wss?:\/\/[^/\s]+)\/(.+)$/)
   if (urlMatch) return { relay: urlMatch[1], id: urlMatch[2] }
   const spaceMatch = val.match(/^(wss?:\/\/[^\s]+)\s+(.+)$/)
@@ -328,7 +332,7 @@ function resetFields() {
             <span v-for="pk in selectedMembers" :key="pk"
               @click="toggleMember(pk)"
               class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-brand/10 text-brand text-[10px] font-medium cursor-pointer hover:bg-brand/20 transition-colors">
-              {{ contacts.find(c => c.pubkey === pk)?.profile?.name || pk.slice(0, 8) }}
+              {{ contacts.find(c => c.pubkey === pk)?.profile?.name || 'Someone' }}
               <span class="text-brand/60">&times;</span>
             </span>
           </div>
@@ -383,7 +387,7 @@ function resetFields() {
             <p class="text-xs text-text-muted">{{ t('group.joinDesc') }}</p>
           </div>
           <input v-model="joinLink" :placeholder="t('group.joinPlaceholder')"
-            class="w-full bg-surface-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors font-mono placeholder:text-text-muted"
+            class="w-full bg-surface-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted"
             @input="joinPreview = null" />
           <p class="text-[9px] text-text-muted px-1">{{ t('group.joinFormatHint') }}</p>
 
@@ -432,7 +436,7 @@ function resetFields() {
           <div class="space-y-1">
             <input v-model="createServer" :placeholder="t('group.serverPlaceholder')"
               @input="checkRelayHealth"
-              class="w-full bg-surface-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors font-mono placeholder:text-text-muted"
+              class="w-full bg-surface-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted"
               :class="createServer.trim() && !isValidServer ? 'border-error' : relayStatus === 'ok' ? 'border-success' : ''" />
             <p v-if="createServer.trim() && !isValidServer" class="text-[9px] text-error px-1">{{ t('group.invalidRelay') }}</p>
             <p v-else-if="relayStatus === 'checking'" class="text-[9px] text-text-muted px-1 flex items-center gap-1">
@@ -471,7 +475,7 @@ function resetFields() {
             <p class="text-xs text-text-muted">{{ t('group.channelJoinDesc') }}</p>
           </div>
           <input v-model="joinLink" :placeholder="t('group.joinPlaceholder')"
-            class="w-full bg-surface-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors font-mono placeholder:text-text-muted" />
+            class="w-full bg-surface-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted" />
           <button @click="handleJoinChannel" :disabled="!canJoin || loading"
             class="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-2xl bg-brand text-surface-base text-sm font-semibold hover:bg-brand-hover disabled:opacity-40 transition-all btn-primary">
             <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
@@ -487,7 +491,7 @@ function resetFields() {
             class="w-full bg-surface-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors resize-none placeholder:text-text-muted" />
           <div class="space-y-1">
             <input v-model="createServer" :placeholder="t('group.serverPlaceholder')"
-              class="w-full bg-surface-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors font-mono placeholder:text-text-muted" />
+              class="w-full bg-surface-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted" />
             <p class="text-[9px] text-text-muted px-1">{{ t('group.serverHintOptional') }}</p>
           </div>
           <button @click="confirmAction = handleCreateChannel; step = 'confirm'" :disabled="!createName.trim()"

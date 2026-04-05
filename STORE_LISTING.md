@@ -15,12 +15,13 @@ Buho Jump is your all-in-one Nostr companion for the browser. Manage your digita
 - Per-site permission control — you decide who gets access
 
 **Lightning Wallet**
-- Connect any NWC-compatible wallet (Buho Wallet, Alby, Coinos, Minibits, and more)
+- Three wallet types: NWC (Alby Hub, Coinos, Minibits), Cashu (ecash), and LNbits
 - Send and receive Bitcoin payments instantly
-- Multiple wallet support with one-click switching
+- Multiple wallets with one-click switching
 - WebLN provider for in-browser payments
 - Budget controls and spending allowances per site
 - Fiat conversion with 19 currencies
+- Shop online with Bitcoin in South Africa — works with MoneyBadger-supported stores via SnapScan, Zapper, and Scan to Pay
 
 **Encrypted Messaging**
 - Private 1:1 chats with NIP-17 end-to-end encryption
@@ -36,7 +37,7 @@ Buho Jump is your all-in-one Nostr companion for the browser. Manage your digita
 - Fully open source (AGPL-3.0 License)
 
 **Built with nostr-core**
-22 Nostr protocol implementations (NIP-02, 04, 05, 06, 07, 11, 17, 19, 24, 28, 29, 42, 44, 46, 47, 50, 51, 57, 59, 65) — all powered by nostr-core.
+20 Nostr protocol implementations (NIP-02, 04, 05, 06, 07, 11, 17, 19, 24, 28, 29, 42, 44, 46, 47, 50, 51, 57, 59, 65) — all powered by nostr-core.
 
 ---
 

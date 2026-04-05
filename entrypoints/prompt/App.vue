@@ -41,7 +41,10 @@ const unlockError = ref('')
 const unlockBusy = ref(false)
 const showPassword = ref(false)
 
-// Budget "remember" state (weblnSendPayment only)
+// Payment methods — both require per-transaction approval + budget UI
+const PAYMENT_METHODS = ['weblnSendPayment', 'weblnKeysend']
+
+// Budget "remember" state (payment methods only)
 const rememberBudget = ref(false)
 const budgetAmount = ref('')
 
@@ -114,7 +117,7 @@ onMounted(async () => {
       if (data[key]) {
         eventData.value = data[key]
         // Default budget to 10x payment amount (Alby pattern)
-        if (method.value === 'weblnSendPayment' && data[key].amountSats) {
+        if (PAYMENT_METHODS.includes(method.value) && data[key].amountSats) {
           budgetAmount.value = String(data[key].amountSats * 10)
         }
       }
@@ -189,6 +192,14 @@ const PERMISSION_INFO = computed(() => ({
     icon: Zap,
     risk: 'high',
     riskLabel: t('prompt.permWeblnPayRisk'),
+  },
+  weblnKeysend: {
+    label: t('prompt.permKeysendLabel'),
+    what: t('prompt.permKeysendWhat'),
+    detail: t('prompt.permKeysendDetail'),
+    icon: Zap,
+    risk: 'high',
+    riskLabel: t('prompt.permKeysendRisk'),
   },
 }))
 
@@ -269,14 +280,16 @@ const hostInitial = computed(() => {
   return h[0].toUpperCase()
 })
 
-// Payment info (weblnSendPayment)
+// Payment info (weblnSendPayment + weblnKeysend)
+const isPayment = computed(() => PAYMENT_METHODS.includes(method.value))
+
 const paymentAmount = computed(() => {
-  if (method.value !== 'weblnSendPayment' || !eventData.value) return null
+  if (!isPayment.value || !eventData.value) return null
   return eventData.value.amountSats || null
 })
 
 const paymentBudget = computed(() => {
-  if (method.value !== 'weblnSendPayment' || !eventData.value) return null
+  if (!isPayment.value || !eventData.value) return null
   const { budgetSats, spentSats } = eventData.value
   if (!budgetSats) return null
   return { budget: budgetSats, spent: spentSats || 0, remaining: budgetSats - (spentSats || 0) }
@@ -320,7 +333,7 @@ async function respond(decision) {
     }
 
     // Include budget if user opted in during payment approval
-    if (rememberBudget.value && method.value === 'weblnSendPayment' && decision.startsWith('allow')) {
+    if (rememberBudget.value && isPayment.value && decision.startsWith('allow')) {
       const budget = parseInt(budgetAmount.value) || 0
       if (budget > 0) payload.setBudget = budget
     }
@@ -372,7 +385,8 @@ async function submitUnlock() {
 </script>
 
 <template>
-  <div class="w-full min-h-[400px] bg-surface-base text-text-primary flex flex-col select-none">
+  <div class="w-full min-h-screen bg-surface-base flex items-start justify-center">
+  <div class="w-full max-w-[420px] min-h-[400px] bg-surface-base text-text-primary flex flex-col select-none">
 
     <!-- Top accent strip -->
     <div class="h-[3px] bg-gradient-to-r from-brand via-brand-light to-brand" />
@@ -389,7 +403,7 @@ async function submitUnlock() {
     <!-- UNLOCK MODE                                        -->
     <!-- ════════════════════════════════════════════════════ -->
     <template v-else-if="mode === 'unlock'">
-      <div class="flex-1 flex flex-col p-5 animate-fade-in-up">
+      <div class="flex-1 flex flex-col p-5 overflow-y-auto animate-fade-in-up">
 
         <!-- Lock icon + title -->
         <div class="text-center space-y-3 pt-3 pb-4">
@@ -481,7 +495,7 @@ async function submitUnlock() {
     <!-- PERMISSION MODE                                    -->
     <!-- ════════════════════════════════════════════════════ -->
     <template v-else>
-      <div class="flex-1 flex flex-col p-5 space-y-3 animate-fade-in-up">
+      <div class="flex-1 flex flex-col p-5 space-y-3 overflow-y-auto animate-fade-in-up">
 
         <!-- ── Site identity card (Alby PublisherCard pattern) ── -->
         <div class="flex items-center gap-3 stagger-1 animate-fade-in-up">
@@ -538,8 +552,8 @@ async function submitUnlock() {
             </span>
           </div>
 
-          <!-- Payment amount (weblnSendPayment) -->
-          <div v-if="method === 'weblnSendPayment'" class="px-4 py-3 border-t border-border bg-surface-elevated/40">
+          <!-- Payment amount (weblnSendPayment / weblnKeysend) -->
+          <div v-if="isPayment" class="px-4 py-3 border-t border-border bg-surface-elevated/40">
             <div class="flex items-center justify-between">
               <span class="text-[11px] text-text-muted font-medium">{{ t('prompt.payAmount') }}</span>
               <span class="text-base font-extrabold text-error">{{ paymentAmount ? paymentAmount.toLocaleString() + ' sats' : t('prompt.payAmountUnknown') }}</span>
@@ -683,7 +697,7 @@ async function submitUnlock() {
           <div class="space-y-2 stagger-4 animate-fade-in-up">
 
             <!-- ── Payment prompt: budget checkbox + allow_once / deny ── -->
-            <template v-if="method === 'weblnSendPayment'">
+            <template v-if="isPayment">
 
               <!-- Budget "remember" checkbox (Alby BudgetControl pattern) -->
               <div v-if="!paymentBudget" class="rounded-2xl border border-border bg-surface-card overflow-hidden transition-all duration-200">
@@ -705,7 +719,7 @@ async function submitUnlock() {
                       v-model="budgetAmount"
                       type="number"
                       min="1"
-                      class="flex-1 bg-surface-base border border-border rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-brand transition-colors tabular-nums"
+                      class="flex-1 bg-surface-elevated border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-brand transition-colors tabular-nums"
                     />
                     <span class="text-[10px] text-text-muted font-semibold shrink-0">sats</span>
                   </div>
@@ -783,5 +797,6 @@ async function submitUnlock() {
 
       </div>
     </template>
+  </div>
   </div>
 </template>

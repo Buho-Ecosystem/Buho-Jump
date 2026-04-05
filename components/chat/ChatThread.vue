@@ -11,6 +11,7 @@ import { useWallet } from '../../composables/useWallet.js'
 import { useMuteList } from '../../composables/useMuteList.js'
 import { useToast } from '../../composables/useToast.js'
 import { useOnline } from '../../composables/useOnline.js'
+import { useRelayHealth } from '../../composables/useRelayHealth.js'
 import { useMessaging } from '../../composables/useMessaging.js'
 import { nip19 } from 'nostr-core'
 import { formatSats } from '../../lib/utils.js'
@@ -37,6 +38,7 @@ const { status: walletStatus, sendZap } = useWallet()
 const { isMuted, mute, unmute } = useMuteList()
 const toast = useToast()
 const { online } = useOnline()
+const { healthy: relayHealthy } = useRelayHealth()
 const { send } = useMessaging()
 
 const muted = computed(() => isMuted(props.pubkey))
@@ -152,9 +154,9 @@ function formatDateLabel(date) {
 function truncateNpub(pubkey) {
   try {
     const npub = nip19.npubEncode(pubkey)
-    return npub.slice(0, 8) + '...' + npub.slice(-4)
+    return 'User ' + npub.slice(5, 9) + '...' + npub.slice(-4)
   } catch {
-    return pubkey.slice(0, 8) + '...'
+    return 'User ' + pubkey.slice(0, 6) + '...'
   }
 }
 
@@ -192,7 +194,7 @@ function handleSend() {
 
   // Send in background — status updates via optimistic message ticks
   sendMessage(props.pubkey, text, sendOpts).catch(() => {
-    // Failed status shown on the bubble itself (tap to retry)
+    toast.error(t('chat.sendFailedDetail'))
   })
 }
 
@@ -431,7 +433,9 @@ watch(messageList, () => {
         </div>
         <div class="min-w-0">
           <div class="text-[14px] font-semibold truncate leading-tight">{{ displayName }}</div>
-          <div v-if="nip05Display" class="text-[11px] text-brand truncate leading-tight">{{ nip05Display }}</div>
+          <div v-if="!online" class="text-[10px] text-error leading-tight">{{ t('common.offline') }}</div>
+          <div v-else-if="!relayHealthy" class="text-[10px] text-warning leading-tight">{{ t('chat.connectionSlow') }}</div>
+          <div v-else-if="nip05Display" class="text-[11px] text-brand truncate leading-tight">{{ nip05Display }}</div>
         </div>
       </div>
 
@@ -643,8 +647,8 @@ watch(messageList, () => {
         @click="showZapPicker = !showZapPicker"
         class="p-2 rounded-full transition-all duration-200 shrink-0"
         :class="showZapPicker ? 'bg-warning/15 text-warning' : 'hover:bg-surface-elevated text-text-muted'"
-        :title="t('chat.zapTitle')"
-        :aria-label="t('chat.zapTitle')"
+        :title="t('chat.zapHint')"
+        :aria-label="t('chat.zapHint')"
       >
         <Zap class="w-5 h-5" />
       </button>

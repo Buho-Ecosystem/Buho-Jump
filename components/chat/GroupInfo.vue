@@ -253,7 +253,7 @@ async function handleRemoveMember() {
 
 function profileName(pubkey) {
   const p = getCachedProfile(pubkey)
-  return p?.display_name || p?.name || pubkey.slice(0, 12) + '...'
+  return p?.display_name || p?.name || 'Someone'
 }
 
 const permissionLabels = {
@@ -377,7 +377,7 @@ function humanPermissions(perms) {
                   <img v-if="c.profile?.picture" :src="c.profile.picture" alt="" class="w-full h-full object-cover" />
                   <span v-else class="text-[8px] font-bold text-white">{{ ((c.profile?.name || '?')[0]).toUpperCase() }}</span>
                 </div>
-                <span class="text-xs font-medium truncate flex-1">{{ c.profile?.display_name || c.profile?.name || c.npub?.slice(0, 12) }}</span>
+                <span class="text-xs font-medium truncate flex-1">{{ c.profile?.display_name || c.profile?.name || 'Someone' }}</span>
               </button>
             </div>
 

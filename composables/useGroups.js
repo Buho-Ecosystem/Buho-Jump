@@ -156,7 +156,7 @@ export function useGroups() {
         groupIdSets[key] = idSet
         groupLatestTs[key] = latest
       }
-    } catch { /* storage error */ }
+    } catch (err) { console.warn('[groups] Could not load saved groups:', err) }
   }
 
   /** Mark metadata (groups list, lastRead, invitations) as needing persistence. */
@@ -195,7 +195,7 @@ export function useGroups() {
         await chrome.storage.local.set(toSet)
         dirtyGroupKeys.clear()
         dirtyMeta = false
-      } catch { /* storage error */ }
+      } catch (err) { console.warn('[groups] Could not save group data:', err) }
     }, 500)
   }
 
@@ -224,7 +224,7 @@ export function useGroups() {
     if (currentGroupSyncToken.complete && msg.sender && msg.sender !== currentAccountPubkey.value) {
       const group = groups.value.find(g => gkey(g) === key)
       const groupName = group?.name || group?.id || 'Group'
-      const senderShort = msg.sender.slice(0, 12) + '...'
+      const senderShort = 'Someone'
       const preview = msg.content?.slice(0, 120) || ''
       chrome.runtime.sendMessage({
         type: 'NOTIFY_GROUP',

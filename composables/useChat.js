@@ -117,7 +117,7 @@ export function useChat() {
         }
         messageIdSets[pk] = idSet
       }
-    } catch { /* storage error */ }
+    } catch (err) { console.warn('[chat] Could not load saved messages:', err) }
   }
 
   let persistTimer = null
@@ -147,7 +147,7 @@ export function useChat() {
 
         await chrome.storage.local.set(toSet)
         dirtyKeys.clear()
-      } catch { /* storage error */ }
+      } catch (err) { console.warn('[chat] Could not save messages:', err) }
     }, 500)
   }
 
@@ -170,7 +170,7 @@ export function useChat() {
       const preview = msg.content?.slice(0, 120) || ''
       chrome.runtime.sendMessage({
         type: 'NOTIFY_DM',
-        params: [{ senderName: pubkey.slice(0, 12) + '...', preview, messageId: msg.id }],
+        params: [{ senderName: 'Someone', preview, messageId: msg.id }],
       }).catch(() => { /* background not ready */ })
     }
 
@@ -543,7 +543,7 @@ export function useChat() {
                 expiresAt: expiry,
               })
             }
-          } catch { /* decrypt failed — not for us or corrupt */ }
+          } catch { /* expected — message not addressed to this account */ }
         },
       }))
     }
@@ -580,7 +580,7 @@ export function useChat() {
             created_at: event.created_at,
             protocol: 'nip04',
           })
-        } catch { /* decrypt failed */ }
+        } catch { /* expected — message not addressed to this account */ }
       },
     }))
 
@@ -619,7 +619,7 @@ export function useChat() {
             created_at: event.created_at,
             protocol: 'nip04',
           })
-        } catch { /* decrypt failed */ }
+        } catch { /* expected — message not addressed to this account */ }
       },
     }))
 

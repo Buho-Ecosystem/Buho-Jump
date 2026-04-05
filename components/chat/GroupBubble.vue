@@ -29,7 +29,7 @@ const { getCachedProfile } = useContacts()
 
 const senderProfile = computed(() => getCachedProfile(props.message.sender))
 const senderName = computed(() =>
-  senderProfile.value?.display_name || senderProfile.value?.name || props.message.sender?.slice(0, 8) + '...'
+  senderProfile.value?.display_name || senderProfile.value?.name || 'Someone'
 )
 const senderColor = computed(() => getAvatarColor(props.message.sender))
 

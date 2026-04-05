@@ -7,7 +7,24 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png" />
     <title>Buho Jump</title>
   </head>
-  <body>
+  <body style="margin:0;">
+    <!-- Pre-flash guard: set background before Vue mounts to avoid white flash in dark mode -->
+    <script>
+      chrome.storage.local.get(['mode', 'theme']).then(d => {
+        const dark = d.mode !== 'light'
+        const bases = {
+          'buho-green':    dark ? '#0C0C0C' : '#FFFFFF',
+          'copper-dusk':   dark ? '#0C0B0A' : '#FAF8F6',
+          'oxford-night':  dark ? '#0A0A0A' : '#EEF2F7',
+          'charcoal-vault': dark ? '#0A0A0A' : '#F3F3F3',
+          'apple-indigo':  dark ? '#000000' : '#F5F5FF',
+          'nostr-purple':  dark ? '#0A080C' : '#F8F5FA',
+        }
+        const bg = bases[d.theme] || (dark ? '#0C0C0C' : '#FFFFFF')
+        document.documentElement.style.backgroundColor = bg
+        document.documentElement.setAttribute('data-mode', dark ? 'dark' : 'light')
+      })
+    </script>
     <div id="app"></div>
     <script type="module" src="./main.js"></script>
   </body>

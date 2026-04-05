@@ -82,7 +82,7 @@ import {
 import { getPool, setAuthHandler } from '../lib/relayPool.js'
 import { connectBunker, createNostrConnectURI, awaitNostrConnect, parseConnectionURI } from '../lib/nip46-bridge.js'
 import { openPromptWindow } from '../lib/browser/capabilities.js'
-import { buildNutbitsDeepLink, NUTBITS_CALLBACK_URL } from '../lib/nutbits.js'
+import { buildNutbitsDeepLink, getCallbackUrl, rotateCallbackToken } from '../lib/nutbits.js'
 import { notifyDm, notifyPayment, notifyGroup, setupNotificationClickHandler } from '../lib/notifications.js'
 import { startNotificationPoller } from '../lib/notificationPoller.js'
 import { saveSession, getSession, clearSession } from '../lib/session.js'
@@ -1169,7 +1169,8 @@ export default defineBackground(() => {
             // NUTbits API serves GET /connect (animated HTML page) which POSTs to
             // create a dedicated NWC connection, then redirects to our callback URL.
             // Chrome blocks web→chrome-extension:// redirects, so we use a dummy
-            // HTTP callback and intercept via tabs.onUpdated before it loads.
+            // HTTP callback with a per-session token and intercept via tabs.onUpdated.
+            const expectedCallback = getCallbackUrl()
             const deepLink = buildNutbitsDeepLink()
             const tab = await chrome.tabs.create({ url: deepLink })
 
@@ -1177,11 +1178,12 @@ export default defineBackground(() => {
               chrome.tabs.onUpdated.removeListener(onUpdated)
               chrome.tabs.onRemoved.removeListener(onRemoved)
               clearTimeout(timeoutId)
+              rotateCallbackToken() // ensure one-time use
             }
 
             const onUpdated = async (tabId, changeInfo) => {
               if (tabId !== tab.id || !changeInfo.url) return
-              if (!changeInfo.url.startsWith(NUTBITS_CALLBACK_URL)) return
+              if (!changeInfo.url.startsWith(expectedCallback)) return
               cleanup()
               try {
                 const url = new URL(changeInfo.url)
@@ -1195,9 +1197,15 @@ export default defineBackground(() => {
                   chrome.tabs.update(tabId, { url: chrome.runtime.getURL('nwc-callback.html?error=invalid') })
                   return
                 }
-                await addWallet(nwcString, 'NUTbits', _cachedPassword)
+                const walletId = await addWallet(nwcString, 'NUTbits', _cachedPassword)
                 teardownNwc()
-                await ensureNWC()
+                try {
+                  await ensureNWC()
+                } catch (connErr) {
+                  // Connection test failed — rollback the stored wallet
+                  await removeWallet(walletId, _cachedPassword).catch(() => {})
+                  throw connErr
+                }
                 chrome.tabs.update(tabId, { url: chrome.runtime.getURL('nwc-callback.html?success=1') })
               } catch (err) {
                 console.error('NUTbits connect failed:', err)

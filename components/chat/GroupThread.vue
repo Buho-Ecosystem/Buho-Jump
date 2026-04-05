@@ -126,7 +126,7 @@ function handleSend() {
   scrollToBottom()
 
   sendGroupMessage(group.value, text, reply).catch(() => {
-    // Failed status shown on the bubble itself
+    toast.error(t('chat.sendFailedDetail'))
   })
 }
 

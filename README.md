@@ -1,81 +1,95 @@
-# Buho Jump - Browser Extension
+<p align="center">
+  <img src="public/logo/icon-256x256.png" width="80" alt="Buho Jump" />
+</p>
 
-**Your Bitcoin Lightning wallet and companion for Nostr apps — social identity, encrypted messaging, and instant payments in the Browser.**
+<h1 align="center">Buho Jump</h1>
 
-Buho Jump is an open-source browser extension that brings Nostr and Lightning to every website. Manage your digital identity, chat with end-to-end encryption, and pay with Bitcoin — all from your browser toolbar.
+<p align="center">
+  Your Bitcoin Lightning wallet and companion for Nostr apps —<br/>
+  social identity, privat messaging, and instant payments in the browser.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Buho-Ecosystem/Buho-Jump/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-green" alt="License" /></a>
+  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome" /></a>
+  <img src="https://img.shields.io/badge/platform-Chrome%20%C2%B7%20Firefox%20%C2%B7%20Brave%20%C2%B7%20Edge-blue" alt="Platforms" />
+</p>
+
+---
+
+## What is Buho Jump?
+
+Buho Jump is an open-source browser extension that brings **Nostr** and **Lightning** to every website. Manage your digital identity, chat with end-to-end encryption, and pay with Bitcoin — all from your browser toolbar.
+
+> [!NOTE]
+> Buho Jump is built by [DoktorShift](https://github.com/DoktorShift) and [Pratik227](https://github.com/Pratik227) as part of the [Buho Ecosystem](https://github.com/Buho-Ecosystem).
+
+---
 
 ## Features
 
-- **NIP-07 Signer** — Sign in to any Nostr web app seamlessly
-- **NIP-46 Remote Signing** — Connect Amber or other signers via QR code
-- **Lightning Wallet** — Send and receive Bitcoin via NWC (Nostr Wallet Connect)
-- **WebLN Provider** — In-browser Lightning payments for compatible sites
-- **Encrypted Chat** — Private 1:1 messages with NIP-17 end-to-end encryption
-- **Group Chat** — Private groups, relay communities (NIP-29), and open channels (NIP-28)
-- **Multi-Account** — Switch between local and remote signer accounts
-- **Multi-Wallet** — Connect and switch between multiple NWC wallets
-- **15 Languages** — English, German, French, Spanish, Japanese, Chinese, and more (Language Packs are not finished - we could need your help!)
-- **Per-Site Permissions** — Fine-grained control over which sites access your identity and wallet
+**Identity**
+- Sign in to any Nostr app (NIP-07)
+- Connect remote signers like Amber (NIP-46)
+- Multiple accounts with easy switching
+- Per-site permission control
 
-## Built with nostr-core
+**Wallet**
+- NWC, Cashu, and LNbits - three wallet types, one-click switching
+- Send and receive Bitcoin Lightning payments
+- WebLN provider for in-browser payments
+- Per-site spending budgets
+- Fiat conversion (19 currencies)
+- Shop online with Bitcoin in South Africa — works with [MoneyBadger-supported stores](https://www.moneybadger.co.za/stores) via SnapScan, Zapper, and Scan to Pay
 
-22 Nostr protocol implementations — all powered by [nostr-core](https://github.com/DoktorShift/nostr-core):
+**Messaging**
+- Private 1:1 chats with end-to-end encryption (NIP-17)
+- Group chats: private groups, relay communities (NIP-29), open channels (NIP-28)
+- Zap friends directly from chat
 
-NIP-02, 04, 05, 06, 07, 11, 17, 19, 24, 28, 29, 42, 44, 46, 47, 50, 51, 57, 59, 65
+**Security**
+- All keys encrypted at rest (AES-256-GCM)
+- No analytics, no telemetry, no tracking
+- Session locks on browser close
+- Fully open source
 
-## Tech Stack
-
-- [WXT](https://wxt.dev) — Browser extension framework
-- [Vue 3](https://vuejs.org) — Composition API with `<script setup>`
-- [Tailwind CSS v4](https://tailwindcss.com) — Utility-first styling with CSS custom properties
-- [nostr-core](https://github.com/DoktorShift/nostr-core) — Complete Nostr protocol library
-- [Vite](https://vitejs.dev) — Build tool
+---
 
 ## Install
 
-### From Stores
-- Chrome Web Store 
-- Firefox Add-ons 
+Get Buho Jump from your browser's extension store:
 
-### From Source
+- [Chrome Web Store](#)
+- [Firefox Add-ons](#)
 
-**Requirements:** Node.js 20+, npm 10+
+Want to build from source? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```bash
-# Clone
-git clone https://github.com/Buho-Ecosystem/Buho-Jump.git
-cd Buho-Jump
+---
 
-# Install dependencies
-npm ci
+## Built with nostr-core
 
-# Development (Chrome)
-npm run dev
+20 Nostr protocol implementations — all powered by [nostr-core](https://github.com/DoktorShift/nostr-core):
 
-# Development (Firefox)
-npm run dev:firefox
+`NIP-02` `NIP-04` `NIP-05` `NIP-06` `NIP-07` `NIP-11` `NIP-17` `NIP-19` `NIP-24` `NIP-28` `NIP-29` `NIP-42` `NIP-44` `NIP-46` `NIP-47` `NIP-50` `NIP-51` `NIP-57` `NIP-59` `NIP-65`
 
-# Production build (Chrome)
-npm run build
+---
 
-# Production build (Firefox)
-npx wxt build --browser firefox
-```
+## Tech Stack
 
-### Load in Browser
+| Tool | Role |
+|------|------|
+| [WXT](https://wxt.dev) | Browser extension framework |
+| [Vue 3](https://vuejs.org) | UI with Composition API |
+| [Tailwind CSS v4](https://tailwindcss.com) | Styling via CSS custom properties |
+| [nostr-core](https://github.com/DoktorShift/nostr-core) | Nostr protocol library |
+| [Vite](https://vitejs.dev) | Build tool |
 
-**Chrome:**
-1. Go to `chrome://extensions`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the `.output/chrome-mv3` folder
-
-**Firefox:**
-1. Go to `about:debugging#/runtime/this-firefox`
-2. Click "Load Temporary Add-on"
-3. Select any file in the `.output/firefox-mv2` folder
+---
 
 ## Project Structure
+
+<details>
+<summary><strong>Show file tree</strong></summary>
 
 ```
 entrypoints/
@@ -87,8 +101,7 @@ entrypoints/
 components/
   chat/                — Chat, groups, contact picker
   wallet/              — Wallet home, send, receive, selector
-  options/             — Settings pages (sites, account, wallets, messaging)
-  popup/               — Bottom tabs
+  options/             — Settings pages
 composables/           — Vue composables (useChat, useGroups, useWallet, etc.)
 lib/                   — Core logic (accounts, crypto, relays, wallet, NIP-46)
 locales/               — i18n translations (15 languages)
@@ -97,22 +110,22 @@ public/
   webln-provider.js    — WebLN window.webln injection
 ```
 
-## Security
+</details>
 
-- All private keys encrypted at rest with AES-256-GCM (PBKDF2, 100k iterations)
-- NWC wallet connections encrypted at rest
-- Direct messages use NIP-17 end-to-end encryption (NIP-44 + NIP-59 gift wraps)
-- Session unlocked during browser session, locks on browser close
-- No analytics, no telemetry, no tracking
-- No remote code execution
+---
 
-See [PRIVACY_POLICY.md](PRIVACY_POLICY.md) for details.
+## Documentation
 
-## Authors
+| Document | What it covers |
+|----------|---------------|
+| [Privacy Policy](PRIVACY_POLICY.md) | What data is stored and transmitted |
+| [Security](SECURITY.md) | Encryption, responsible disclosure |
+| [FAQ](FAQ.md) | Common questions answered |
+| [Contributing](CONTRIBUTING.md) | How to help — code, translations, bug reports |
+| [Store Listing](STORE_LISTING.md) | Chrome/Firefox store descriptions and permissions |
 
-- [DoktorShift](https://github.com/DoktorShift)
-- [Pratik227](https://github.com/Pratik227)
+---
 
 ## License
 
-[AGPL-3.0](LICENSE)
+[AGPL-3.0](LICENSE) — free and open source.

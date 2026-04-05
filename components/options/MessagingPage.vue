@@ -40,8 +40,7 @@ watch([tab, search], () => { visibleCount.value = PAGE_SIZE })
 
 // Group join form
 const showJoinForm = ref(false)
-const joinRelay = ref('')
-const joinGroupId = ref('')
+const joinLink = ref('')
 const joining = ref(false)
 
 // Leave confirmation
@@ -110,19 +109,29 @@ function profileName(pubkey) {
 function truncateNpub(pubkey) {
   try {
     const npub = nip19.npubEncode(pubkey)
-    return npub.slice(0, 12) + '...' + npub.slice(-6)
-  } catch { return pubkey.slice(0, 12) + '...' }
+    return 'User ' + npub.slice(5, 9) + '...' + npub.slice(-4)
+  } catch { return 'User ' + pubkey.slice(0, 6) + '...' }
+}
+
+function parseJoinLink() {
+  let val = joinLink.value.trim()
+  if (val && !val.startsWith('wss://') && !val.startsWith('ws://') && val.includes('/')) {
+    val = 'wss://' + val
+  }
+  const match = val.match(/^(wss?:\/\/[^/\s]+)\/(.+)$/)
+  if (match) return { relay: match[1], id: match[2] }
+  return null
 }
 
 async function handleJoinGroup() {
-  if (!joinRelay.value.trim() || !joinGroupId.value.trim()) return
+  const parsed = parseJoinLink()
+  if (!parsed) return
   joining.value = true
   try {
-    await joinRelayGroup(joinGroupId.value.trim(), joinRelay.value.trim())
+    await joinRelayGroup(parsed.id, parsed.relay)
     toast.success(t('group.accepted'))
     showJoinForm.value = false
-    joinRelay.value = ''
-    joinGroupId.value = ''
+    joinLink.value = ''
   } catch (err) {
     toast.error(err.message || t('group.joinFailed'))
   } finally {
@@ -221,18 +230,13 @@ async function handleLeaveGroup() {
       <div v-if="showJoinForm" class="bg-surface-card rounded-3xl border border-border shadow-sm p-4 space-y-3">
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold">{{ t('group.joinExisting') }}</span>
-          <button @click="showJoinForm = false; joinRelay = ''; joinGroupId = ''"
+          <button @click="showJoinForm = false; joinLink = ''"
             class="text-[10px] text-text-muted hover:text-text-secondary transition-colors">{{ t('common.cancel') }}</button>
         </div>
-        <div class="space-y-1">
-          <input v-model="joinRelay" :placeholder="t('group.serverPlaceholder')"
-            class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors font-mono placeholder:text-text-muted"
-            :class="joinRelay.trim() && !joinRelay.trim().startsWith('wss://') ? 'border-error' : ''" />
-          <p v-if="joinRelay.trim() && !joinRelay.trim().startsWith('wss://')" class="text-[9px] text-error px-1">{{ t('group.invalidRelay') }}</p>
-        </div>
-        <input v-model="joinGroupId" :placeholder="t('group.groupName')"
+        <input v-model="joinLink" :placeholder="t('group.joinPlaceholder')"
           class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted" />
-        <button @click="handleJoinGroup" :disabled="!joinRelay.trim() || !joinGroupId.trim() || joining || !joinRelay.trim().startsWith('wss://')"
+        <p class="text-[9px] text-text-muted px-1">{{ t('group.joinFormatHint') }}</p>
+        <button @click="handleJoinGroup" :disabled="!parseJoinLink() || joining"
           class="w-full py-2.5 text-xs rounded-2xl bg-brand text-surface-base font-semibold hover:bg-brand-hover disabled:opacity-40 transition-all btn-primary flex items-center justify-center gap-1.5">
           <Loader2 v-if="joining" class="w-3.5 h-3.5 animate-spin" />
           {{ joining ? t('group.joining') : t('group.joinGroup') }}

@@ -14,6 +14,8 @@ import { useWallet } from '../../composables/useWallet.js'
 import { useToast } from '../../composables/useToast.js'
 import { useFiat } from '../../composables/useFiat.js'
 import { useOnline } from '../../composables/useOnline.js'
+import { useContacts } from '../../composables/useContacts.js'
+import { getAvatarColor } from '../../lib/avatarColor.js'
 
 const { t } = useI18n()
 import { formatSats, detectPaymentInput } from '../../lib/utils.js'
@@ -33,6 +35,7 @@ const { payInvoice, makeInvoice, status } = useWallet()
 const toast = useToast()
 const { toFiat, fiatToSats, currency, loadRate } = useFiat()
 const { online } = useOnline()
+const { resolveInput, fetchProfile, getCachedProfile } = useContacts()
 
 // ── State ──
 const step = ref('input') // 'input' | 'confirm' | 'merchant-confirm' | 'withdraw-confirm' | 'result'
@@ -71,6 +74,11 @@ const pendingSuccessAction = ref(null) // Raw action stored between invoice fetc
 const pendingVerifyUrl = ref(null) // LUD-21 verify URL
 const paymentVerified = ref(false) // True if LUD-21 verification passed
 
+// ── Nostr identity → Lightning address resolution ──
+const nostrProfile = ref(null) // { pubkey, name, picture, lud16 }
+const nostrResolving = ref(false)
+const nostrResolved = ref(false) // true once profile card is shown
+
 // Load rate for conversions
 loadRate()
 
@@ -83,14 +91,18 @@ const detected = computed(() => {
 const isMerchant = computed(() => detected.value?.type === 'merchant')
 const isMerchantUnsupported = computed(() => detected.value?.type === 'merchant-unsupported')
 
+const isNostrIdentity = computed(() => detected.value?.type === 'nostr-identity')
+
 const detectedLabel = computed(() => {
   if (!detected.value) return ''
+  if (nostrResolved.value && nostrProfile.value?.lud16) return t('wallet.lightningAddress')
   const labels = {
     invoice: t('wallet.lightningInvoice'),
     lnaddress: t('wallet.lightningAddress'),
     lnurl: t('wallet.lnurl'),
     merchant: t('wallet.merchantDetected'),
     'merchant-unsupported': t('wallet.merchantDetected'),
+    'nostr-identity': nostrResolving.value ? t('wallet.resolvingProfile') : t('wallet.nostrIdentity'),
     unknown: t('wallet.unknownFormat'),
   }
   return labels[detected.value.type] || ''
@@ -99,6 +111,7 @@ const detectedLabel = computed(() => {
 const detectedIcon = computed(() => {
   if (detected.value?.type === 'merchant' || detected.value?.type === 'merchant-unsupported') return Store
   if (detected.value?.type === 'lnaddress') return AtSign
+  if (detected.value?.type === 'nostr-identity') return nostrResolving.value ? Loader2 : AtSign
   return Zap
 })
 
@@ -108,6 +121,7 @@ const detectedColor = computed(() => {
   if (detected.value.type === 'merchant-unsupported') return 'text-warning bg-warning/10'
   if (detected.value.type === 'lnurl') return 'text-info bg-info/10'
   if (detected.value.type === 'merchant') return 'text-brand bg-brand/10'
+  if (detected.value.type === 'nostr-identity') return nostrResolving.value ? 'text-text-muted bg-surface-elevated' : 'text-brand bg-brand/10'
   return 'text-success bg-success/10'
 })
 
@@ -116,7 +130,8 @@ const isWithdraw = computed(() => detected.value?.lnurlType === 'withdraw')
 const needsAmount = computed(() => {
   if (!detected.value) return false
   if (detected.value.type === 'merchant') return false
-  if (isWithdraw.value) return false // amount entered separately in withdraw flow
+  if (isWithdraw.value) return false
+  if (detected.value.type === 'nostr-identity') return nostrResolved.value && !!nostrProfile.value?.lud16
   return detected.value.type === 'lnaddress' || detected.value.type === 'lnurl'
 })
 
@@ -155,6 +170,12 @@ const canProceed = computed(() => {
   if (!detected.value) return false
   if (detected.value.type === 'unknown') return false
   if (detected.value.type === 'merchant-unsupported') return false
+  if (detected.value.type === 'nostr-identity') {
+    if (nostrResolving.value) return false
+    if (!nostrResolved.value) return false
+    if (!nostrProfile.value?.lud16) return false
+    return effectiveSats.value > 0
+  }
   if (detected.value.type === 'invoice') return true
   if (detected.value.type === 'merchant') return true
   if (isWithdraw.value) return true
@@ -231,6 +252,42 @@ function stopCountdown() {
 onBeforeUnmount(() => {
   stopCountdown()
   clearTimeout(fiatDebounce)
+})
+
+// ── Nostr identity resolution ──
+// When user pastes npub/nprofile, resolve to profile → Lightning address
+watch(() => detected.value?.type, async (type) => {
+  if (type !== 'nostr-identity') {
+    nostrProfile.value = null
+    nostrResolving.value = false
+    nostrResolved.value = false
+    return
+  }
+  nostrResolving.value = true
+  nostrResolved.value = false
+  nostrProfile.value = null
+  payError.value = ''
+  try {
+    const pubkey = await resolveInput(detected.value.value)
+    if (!pubkey) throw new Error('Could not resolve')
+    const profile = await fetchProfile(pubkey)
+    nostrProfile.value = {
+      pubkey,
+      name: profile?.display_name || profile?.name || null,
+      picture: profile?.picture || null,
+      nip05: profile?.nip05 || null,
+      lud16: profile?.lud16 || null,
+    }
+    nostrResolved.value = true
+    if (!profile?.lud16) {
+      payError.value = t('wallet.nostrNoLightning')
+    }
+  } catch {
+    nostrResolved.value = true
+    payError.value = t('wallet.nostrResolveFailed')
+  } finally {
+    nostrResolving.value = false
+  }
 })
 
 async function resolveMerchantPayment() {
@@ -318,6 +375,21 @@ async function proceed() {
       step.value = 'withdraw-confirm'
     } catch (err) {
       payError.value = err.message || t('wallet.withdrawFailed')
+    } finally {
+      resolving.value = false
+    }
+    return
+  }
+
+  // Nostr identity → use resolved Lightning address
+  if (detected.value.type === 'nostr-identity' && nostrProfile.value?.lud16) {
+    resolving.value = true
+    try {
+      const result = await fetchInvoice(nostrProfile.value.lud16, effectiveSats.value)
+      resolvedInvoice.value = result.invoice
+      step.value = 'confirm'
+    } catch (err) {
+      payError.value = err.message || t('wallet.addressResolveFailed')
     } finally {
       resolving.value = false
     }
@@ -440,6 +512,9 @@ function reset() {
   pendingVerifyUrl.value = null
   paymentVerified.value = false
   fiatRateUnavailable.value = false
+  nostrProfile.value = null
+  nostrResolving.value = false
+  nostrResolved.value = false
   stopCountdown()
 }
 </script>
@@ -523,10 +598,62 @@ function reset() {
         </div>
       </div>
 
+      <!-- Unknown format — guidance + report -->
+      <div v-if="detected?.type === 'unknown'" class="px-1 space-y-2 animate-fade-in-up">
+        <p class="text-[11px] text-text-muted">
+          <span class="font-semibold text-text-secondary">{{ t('wallet.unknownFormatTitle') }}</span>
+          — {{ t('wallet.unknownFormatHint') }}
+        </p>
+        <p class="text-[10px] text-text-muted">
+          {{ t('wallet.unknownFormatReport') }}
+          <a href="https://t.me/rotation77" target="_blank" rel="noopener noreferrer" class="font-semibold text-text-secondary hover:text-brand transition-colors">{{ t('wallet.reportTelegram') }}</a>
+          <span class="opacity-30 mx-1">·</span>
+          <a href="https://github.com/Buho-Ecosystem/Buho-Jump/issues" target="_blank" rel="noopener noreferrer" class="font-semibold text-text-secondary hover:text-brand transition-colors">{{ t('wallet.reportGithub') }}</a>
+        </p>
+      </div>
+
       <!-- Phase 2 warning -->
       <div v-if="isMerchantUnsupported" class="flex items-start gap-2 p-2.5 rounded-xl bg-warning/10 text-warning text-xs">
         <AlertTriangle class="w-3.5 h-3.5 mt-0.5 shrink-0" />
         <span>{{ t('wallet.merchantNotSupported', { name: detected.merchant?.name || 'This retailer' }) }}</span>
+      </div>
+
+      <!-- Nostr identity — resolving shimmer -->
+      <div v-if="isNostrIdentity && nostrResolving" class="bg-surface-card rounded-2xl border border-border p-4 animate-fade-in-up">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-full skeleton-shimmer shrink-0" />
+          <div class="flex-1 space-y-2">
+            <div class="skeleton-shimmer h-3.5 rounded w-28" />
+            <div class="skeleton-shimmer h-3 rounded w-40" />
+          </div>
+        </div>
+        <div class="flex justify-center mt-3">
+          <div class="flex items-center gap-2 text-[10px] text-text-muted">
+            <Loader2 class="w-3 h-3 animate-spin" />
+            <span>{{ t('wallet.resolvingProfile') }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nostr identity — resolved profile card -->
+      <div v-else-if="isNostrIdentity && nostrResolved && nostrProfile" class="bg-surface-card rounded-2xl border border-brand/20 p-4 animate-fade-in-up">
+        <div class="flex items-center gap-3">
+          <div
+            class="w-12 h-12 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
+            :style="!nostrProfile.picture ? { background: getAvatarColor(nostrProfile.pubkey) } : {}"
+          >
+            <img v-if="nostrProfile.picture" :src="nostrProfile.picture" alt="" class="w-full h-full object-cover" @error="nostrProfile.picture = null" />
+            <span v-else class="text-lg font-bold text-white">{{ (nostrProfile.name || '?')[0].toUpperCase() }}</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-extrabold truncate">{{ nostrProfile.name || 'Unknown' }}</p>
+            <p v-if="nostrProfile.nip05" class="text-[11px] text-brand truncate">{{ nostrProfile.nip05 }}</p>
+            <p v-if="nostrProfile.lud16" class="text-[10px] text-success truncate flex items-center gap-1 mt-0.5">
+              <Zap class="w-3 h-3" />
+              {{ nostrProfile.lud16 }}
+            </p>
+          </div>
+        </div>
       </div>
 
       <!-- Amount input card (only when needed) -->
@@ -787,9 +914,13 @@ function reset() {
         </div>
 
         <!-- Destination -->
-        <div class="flex items-center gap-2 px-4 py-2.5 border-t border-border" :class="detectedColor">
+        <div class="flex items-center gap-2 px-4 py-2.5 border-t border-border" :class="nostrProfile?.lud16 ? 'text-success bg-success/10' : detectedColor">
           <component :is="detectedIcon" class="w-3.5 h-3.5" />
-          <span class="text-[11px] font-medium truncate">{{ detected?.type === 'lnaddress' ? detected.value : detectedLabel }}</span>
+          <span v-if="nostrProfile" class="text-[11px] font-medium truncate flex items-center gap-1.5">
+            <img v-if="nostrProfile.picture" :src="nostrProfile.picture" class="w-4 h-4 rounded-full" />
+            {{ nostrProfile.name || nostrProfile.lud16 }}
+          </span>
+          <span v-else class="text-[11px] font-medium truncate">{{ detected?.type === 'lnaddress' ? detected.value : detectedLabel }}</span>
         </div>
       </div>
 
