@@ -41,7 +41,7 @@ export default defineConfig({
     }),
     web_accessible_resources: [
       {
-        resources: ['nostr-provider.js', 'webln-provider.js'],
+        resources: ['nostr-provider.js', 'webln-provider.js', 'logo/icon-256x256.png'],
         matches: ['<all_urls>'],
       },
     ],

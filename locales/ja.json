@@ -28,7 +28,8 @@
     "showingOf": "Showing {shown} of {total}",
     "showMore": "Show more",
     "offline": "No internet connection",
-    "open": "Open"
+    "open": "Open",
+    "validating": "検証中..."
   },
   "errors": {
     "PERMISSION_DENIED": "Permission denied",
@@ -93,7 +94,12 @@
     "relaySettings": "リレー設定",
     "relaySettingsDesc": "アカウント、ウォレット、チャットのリレーを管理",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Open in full page"
+    "openFullPage": "Open in full page",
+    "more": "その他",
+    "allSettings": "すべての設定",
+    "popOut": "ウィンドウを切り離す",
+    "popOutTitle": "ウィンドウを切り離す",
+    "popOutDesc": "Buhoをフローティングウィンドウとして開いたまま、どこにでもドラッグできます。ウォレットを失うことなく自由にブラウジングできます。"
   },
   "relay": {
     "title": "リレー設定",
@@ -138,7 +144,10 @@
     "infoOperator": "運営者",
     "infoContact": "連絡先",
     "infoYes": "はい",
-    "infoNo": "いいえ"
+    "infoNo": "いいえ",
+    "statusConnected": "リレーに接続可能",
+    "statusUnreachable": "リレーに接続不可",
+    "refreshStatus": "リレー接続を確認"
   },
   "account": {
     "activeDesc": "アクティブなアカウント——アプリはこのプロフィールを使用します",
@@ -171,7 +180,12 @@
     "showQr": "Show QR code",
     "connectedRelays": "Connected relays",
     "relayCount": "{count} relay | {count} relays",
-    "noRelays": "No relays configured"
+    "noRelays": "No relays configured",
+    "deleteBackupWarning": "まずキーをバックアップしてください！",
+    "deleteBackupHint": "バックアップなしでこのIDを削除すると、アクセスが永久に失われます。復元はできません。",
+    "deleteBackupCta": "設定でキーをバックアップ",
+    "deleteLocalExplain": "この操作はBuhoから秘密鍵を完全に削除します。接続されたすべてのサイトがこのIDへのアクセスを失います。",
+    "deleteRemoteExplain": "これはリモート署名者との接続を解除するだけです。キーは署名デバイス上で安全に保持されます — いつでも再接続できます。"
   },
   "wizard": {
     "addAccount": "アカウントを追加",
@@ -340,9 +354,7 @@
     "kindRelayList": "サーバー設定",
     "kindArticle": "長文記事",
     "kindAppData": "アプリデータ",
-    "kindGeneric": "イベントタイプ {kind}",
-    "moreOptions": "その他のオプション",
-    "fewerOptions": "オプションを閉じる"
+    "kindGeneric": "イベントタイプ {kind}"
   },
   "wallet": {
     "balance": "残高",
@@ -507,7 +519,13 @@
     "removeWalletWarning": "This will permanently delete all funds in this wallet. Make sure you have a backup.",
     "lightningReady": "Lightning-ready",
     "invoiceCopied": "Invoice copied",
-    "fileTooLarge": "File too large (max 10 MB)"
+    "fileTooLarge": "File too large (max 10 MB)",
+    "chooseType": "ウォレットの接続方法を選択",
+    "nwcDesc": "Nostrリレー経由で接続 — Alby、Buho、LNbits、Coinosなどに対応",
+    "lnbitsDesc": "REST APIでLNbitsインスタンスに直接接続",
+    "lnbitsHelp": "URLとAdmin KeyはLNbitsウォレット設定のAPI情報にあります。",
+    "lnbitsUrl": "LNbits URL",
+    "lnbitsAdminKey": "Admin Key"
   },
   "sites": {
     "title": "Site Details",
@@ -624,7 +642,8 @@
     "filterAll": "All",
     "filterDms": "DMs",
     "filterGroups": "Groups",
-    "joinOrCreate": "Join or create a group"
+    "joinOrCreate": "Join or create a group",
+    "messageDeletedLabel": "このメッセージは削除されました"
   },
   "group": {
     "title": "Groups",
@@ -698,7 +717,20 @@
     "searchMembers": "Search contacts...",
     "channelJoinDesc": "Paste a channel link to join a public conversation.",
     "serverHintOptional": "Optional — leave empty to use your default relays",
-    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave."
+    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave.",
+    "copyInviteLink": "招待リンクをコピー",
+    "linkCopied": "招待リンクをコピーしました",
+    "previewGroup": "グループをプレビュー",
+    "muteGroup": "通知をミュート",
+    "unmuteGroup": "通知のミュートを解除",
+    "muted": "通知をミュートしました",
+    "unmuted": "通知のミュートを解除しました",
+    "checkingRelay": "サーバーを確認中...",
+    "relayOnline": "サーバーはオンラインで到達可能です",
+    "relayUnreachable": "サーバーがオフラインの可能性があります — 試すことはできます",
+    "inviteCount": "{count}人を招待",
+    "usersInvited": "{count}人のメンバーを招待しました",
+    "inviteManualPlaceholder": "npub、NIP-05、またはhex公開鍵"
   },
   "notifications": {
     "title": "Notifications",
@@ -767,6 +799,47 @@
     "pointCamera": "カメラをQRコードに向けてください",
     "cameraBlocked": "Camera is blocked. Upload a QR code image instead, or allow camera access in your browser settings.",
     "noQrFound": "No QR code found in this image. Try a clearer photo.",
-    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead."
+    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead.",
+    "extensionHint": "拡張機能のポップアップではカメラを使用できません"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "ミントはecash残高を保管し、あなたに代わってLightning支払いを処理します。",
+    "mintExplainer": "Buho Jumpは各アカウントに即座にecashウォレットを作成し、設定なしですぐにBitcoinを受け取れます。",
+    "whatsAMint": "ミントとは？",
+    "mintExplainerIntro": "ミントはecashエコシステムの信頼性の高いサーバーです。残高をecashトークンとして保管し、Lightning支払いを処理します — 素早く始められるように設計されています。",
+    "mintTooltipGood": "優れている理由",
+    "mintTooltipKnow": "知っておくべきこと",
+    "mintBulletInstant": "ノード不要でBitcoinを即座に受け取れる",
+    "mintBulletNoSetup": "すべてのアカウントですぐに使える",
+    "mintBulletPrivacy": "ecashは強力なトランザクションプライバシーを提供",
+    "mintBulletCustodial": "カストディアル — ミントが資金を保管",
+    "mintBulletSmall": "少額向け、長期保管には不向き",
+    "mintBulletAdvanced": "自分のミントを運営する場合のみ変更",
+    "changeWarningInline": "これは上級設定です。何をしているか理解している場合のみミントを変更してください。既存の残高は現在のミントに残ります。",
+    "mintInfo": "ミント詳細",
+    "mintInfoFailed": "ミント情報を読み込めませんでした",
+    "mintUnreachable": "このミントに接続できませんでした。URLを確認して再試行してください。",
+    "changeMint": "ミントを変更",
+    "newMint": "新しいミントURL",
+    "validateMint": "検証とプレビュー",
+    "confirmChangeTitle": "Cashu Mintを変更しますか？",
+    "confirmChangeDesc": "既存の残高は現在のミントに残り、自動的に転送されません。新しいトランザクションのみが新しいミントを使用します。",
+    "confirmChange": "ミントを変更",
+    "mintChanged": "ミントが正常に更新されました",
+    "version": "バージョン",
+    "contact": "連絡先",
+    "supportedNuts": "対応NUT"
+  },
+  "nutbits": {
+    "oneClick": "ワンクリック",
+    "connectDesc": "ワンクリックで専用ウォレット — NUTbitsで入金",
+    "callbackSuccess": "ウォレット接続完了！",
+    "callbackSuccessDesc": "専用のNUTbitsウォレットがリンクされました。NUTbitsで入金して送金を始めましょう。",
+    "callbackClosing": "このタブは自動的に閉じます...",
+    "callbackFailed": "接続に失敗しました",
+    "callbackNoValue": "NUTbitsから接続文字列を受信できませんでした。",
+    "callbackInvalid": "無効な接続文字列です。NWC URIが必要です。",
+    "callbackConnectFailed": "ウォレット接続を保存できませんでした。もう一度お試しください。"
   }
 }

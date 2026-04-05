@@ -28,9 +28,9 @@
     "showingOf": "แสดง {shown} จาก {total}",
     "showMore": "แสดงเพิ่มเติม",
     "offline": "ไม่มีการเชื่อมต่ออินเทอร์เน็ต",
-    "open": "Open"
+    "open": "Open",
+    "validating": "กำลังตรวจสอบ..."
   },
-
   "errors": {
     "PERMISSION_DENIED": "ไม่ได้รับอนุญาต",
     "NO_SIGNER": "ไม่มีตัวลงชื่อ",
@@ -45,7 +45,6 @@
     "TIMEOUT": "คำขอหมดเวลา",
     "INSUFFICIENT_BALANCE": "ยอดเงินไม่เพียงพอ"
   },
-
   "lock": {
     "createTitle": "สร้างรหัสผ่าน",
     "unlockTitle": "ยินดีต้อนรับกลับ",
@@ -71,13 +70,11 @@
     "stayUnlocked": "คงสถานะปลดล็อก",
     "backupReminder": "สำรองกุญแจบัญชีของคุณเพื่อป้องกันการสูญเสียการเข้าถึง"
   },
-
   "tabs": {
     "account": "บัญชี",
     "wallet": "กระเป๋าเงิน",
     "chat": "แชท"
   },
-
   "settings": {
     "appearance": "รูปลักษณ์",
     "lightMode": "โหมดสว่าง",
@@ -97,9 +94,13 @@
     "relaySettings": "ตั้งค่ารีเลย์",
     "relaySettingsDesc": "กำหนดค่าการเชื่อมต่อรีเลย์",
     "version": "Buho Jump v{version}",
-    "openFullPage": "เปิดในหน้าเต็ม"
+    "openFullPage": "เปิดในหน้าเต็ม",
+    "more": "เพิ่มเติม",
+    "allSettings": "การตั้งค่าทั้งหมด",
+    "popOut": "หน้าต่างลอย",
+    "popOutTitle": "แยกหน้าต่าง",
+    "popOutDesc": "เปิด Buho เป็นหน้าต่างลอยที่ลากไปไหนก็ได้ เรียกดูเว็บอย่างอิสระโดยไม่สูญเสียกระเป๋าเงิน"
   },
-
   "relay": {
     "title": "ตั้งค่ารีเลย์",
     "warning": "คำเตือน: การเปลี่ยนการตั้งค่าเหล่านี้อาจส่งผลต่อประสบการณ์การใช้งานหลัก",
@@ -143,9 +144,11 @@
     "infoOperator": "ผู้ดำเนินการ",
     "infoContact": "ติดต่อ",
     "infoYes": "ใช่",
-    "infoNo": "ไม่"
+    "infoNo": "ไม่",
+    "statusConnected": "รีเลย์สามารถเข้าถึงได้",
+    "statusUnreachable": "ไม่สามารถเข้าถึงรีเลย์ได้",
+    "refreshStatus": "ตรวจสอบการเชื่อมต่อรีเลย์"
   },
-
   "account": {
     "activeDesc": "บัญชีที่ใช้งานอยู่ — แอปจะใช้โปรไฟล์นี้",
     "appPermissions": "สิทธิ์ของแอป",
@@ -177,14 +180,17 @@
     "showQr": "แสดง QR โค้ด",
     "connectedRelays": "รีเลย์ที่เชื่อมต่อ",
     "relayCount": "{count} รีเลย์",
-    "noRelays": "ไม่มีรีเลย์ที่กำหนดค่า"
+    "noRelays": "ไม่มีรีเลย์ที่กำหนดค่า",
+    "deleteBackupWarning": "สำรองคีย์ของคุณก่อน!",
+    "deleteBackupHint": "หากไม่มีการสำรองข้อมูล การลบตัวตนนี้หมายถึงการสูญเสียการเข้าถึงตลอดไป ไม่สามารถกู้คืนได้",
+    "deleteBackupCta": "สำรองคีย์ในการตั้งค่า",
+    "deleteLocalExplain": "การดำเนินการนี้จะลบคีย์ส่วนตัวของคุณออกจาก Buho อย่างถาวร เว็บไซต์ที่เชื่อมต่อทั้งหมดจะสูญเสียการเข้าถึงตัวตนนี้",
+    "deleteRemoteExplain": "การดำเนินการนี้จะตัดการเชื่อมต่อจากผู้ลงนามระยะไกลเท่านั้น คีย์ของคุณยังคงปลอดภัยบนอุปกรณ์ผู้ลงนาม — คุณสามารถเชื่อมต่อใหม่ได้ตลอดเวลา"
   },
-
   "wizard": {
     "addAccount": "เพิ่มบัญชี",
     "addAccountDesc": "บัญชีของคุณใช้เข้าสู่ระบบแอป โพสต์ และส่งข้อความ — ทั้งหมดโดยไม่ต้องมีเซิร์ฟเวอร์กลาง",
     "recommended": "แนะนำ",
-
     "modeNewTitle": "สร้างบัญชีใหม่",
     "modeNewDesc": "สร้างคู่กุญแจใหม่พร้อมวลีกู้คืน 12 คำที่คุณสามารถสำรองได้",
     "modeImportTitle": "ฉันมีบัญชีอยู่แล้ว",
@@ -192,7 +198,6 @@
     "modeSignerTitle": "ตัวลงชื่อภายนอก",
     "modeSignerDesc": "กุญแจของคุณจะอยู่บนแอปตัวลงชื่อ (nsec.app, Amber, Primal) ตัวเลือกที่ปลอดภัยที่สุด",
     "advancedOptions": "ตัวเลือกเพิ่มเติม",
-
     "stepSetup": "ตั้งค่า",
     "stepName": "ชื่อ",
     "stepImport": "นำเข้า",
@@ -200,14 +205,12 @@
     "stepBackup": "สำรอง",
     "stepProfile": "โปรไฟล์",
     "stepDone": "เสร็จสิ้น",
-
     "chooseName": "เลือกชื่อ",
     "chooseNameDesc": "เลือกชื่อที่คนอื่นจะเห็นเมื่อติดต่อกับคุณ คุณสามารถเปลี่ยนได้ทุกเมื่อ",
     "importAccount": "นำเข้าบัญชีของคุณ",
     "importAccountDesc": "ใส่กุญแจสำรองจากบัญชีที่มีอยู่เพื่อกู้คืนที่นี่",
     "connectSigner": "เชื่อมต่อตัวลงชื่อของคุณ",
     "connectSignerDesc": "วางลิงก์การเชื่อมต่อจากแอปตัวลงชื่อของคุณ",
-
     "displayName": "ชื่อที่แสดง",
     "namePlaceholder": "เช่น satoshi, alice, ชื่อ_ของคุณ",
     "nameHint": "นี่คือชื่อที่คนอื่นจะเห็น ใช้ชื่อจริง ชื่อเล่น หรืออะไรก็ได้ที่คุณชอบ",
@@ -227,11 +230,9 @@
     "copyUri": "คัดลอก URI",
     "waitingForSigner": "กำลังรอตัวลงชื่อเชื่อมต่อ…",
     "connectExpired": "การเชื่อมต่อหมดเวลา — ลองอีกครั้ง",
-
     "createAccount": "สร้างบัญชี",
     "importAccountBtn": "นำเข้าบัญชี",
     "connect": "เชื่อมต่อ",
-
     "connectPreparing": "กำลังเตรียม...",
     "connectConnecting": "กำลังเชื่อมต่อกับตัวลงชื่อของคุณ...",
     "connectFetchingProfile": "กำลังโหลดโปรไฟล์ของคุณ...",
@@ -240,7 +241,6 @@
     "progressSecureConnection": "กำลังตั้งค่าการเชื่อมต่อที่ปลอดภัย",
     "progressConnecting": "กำลังเชื่อมต่อกับแอปตัวลงชื่อของคุณ",
     "progressLoadingProfile": "กำลังโหลดโปรไฟล์ของคุณ",
-
     "backupTitle": "บันทึกกุญแจกู้คืนของคุณ",
     "backupDesc": "นี่คือวิธีเดียวในการกู้คืนบัญชีของคุณ หากคุณทำหาย ไม่มีใครช่วยได้ — แม้แต่เรา",
     "backupWarning": "อย่าแชร์สิ่งนี้กับใคร — มันควบคุมบัญชีทั้งหมดของคุณ",
@@ -249,7 +249,6 @@
     "downloadFile": "ดาวน์โหลดไฟล์",
     "backupConfirm": "ฉันได้บันทึกกุญแจกู้คืนไว้ในที่ปลอดภัยแล้ว",
     "backupConfirmHint": "ใช้ตัวจัดการรหัสผ่าน (1Password, Bitwarden) บันทึกที่เข้ารหัส หรือเขียนลงกระดาษแล้วเก็บไว้อย่างปลอดภัย",
-
     "profileTitle": "โปรไฟล์ของคุณ",
     "profileDesc": "ตรวจสอบข้อมูลโปรไฟล์ของคุณ คุณสามารถอัปเดตได้ทุกเมื่อ",
     "completeProfile": "กรอกโปรไฟล์ให้สมบูรณ์",
@@ -258,13 +257,11 @@
     "aboutPlaceholder": "เล่าเกี่ยวกับตัวคุณให้โลกรู้...",
     "saveProfile": "บันทึกโปรไฟล์",
     "saving": "กำลังบันทึก...",
-
     "connectedTitle": "เชื่อมต่อแล้ว",
     "connectedDesc": "ตัวลงชื่อของคุณเชื่อมต่อแล้วและพร้อมใช้งาน",
     "connectedBadge": "ออนไลน์",
     "signerExplainer": "กุญแจของคุณอยู่อย่างปลอดภัยบนแอปตัวลงชื่อ เมื่อแอปต้องการดำเนินการในนามคุณ คำขอจะถูกส่งไปยังตัวลงชื่อเพื่อขออนุมัติ",
     "howItWorks": "วิธีการทำงาน:",
-
     "modeRecoverTitle": "กู้คืนด้วยคำ",
     "modeRecoverDesc": "กู้คืนบัญชีของคุณโดยใช้คำกู้คืน 12 คำที่คุณบันทึกไว้",
     "stepRecover": "กู้คืน",
@@ -274,12 +271,10 @@
     "recoveryWords": "คำกู้คืน",
     "recoveryWordsPlaceholder": "ใส่ 12 คำโดยคั่นด้วยเว้นวรรค",
     "recoveryWordsHint": "ใส่คำตามลำดับที่คุณได้รับทุกประการ",
-
     "mnemonicWarning": "จดคำเหล่านี้ไว้ — เป็นวิธีเดียวในการกู้คืนบัญชีของคุณ",
     "copyWords": "คัดลอกคำ",
     "backupMnemonicTitle": "บันทึกคำกู้คืนของคุณ",
     "backupMnemonicDesc": "คำ 12 คำเหล่านี้เป็นวิธีเดียวในการกู้คืนบัญชีของคุณ จดไว้และเก็บรักษาให้ปลอดภัย",
-
     "doneTitle": "พร้อมใช้งานแล้ว",
     "doneDesc": "บัญชีของคุณพร้อมแล้ว แอปสามารถขอใช้งานได้ — คุณจะถูกถามก่อนเสมอ",
     "profileSaved": "บันทึกโปรไฟล์เรียบร้อยแล้ว",
@@ -287,7 +282,6 @@
     "pinTitle": "Pin Buho Jump to your toolbar",
     "pinDesc": "Click the puzzle piece icon in your browser toolbar and pin Buho Jump for quick access."
   },
-
   "prompt": {
     "wantsAccess": "ต้องการเข้าถึงบัญชีของคุณ",
     "yourAccount": "บัญชีของคุณ",
@@ -309,20 +303,16 @@
     "allowAllExclude": "การชำระเงินต้องได้รับการอนุมัติจากคุณเสมอ",
     "decideSeparately": "ตัดสินใจทีละรายการ",
     "decideSeparatelyDesc": "คุณจะถูกถามทุกครั้ง",
-
     "lockedTitle": "ปลดล็อกเพื่อดำเนินการต่อ",
     "lockedDesc": "ใส่รหัสผ่านเพื่อดำเนินการต่อ",
     "lockedRequestedBy": "ร้องขอโดย",
     "showPassword": "แสดง",
     "hidePassword": "ซ่อน",
-
     "httpWarning": "ไซต์นี้ไม่ปลอดภัย — ข้อมูลของคุณอาจถูกดักจับ",
-
     "permPublicLabel": "ดูโปรไฟล์สาธารณะของคุณ",
     "permPublicWhat": "แอปต้องการรู้ว่าคุณเป็นใคร — เหมือนกับการแสดงบัตรโปรไฟล์ของคุณ",
     "permPublicDetail": "จะแชร์เฉพาะข้อมูลสาธารณะเท่านั้น ไม่สามารถโพสต์หรือดำเนินการในนามคุณ",
     "permPublicRisk": "อ่านอย่างเดียว",
-
     "permSignLabel": "โพสต์หรือดำเนินการในนามคุณ",
     "permSignWhat": "แอปต้องการเผยแพร่บางอย่างโดยใช้บัญชีของคุณ — เช่น โพสต์ ปฏิกิริยา หรือการดำเนินการ",
     "permSignDetail": "เหมือนกับการกด \"ส่ง\" เนื้อหาจะเห็นได้โดยคนอื่น",
@@ -330,22 +320,18 @@
     "httpAuth": "การยืนยันตัวตน HTTP",
     "viewEvent": "ดูข้อมูล Event",
     "hideEvent": "ซ่อนข้อมูล Event",
-
     "permEncryptLabel": "เข้ารหัสข้อความ",
     "permEncryptWhat": "แอปต้องการส่งข้อความส่วนตัวที่เฉพาะผู้รับเท่านั้นที่อ่านได้",
     "permEncryptDetail": "ข้อความจะถูกเข้ารหัสก่อนส่ง",
     "permEncryptRisk": "ข้อความ",
-
     "permDecryptLabel": "อ่านข้อความส่วนตัว",
     "permDecryptWhat": "แอปต้องการเปิดข้อความส่วนตัวที่ส่งถึงคุณ",
     "permDecryptDetail": "ข้อความที่ถอดรหัสแล้วจะเห็นได้โดยแอป",
     "permDecryptRisk": "ข้อความ",
-
     "permWeblnLabel": "เชื่อมต่อกระเป๋าเงินของคุณ",
     "permWeblnWhat": "แอปต้องการโต้ตอบกับกระเป๋าเงิน Lightning ของคุณ — ตรวจสอบยอดเงินและสร้างใบแจ้งหนี้",
     "permWeblnDetail": "แอปนี้ไม่สามารถส่งการชำระเงินโดยไม่ได้รับการอนุมัติจากคุณ",
     "permWeblnRisk": "เข้าถึงกระเป๋าเงิน",
-
     "permWeblnPayLabel": "ส่งการชำระเงิน",
     "permWeblnPayWhat": "แอปต้องการชำระ Lightning invoice โดยใช้กระเป๋าเงินของคุณ",
     "permWeblnPayDetail": "sats จะถูกหักจากกระเป๋าเงินของคุณ อนุมัติเฉพาะเมื่อคุณเชื่อถือแอปนี้และคาดหวังการชำระเงินนี้",
@@ -356,10 +342,8 @@
     "budgetRemaining": "งบประมาณคงเหลือ",
     "rememberBudget": "Remember and set a budget",
     "rememberBudgetHint": "Auto-approve future payments within this budget",
-
     "permDefaultWhat": "แอปนี้กำลังขอเข้าถึงบัญชีของคุณ",
     "permDefaultRisk": "สิทธิ์",
-
     "kindProfile": "ข้อมูลโปรไฟล์",
     "kindNote": "โน้ตข้อความสั้น",
     "kindContacts": "รายชื่อผู้ติดต่อ",
@@ -372,7 +356,6 @@
     "kindAppData": "ข้อมูลแอป",
     "kindGeneric": "ประเภท Event {kind}"
   },
-
   "wallet": {
     "balance": "ยอดเงิน",
     "reconnecting": "กำลังเชื่อมต่อใหม่…",
@@ -394,7 +377,6 @@
     "failedRefresh": "รีเฟรชไม่สำเร็จ",
     "walletConnected": "เชื่อมต่อกระเป๋าเงินแล้ว",
     "connectFailed": "เชื่อมต่อกระเป๋าเงินไม่สำเร็จ",
-
     "noWallet": "ไม่มีกระเป๋าเงินที่เชื่อมต่อ",
     "noWalletDesc": "วางลิงก์การเชื่อมต่อจากแอปกระเป๋าเงินเพื่อเปิดใช้การชำระเงิน",
     "noWalletHomeDesc": "เชื่อมต่อกระเป๋าเงิน Lightning เพื่อส่งและรับ sats ได้ทันที",
@@ -417,7 +399,6 @@
     "removeWallet": "ลบออก",
     "noWallets": "ไม่มีกระเป๋าเงินที่เชื่อมต่อ",
     "connectPrompt": "เชื่อมต่อกระเป๋าเงิน",
-
     "sendTitle": "ส่งการชำระเงิน",
     "sendResult": "ผลการชำระเงิน",
     "invoiceLabel": "ใบแจ้งหนี้หรือที่อยู่",
@@ -446,7 +427,6 @@
     "hideInvoiceDetails": "ซ่อนรายละเอียดใบแจ้งหนี้",
     "sendAnother": "ส่งการชำระเงินอีกครั้ง",
     "rateUnavailable": "อัตราแลกเปลี่ยนไม่พร้อมใช้งาน — ใส่จำนวนเป็น sats แทน",
-
     "qrFailed": "สร้าง QR โค้ดไม่สำเร็จ",
     "receiveTitle": "รับการชำระเงิน",
     "receiveHintCashu": "Create a Lightning invoice or redeem an ecash token",
@@ -459,12 +439,10 @@
     "creating": "กำลังสร้าง...",
     "requesting": "กำลังร้องขอ",
     "newInvoice": "ใบแจ้งหนี้ใหม่",
-
     "historyTitle": "ประวัติธุรกรรม",
     "loadMore": "โหลดเพิ่ม",
     "noResults": "ไม่พบธุรกรรม",
     "noResultsHint": "ธุรกรรมจะปรากฏที่นี่เมื่อคุณส่งหรือรับการชำระเงิน",
-
     "detailTitle": "รายละเอียดธุรกรรม",
     "description": "รายละเอียด",
     "noDescription": "ไม่มีรายละเอียด",
@@ -473,7 +451,6 @@
     "feesNone": "ไม่มีค่าธรรมเนียม",
     "technicalDetails": "รายละเอียดเทคนิค",
     "paymentHash": "Payment hash",
-
     "statusPending": "รอดำเนินการ",
     "statusExpired": "หมดอายุ",
     "statusFailed": "ล้มเหลว",
@@ -486,7 +463,6 @@
     "filterSent": "ส่ง",
     "groupToday": "วันนี้",
     "groupYesterday": "เมื่อวาน",
-
     "merchantPayment": "การชำระเงินหน้าร้าน",
     "merchantDetected": "ตรวจพบ QR หน้าร้าน",
     "merchantPaying": "ชำระเงินที่",
@@ -507,7 +483,6 @@
     "addressResolveFailed": "ไม่สามารถค้นหาที่อยู่นี้ได้ ตรวจสอบความถูกต้องแล้วลองอีกครั้ง",
     "lnurlFailed": "ไม่สามารถดำเนินการคำขอนี้ได้ บริการอาจไม่พร้อมใช้งานชั่วคราว",
     "connectFailedDetail": "ไม่สามารถเชื่อมต่อกับกระเป๋าเงินได้ ตรวจสอบว่าลิงก์การเชื่อมต่อถูกต้องและไม่หมดอายุ",
-
     "withdrawTitle": "รับการชำระเงิน",
     "withdrawDesc": "มีคนกำลังส่ง sats ให้คุณ",
     "withdrawClaiming": "กำลังรับ...",
@@ -517,11 +492,9 @@
     "withdrawFailed": "ไม่สามารถรับการชำระเงินนี้ได้ ลิงก์อาจหมดอายุหรือถูกใช้ไปแล้ว",
     "withdrawMin": "ขั้นต่ำ: {min} sats",
     "withdrawMax": "สูงสุด: {max} sats",
-
     "successActionMessage": "ข้อความจากผู้ส่ง",
     "successActionUrl": "ลิงก์จากผู้ส่ง",
     "successActionSecret": "ข้อความลับ",
-
     "lightning": "Lightning",
     "token": "โทเค็น",
     "pasteToken": "วางโทเค็นการชำระเงิน",
@@ -531,7 +504,6 @@
     "receivedSats": "ได้รับ {amount} sats",
     "waitingForPayment": "กำลังรอการชำระเงิน...",
     "ecashTokenDetected": "ตรวจพบโทเค็นการชำระเงิน",
-
     "backupWallet": "สำรองกระเป๋าเงิน",
     "backupDesc": "ดาวน์โหลดข้อมูลสำรองที่เข้ารหัสของกระเป๋าเงินของคุณ",
     "backupExport": "ดาวน์โหลดข้อมูลสำรอง",
@@ -544,13 +516,17 @@
     "backupImported": "นำเข้าข้อมูลสำรองแล้ว",
     "backupExported": "ดาวน์โหลดข้อมูลสำรองแล้ว",
     "backupWarning": "ใครก็ตามที่มีไฟล์นี้สามารถใช้เงินเหล่านี้ได้ เก็บรักษาให้ปลอดภัย",
-
     "removeWalletWarning": "การดำเนินการนี้จะลบเงินทั้งหมดในกระเป๋าเงินนี้อย่างถาวร ตรวจสอบว่าคุณมีข้อมูลสำรอง",
     "lightningReady": "พร้อมใช้ Lightning",
     "invoiceCopied": "คัดลอกใบแจ้งหนี้แล้ว",
-    "fileTooLarge": "ไฟล์ใหญ่เกินไป (สูงสุด 10 MB)"
+    "fileTooLarge": "ไฟล์ใหญ่เกินไป (สูงสุด 10 MB)",
+    "chooseType": "เลือกวิธีเชื่อมต่อกระเป๋าเงินของคุณ",
+    "nwcDesc": "เชื่อมต่อผ่าน Nostr รีเลย์ — ใช้ได้กับ Alby, Buho, LNbits, Coinos และอื่นๆ",
+    "lnbitsDesc": "เชื่อมต่อโดยตรงกับอินสแตนซ์ LNbits ผ่าน REST API",
+    "lnbitsHelp": "ค้นหา URL และ Admin Key ในการตั้งค่ากระเป๋าเงิน LNbits ภายใต้ข้อมูล API",
+    "lnbitsUrl": "LNbits URL",
+    "lnbitsAdminKey": "Admin Key"
   },
-
   "sites": {
     "title": "รายละเอียดไซต์",
     "permissionsGranted": "สิทธิ์",
@@ -569,7 +545,6 @@
     "removeBudget": "ลบงบประมาณ",
     "revokeAll": "เพิกถอนการเข้าถึงทั้งหมด",
     "revokeAllConfirm": "ลบสิทธิ์และงบประมาณทั้งหมดของ {host} หรือไม่?",
-
     "methodLabel_getPublicKey": "ดูตัวตนสาธารณะ",
     "methodLabel_signEvent": "ลงชื่อโพสต์และการดำเนินการ",
     "methodLabel_nip04_encrypt": "เข้ารหัสข้อความ",
@@ -579,7 +554,6 @@
     "methodLabel_weblnEnable": "เชื่อมต่อกระเป๋าเงิน",
     "methodLabel_weblnSendPayment": "ส่งการชำระเงิน"
   },
-
   "toast": {
     "accountReady": "บัญชีพร้อมแล้ว",
     "switchedTo": "สลับไปที่ {name}",
@@ -591,7 +565,6 @@
     "failedRevoke": "ลบการเข้าถึงไม่สำเร็จ",
     "failedPublish": "บันทึกโปรไฟล์ไม่สำเร็จ"
   },
-
   "chat": {
     "title": "ข้อความ",
     "newChat": "แชทใหม่",
@@ -669,9 +642,9 @@
     "filterAll": "ทั้งหมด",
     "filterDms": "ข้อความส่วนตัว",
     "filterGroups": "กลุ่ม",
-    "joinOrCreate": "เข้าร่วมหรือสร้างกลุ่ม"
+    "joinOrCreate": "เข้าร่วมหรือสร้างกลุ่ม",
+    "messageDeletedLabel": "ข้อความนี้ถูกลบแล้ว"
   },
-
   "group": {
     "title": "กลุ่ม",
     "createGroup": "สร้างกลุ่ม",
@@ -744,9 +717,21 @@
     "searchMembers": "ค้นหาผู้ติดต่อ...",
     "channelJoinDesc": "วางลิงก์ช่องเพื่อเข้าร่วมบทสนทนาสาธารณะ",
     "serverHintOptional": "ไม่บังคับ — เว้นว่างเพื่อใช้รีเลย์เริ่มต้นของคุณ",
-    "soleAdminWarning": "คุณเป็นผู้ดูแลคนเดียว กลุ่มจะไม่มีผู้ดูแลหากคุณออก"
+    "soleAdminWarning": "คุณเป็นผู้ดูแลคนเดียว กลุ่มจะไม่มีผู้ดูแลหากคุณออก",
+    "copyInviteLink": "คัดลอกลิงก์เชิญ",
+    "linkCopied": "คัดลอกลิงก์เชิญแล้ว",
+    "previewGroup": "ดูตัวอย่างกลุ่ม",
+    "muteGroup": "ปิดเสียงการแจ้งเตือน",
+    "unmuteGroup": "เปิดเสียงการแจ้งเตือน",
+    "muted": "ปิดเสียงการแจ้งเตือนแล้ว",
+    "unmuted": "เปิดเสียงการแจ้งเตือนแล้ว",
+    "checkingRelay": "กำลังตรวจสอบเซิร์ฟเวอร์...",
+    "relayOnline": "เซิร์ฟเวอร์ออนไลน์และเข้าถึงได้",
+    "relayUnreachable": "เซิร์ฟเวอร์อาจออฟไลน์ — คุณยังสามารถลองได้",
+    "inviteCount": "เชิญ {count}",
+    "usersInvited": "เชิญสมาชิก {count} คนแล้ว",
+    "inviteManualPlaceholder": "npub, NIP-05 หรือ hex pubkey"
   },
-
   "notifications": {
     "title": "การแจ้งเตือน",
     "desc": "เลือกการแจ้งเตือนเบราว์เซอร์ที่คุณต้องการรับ คุณสามารถเปลี่ยนได้ทุกเมื่อ",
@@ -768,7 +753,6 @@
     "settingsLabel": "การแจ้งเตือน",
     "settingsDesc": "จัดการแจ้งเตือนเบราว์เซอร์"
   },
-
   "options": {
     "openInTab": "เปิดในแท็บเต็ม",
     "sites": "ไซต์ที่เชื่อมต่อ",
@@ -807,7 +791,6 @@
     "messaging": "ข้อความ",
     "messagingDesc": "บทสนทนา กลุ่ม และผู้ติดต่อ"
   },
-
   "qr": {
     "scanTitle": "สแกน QR โค้ด",
     "startingCamera": "กำลังเปิดกล้อง...",
@@ -816,6 +799,47 @@
     "pointCamera": "หันกล้องไปที่ QR โค้ด",
     "cameraBlocked": "กล้องถูกบล็อก อัปโหลดรูปภาพ QR โค้ดแทน หรืออนุญาตการเข้าถึงกล้องในการตั้งค่าเบราว์เซอร์",
     "noQrFound": "ไม่พบ QR โค้ดในภาพนี้ ลองถ่ายภาพที่ชัดกว่า",
-    "cameraFailed": "ไม่สามารถเปิดกล้องได้ ลองอัปโหลดรูปภาพ QR โค้ดแทน"
+    "cameraFailed": "ไม่สามารถเปิดกล้องได้ ลองอัปโหลดรูปภาพ QR โค้ดแทน",
+    "extensionHint": "กล้องไม่สามารถใช้งานในป๊อปอัพส่วนขยายได้"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "มินต์เก็บรักษายอดเงิน ecash ของคุณและดำเนินการชำระเงิน Lightning ในนามของคุณ",
+    "mintExplainer": "Buho Jump สร้างกระเป๋าเงิน ecash ทันทีสำหรับทุกบัญชี เพื่อให้คุณรับ Bitcoin ได้ทันที — ไม่ต้องตั้งค่า",
+    "whatsAMint": "มินต์คืออะไร?",
+    "mintExplainerIntro": "มินต์คือเซิร์ฟเวอร์ที่เชื่อถือได้ในระบบนิเวศ ecash เก็บรักษายอดเงินของคุณเป็นโทเค็น ecash และจัดการการชำระเงิน Lightning ให้คุณ — ออกแบบมาเพื่อเริ่มต้นอย่างรวดเร็ว",
+    "mintTooltipGood": "ทำไมถึงดี",
+    "mintTooltipKnow": "ควรรู้",
+    "mintBulletInstant": "รับ Bitcoin ทันที ไม่ต้องมีโหนด",
+    "mintBulletNoSetup": "ใช้งานได้ทันทีสำหรับทุกบัญชี",
+    "mintBulletPrivacy": "Ecash ให้ความเป็นส่วนตัวของธุรกรรมที่แข็งแกร่ง",
+    "mintBulletCustodial": "รับฝาก — มินต์เก็บรักษาเงินของคุณ",
+    "mintBulletSmall": "เหมาะสำหรับจำนวนเล็กน้อย ไม่เหมาะสำหรับการเก็บรักษาระยะยาว",
+    "mintBulletAdvanced": "เปลี่ยนเฉพาะเมื่อคุณดำเนินการมินต์ของตัวเอง",
+    "changeWarningInline": "นี่คือการตั้งค่าขั้นสูง เปลี่ยนมินต์เฉพาะเมื่อคุณรู้ว่ากำลังทำอะไร ยอดเงินปัจจุบันของคุณจะยังคงอยู่บนมินต์ปัจจุบัน",
+    "mintInfo": "รายละเอียดมินต์",
+    "mintInfoFailed": "ไม่สามารถโหลดข้อมูลมินต์ได้",
+    "mintUnreachable": "ไม่สามารถเข้าถึงมินต์นี้ได้ ตรวจสอบ URL แล้วลองอีกครั้ง",
+    "changeMint": "เปลี่ยนมินต์",
+    "newMint": "URL มินต์ใหม่",
+    "validateMint": "ตรวจสอบและดูตัวอย่าง",
+    "confirmChangeTitle": "เปลี่ยน Cashu Mint?",
+    "confirmChangeDesc": "ยอดเงินปัจจุบันของคุณจะยังคงอยู่บนมินต์ปัจจุบันและจะไม่ถูกโอนโดยอัตโนมัติ เฉพาะธุรกรรมใหม่เท่านั้นที่จะใช้มินต์ใหม่",
+    "confirmChange": "เปลี่ยนมินต์",
+    "mintChanged": "อัปเดตมินต์สำเร็จ",
+    "version": "เวอร์ชัน",
+    "contact": "ติดต่อ",
+    "supportedNuts": "NUTs ที่รองรับ"
+  },
+  "nutbits": {
+    "oneClick": "1-คลิก",
+    "connectDesc": "กระเป๋าเงินเฉพาะในคลิกเดียว — เติมเงินผ่าน NUTbits",
+    "callbackSuccess": "เชื่อมต่อกระเป๋าเงินแล้ว!",
+    "callbackSuccessDesc": "กระเป๋าเงิน NUTbits เฉพาะของคุณเชื่อมต่อแล้ว เติมเงินผ่าน NUTbits เพื่อเริ่มส่งการชำระเงิน",
+    "callbackClosing": "แท็บนี้จะปิดโดยอัตโนมัติ...",
+    "callbackFailed": "การเชื่อมต่อล้มเหลว",
+    "callbackNoValue": "ไม่ได้รับสตริงการเชื่อมต่อจาก NUTbits",
+    "callbackInvalid": "ได้รับสตริงการเชื่อมต่อที่ไม่ถูกต้อง คาดหวัง NWC URI",
+    "callbackConnectFailed": "ไม่สามารถบันทึกการเชื่อมต่อกระเป๋าเงินได้ กรุณาลองอีกครั้ง"
   }
 }

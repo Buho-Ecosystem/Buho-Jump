@@ -9,7 +9,7 @@ import { useWallet } from '../../composables/useWallet.js'
 import { useToast } from '../../composables/useToast.js'
 import QrScanner from '../QrScanner.vue'
 import {
-  Link, ScanLine, Loader2, ArrowLeft, Server, Eye, EyeOff,
+  Link, ScanLine, Loader2, ArrowLeft, Server, Eye, EyeOff, Zap,
 } from 'lucide-vue-next'
 
 const emit = defineEmits(['back'])
@@ -88,6 +88,12 @@ function onScan(val) {
   nwcUri.value = val
   showScanner.value = false
 }
+
+// ── NUTbits one-click connect ──
+function handleConnectNutbits() {
+  chrome.runtime.sendMessage({ type: 'NUTBITS_CONNECT' })
+  // Popup will close when NUTbits tab opens — background handles the rest
+}
 </script>
 
 <template>
@@ -115,6 +121,22 @@ function onScan(val) {
       </div>
 
       <div class="space-y-2">
+        <!-- NUTbits one-click -->
+        <button
+          @click="handleConnectNutbits"
+          class="w-full flex items-center gap-4 p-4 rounded-2xl bg-surface-card border border-brand/20 hover:border-brand/40 hover:bg-brand/3 transition-all duration-200 text-left group relative overflow-hidden"
+        >
+          <div class="absolute top-1.5 right-2">
+            <span class="text-[8px] px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-bold uppercase tracking-wider">{{ t('nutbits.oneClick') }}</span>
+          </div>
+          <img src="/NUTbits/pixel-nut-v2b-128.png" alt="NUTbits" class="w-11 h-11 rounded-xl shrink-0" />
+          <div class="flex-1 min-w-0">
+            <span class="text-sm font-bold block group-hover:text-brand transition-colors">NUTbits</span>
+            <span class="text-[10px] text-text-muted leading-relaxed">{{ t('nutbits.connectDesc') }}</span>
+          </div>
+          <Zap class="w-4 h-4 text-brand shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </button>
+
         <!-- NWC option -->
         <button
           @click="selectType('nwc')"

@@ -19,7 +19,7 @@ const processing = ref(null) // groupId:relay being processed
 
 function inviterName(pubkey) {
   const p = getCachedProfile(pubkey)
-  return p?.display_name || p?.name || pubkey.slice(0, 12) + '...'
+  return p?.display_name || p?.name || 'Someone'
 }
 
 async function handleAccept(inv) {

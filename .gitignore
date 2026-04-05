@@ -5,3 +5,8 @@ dist/
 dev/
 .DS_Store
 .claude/
+
+# Internal planning docs (not for public repo)
+*_PLAN.md
+NOSTR_CORE_MIGRATION.md
+BACKLOG.md

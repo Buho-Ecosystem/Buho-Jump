@@ -30,7 +30,7 @@ const preview = computed(() => {
   if (!props.lastMessage) return t('group.noGroupsDesc')
   const isMe = props.lastMessage.sender === currentAccountPubkey.value
   const senderProfile = getCachedProfile(props.lastMessage.sender)
-  const senderName = isMe ? t('chat.you') : (senderProfile?.display_name || senderProfile?.name || props.lastMessage.sender?.slice(0, 8) + '...')
+  const senderName = isMe ? t('chat.you') : (senderProfile?.display_name || senderProfile?.name || 'Someone')
   return `${senderName}: ${props.lastMessage.content}`
 })
 

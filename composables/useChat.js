@@ -38,6 +38,7 @@ const error = ref(null)      // i18n key or null — set on init/subscribe failu
 const currentAccountPubkey = ref(null) // tracks which account owns the data
 
 let subscription = null
+let subscriptionSignature = null // Cache to prevent duplicate subscriptions
 
 // Performance: O(1) dedup, dirty tracking, timestamp cache
 const messageIdSets = {}   // { [pubkey]: Set<id> } — for O(1) dedup
@@ -48,6 +49,17 @@ let latestTimestamp = 0     // cached latest message timestamp across all conver
 // When subscribe() is called, a new token replaces the old one. Old subscription
 // callbacks still reference their captured (abandoned) token, harmlessly.
 let currentSyncToken = { complete: false }
+
+// Reactions: { [messageId]: [{ emoji, sender, created_at }] }
+const reactions = ref({})
+const reactionIdSet = new Set() // O(1) dedup for reaction event IDs
+
+// Deletions: { [messageId]: true } for reactive tracking
+const deletedIds = ref({})
+
+// Pending queues: reactions/deletions for messages not yet received
+const pendingReactions = [] // { targetId, emoji, sender, created_at }
+const pendingDeletions = [] // { targetId, sender }
 
 // Message shape:
 // { id, sender: 'me'|pubkey, content, created_at, protocol: 'nip17'|'nip04', type?: 'zap', status?: 'sending'|'sent'|'failed' }
@@ -105,7 +117,7 @@ export function useChat() {
         }
         messageIdSets[pk] = idSet
       }
-    } catch { /* storage error */ }
+    } catch (err) { console.warn('[chat] Could not load saved messages:', err) }
   }
 
   let persistTimer = null
@@ -135,7 +147,7 @@ export function useChat() {
 
         await chrome.storage.local.set(toSet)
         dirtyKeys.clear()
-      } catch { /* storage error */ }
+      } catch (err) { console.warn('[chat] Could not save messages:', err) }
     }, 500)
   }
 
@@ -158,9 +170,104 @@ export function useChat() {
       const preview = msg.content?.slice(0, 120) || ''
       chrome.runtime.sendMessage({
         type: 'NOTIFY_DM',
-        params: [{ senderName: pubkey.slice(0, 12) + '...', preview, messageId: msg.id }],
+        params: [{ senderName: 'Someone', preview, messageId: msg.id }],
       }).catch(() => { /* background not ready */ })
     }
+
+    // Apply any pending reactions/deletions for this message
+    applyPendingForMessage(msg.id)
+  }
+
+  /**
+   * Add a reaction to a message. If the target message hasn't arrived yet, queue it.
+   */
+  function addReaction(targetId, reaction) {
+    if (reactionIdSet.has(reaction.id)) return
+    reactionIdSet.add(reaction.id)
+
+    // Check if target message exists in any conversation
+    const found = findMessageConversation(targetId)
+    if (found) {
+      const existing = reactions.value[targetId] || []
+      reactions.value = { ...reactions.value, [targetId]: [...existing, reaction] }
+    } else {
+      pendingReactions.push({ targetId, ...reaction })
+    }
+  }
+
+  /**
+   * Mark a message as deleted. If the target message hasn't arrived yet, queue it.
+   */
+  /**
+   * Mark a message as deleted. Only the message author can delete their own message.
+   * If the target message hasn't arrived yet, queue it for validation on arrival.
+   */
+  function addDeletion(targetId, sender) {
+    if (deletedIds.value[targetId]) return
+
+    const conversationPubkey = findMessageConversation(targetId)
+    if (conversationPubkey) {
+      // Validate: only the original author can delete
+      const msgs = messages.value[conversationPubkey] || []
+      const targetMsg = msgs.find(m => m.id === targetId)
+      if (!targetMsg) return
+      const authorPubkey = targetMsg.sender === 'me' ? currentAccountPubkey.value : targetMsg.sender
+      if (sender !== authorPubkey) return // Reject spoofed deletion
+
+      deletedIds.value = { ...deletedIds.value, [targetId]: true }
+    } else {
+      // Message not received yet — queue for validation on arrival
+      pendingDeletions.push({ targetId, sender })
+    }
+  }
+
+  /**
+   * Apply queued reactions/deletions when their target message arrives.
+   */
+  function applyPendingForMessage(messageId) {
+    // Apply pending reactions
+    for (let i = pendingReactions.length - 1; i >= 0; i--) {
+      if (pendingReactions[i].targetId === messageId) {
+        const r = pendingReactions.splice(i, 1)[0]
+        const existing = reactions.value[messageId] || []
+        reactions.value = { ...reactions.value, [messageId]: [...existing, r] }
+      }
+    }
+    // Apply pending deletions (with author validation)
+    for (let i = pendingDeletions.length - 1; i >= 0; i--) {
+      if (pendingDeletions[i].targetId === messageId) {
+        const pending = pendingDeletions.splice(i, 1)[0]
+        // Validate: deletion sender must match message author
+        const authorPubkey = msg.sender === 'me' ? currentAccountPubkey.value : msg.sender
+        if (pending.sender === authorPubkey) {
+          deletedIds.value = { ...deletedIds.value, [messageId]: true }
+        }
+      }
+    }
+  }
+
+  /**
+   * Find which conversation contains a message ID (for reaction targeting).
+   */
+  function findMessageConversation(messageId) {
+    for (const [pubkey, msgs] of Object.entries(messages.value)) {
+      if (msgs.some(m => m.id === messageId)) return pubkey
+    }
+    return null
+  }
+
+  /**
+   * Get reactions for a specific message.
+   */
+  function getReactions(messageId) {
+    return computed(() => reactions.value[messageId] || [])
+  }
+
+  /**
+   * Check if a message is deleted.
+   */
+  function isDeleted(messageId) {
+    return !!deletedIds.value[messageId]
   }
 
   // ── Send ──
@@ -325,15 +432,9 @@ export function useChat() {
 
   // ── Subscriptions ──
 
-  async function subscribe() {
+  async function subscribe(opts = {}) {
     const account = await getActiveAccount()
     if (!account?.pubkey) return
-
-    // Cleanup previous
-    if (subscription) {
-      subscription.close()
-      subscription = null
-    }
 
     const pool = getPool()
     const myPubkey = account.pubkey
@@ -352,6 +453,17 @@ export function useChat() {
     let inboxRelays = []
     try { inboxRelays = await getInboxRelays(myPubkey) } catch { /* ignore */ }
     const subscribeRelays = [...new Set([...ownChatRelays, ...inboxRelays])]
+
+    // Subscription signature: skip re-subscribe if filters unchanged (prevents duplicate subs)
+    const sig = `${myPubkey}:${isLocal}:${subscribeRelays.sort().join(',')}:${since}`
+    if (!opts.force && subscription && subscriptionSignature === sig) return
+    subscriptionSignature = sig
+
+    // Cleanup previous
+    if (subscription) {
+      subscription.close()
+      subscription = null
+    }
 
     const subs = []
 
@@ -378,35 +490,60 @@ export function useChat() {
         oneose: onEose,
         onevent(event) {
           try {
-            const dm = nip17.unwrapDirectMessage(event, secretKey)
+            // Unwrap the gift wrap to get the raw rumor (kind-agnostic)
+            const rumor = nip59.unwrap(event, secretKey)
+            const senderPubkey = rumor.pubkey
 
-            // Check for NIP-40 expiration
-            const expiry = dm.tags ? (() => { const t = dm.tags.find(t => t[0] === 'expiration'); return t ? parseInt(t[1]) : undefined })() : undefined
+            // ── Kind 7: Reaction ──
+            if (rumor.kind === 7) {
+              const eTag = rumor.tags?.find(t => t[0] === 'e')
+              if (!eTag) return
+              addReaction(eTag[1], {
+                id: rumor.id,
+                emoji: rumor.content || '+',
+                sender: senderPubkey === myPubkey ? 'me' : senderPubkey,
+                created_at: rumor.created_at,
+              })
+              return
+            }
 
-            if (dm.sender === myPubkey) {
+            // ── Kind 5: Deletion ──
+            if (rumor.kind === 5) {
+              const eTag = rumor.tags?.find(t => t[0] === 'e')
+              if (!eTag) return
+              addDeletion(eTag[1], senderPubkey)
+              return
+            }
+
+            // ── Kind 14: Direct message ──
+            if (rumor.kind !== 14) return // Ignore unknown kinds
+
+            const expiry = rumor.tags ? (() => { const t = rumor.tags.find(t => t[0] === 'expiration'); return t ? parseInt(t[1]) : undefined })() : undefined
+
+            if (senderPubkey === myPubkey) {
               // Self-copy: message we sent (from this or another client)
-              const pTag = dm.tags?.find(t => t[0] === 'p')
+              const pTag = rumor.tags?.find(t => t[0] === 'p')
               if (!pTag) return
               addMessage(pTag[1], {
-                id: dm.id,
+                id: rumor.id,
                 sender: 'me',
-                content: cleanMessageContent(dm.content),
-                created_at: dm.created_at,
+                content: cleanMessageContent(rumor.content),
+                created_at: rumor.created_at,
                 protocol: 'nip17',
                 expiresAt: expiry,
               })
             } else {
               // Incoming message from someone else
-              addMessage(dm.sender, {
-                id: dm.id,
-                sender: dm.sender,
-                content: cleanMessageContent(dm.content),
-                created_at: dm.created_at,
+              addMessage(senderPubkey, {
+                id: rumor.id,
+                sender: senderPubkey,
+                content: cleanMessageContent(rumor.content),
+                created_at: rumor.created_at,
                 protocol: 'nip17',
                 expiresAt: expiry,
               })
             }
-          } catch { /* decrypt failed — not for us or corrupt */ }
+          } catch { /* expected — message not addressed to this account */ }
         },
       }))
     }
@@ -443,7 +580,7 @@ export function useChat() {
             created_at: event.created_at,
             protocol: 'nip04',
           })
-        } catch { /* decrypt failed */ }
+        } catch { /* expected — message not addressed to this account */ }
       },
     }))
 
@@ -482,7 +619,7 @@ export function useChat() {
             created_at: event.created_at,
             protocol: 'nip04',
           })
-        } catch { /* decrypt failed */ }
+        } catch { /* expected — message not addressed to this account */ }
       },
     }))
 
@@ -559,10 +696,17 @@ export function useChat() {
 
   function cleanup() {
     currentSyncToken = { complete: false }
+    subscriptionSignature = null
     // Clear performance caches
     for (const k of Object.keys(messageIdSets)) delete messageIdSets[k]
     dirtyKeys.clear()
     latestTimestamp = 0
+    // Clear reactions/deletions state
+    reactions.value = {}
+    reactionIdSet.clear()
+    deletedIds.value = {}
+    pendingReactions.length = 0
+    pendingDeletions.length = 0
     if (persistTimer) {
       clearTimeout(persistTimer)
       persistTimer = null
@@ -590,6 +734,10 @@ export function useChat() {
     subscribe,
     markRead,
     getMessages,
+    getReactions,
+    isDeleted,
+    reactions,
+    deletedIds,
     cleanup,
   }
 }

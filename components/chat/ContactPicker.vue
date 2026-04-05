@@ -113,7 +113,8 @@ async function handleResolve() {
     const profile = await fetchProfile(pubkey)
     resolvedProfile.value = profile
   } catch (err) {
-    resolveError.value = err.message || t('chat.resolveFailed')
+    resolveError.value = t('chat.resolveFailed')
+    console.debug('[contacts] Resolve error:', err)
   } finally {
     resolving.value = false
   }
@@ -148,7 +149,12 @@ async function searchRelays() {
       } catch { /* malformed */ }
     }
     relaySearchResults.value = profiles
-  } catch { /* relay search failed — NIP-50 not supported */ }
+  } catch (err) {
+    console.debug('[contacts] Relay search failed:', err)
+    if (filteredContacts.value.length === 0 && !resolvedPubkey.value) {
+      resolveError.value = t('chat.searchNotFound')
+    }
+  }
   finally { relaySearching.value = false }
 }
 
@@ -165,9 +171,9 @@ onBeforeUnmount(() => {
 function truncateNpub(pubkey) {
   try {
     const npub = nip19.npubEncode(pubkey)
-    return npub.slice(0, 12) + '...' + npub.slice(-6)
+    return 'User ' + npub.slice(5, 9) + '...' + npub.slice(-4)
   } catch {
-    return pubkey.slice(0, 12) + '...'
+    return 'User ' + pubkey.slice(0, 6) + '...'
   }
 }
 </script>

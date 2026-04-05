@@ -28,7 +28,8 @@
     "showingOf": "Showing {shown} of {total}",
     "showMore": "Show more",
     "offline": "No internet connection",
-    "open": "Open"
+    "open": "Open",
+    "validating": "Validerer..."
   },
   "errors": {
     "PERMISSION_DENIED": "Permission denied",
@@ -93,7 +94,12 @@
     "relaySettings": "Relay-indstillinger",
     "relaySettingsDesc": "Administrer relays til konto, tegnebog og chat",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Open in full page"
+    "openFullPage": "Open in full page",
+    "more": "Mere",
+    "allSettings": "Alle indstillinger",
+    "popOut": "Løsrevet vindue",
+    "popOutTitle": "Løsriv vindue",
+    "popOutDesc": "Hold Buho åben som et flydende vindue, du kan trække hvorhen du vil. Surf frit uden at miste din tegnebog."
   },
   "relay": {
     "title": "Relay-indstillinger",
@@ -138,7 +144,10 @@
     "infoOperator": "Operatør",
     "infoContact": "Kontakt",
     "infoYes": "Ja",
-    "infoNo": "Nej"
+    "infoNo": "Nej",
+    "statusConnected": "Relay er tilgængeligt",
+    "statusUnreachable": "Relay er utilgængeligt",
+    "refreshStatus": "Tjek relay-forbindelse"
   },
   "account": {
     "activeDesc": "Aktiv konto — apps vil bruge denne profil",
@@ -171,7 +180,12 @@
     "showQr": "Show QR code",
     "connectedRelays": "Connected relays",
     "relayCount": "{count} relay | {count} relays",
-    "noRelays": "No relays configured"
+    "noRelays": "No relays configured",
+    "deleteBackupWarning": "Sikkerhedskopier din nøgle først!",
+    "deleteBackupHint": "Uden sikkerhedskopi betyder fjernelse af denne identitet, at adgangen mistes for altid. Der er ingen gendannelse.",
+    "deleteBackupCta": "Sikkerhedskopier nøgle i Indstillinger",
+    "deleteLocalExplain": "Denne handling fjerner permanent din private nøgle fra Buho. Alle tilsluttede sider mister adgang til denne identitet.",
+    "deleteRemoteExplain": "Dette afbryder kun forbindelsen til fjernunderskriveren. Din nøgle forbliver sikker på underskriverenheden — du kan genoprette forbindelsen når som helst."
   },
   "wizard": {
     "addAccount": "Tilføj en Konto",
@@ -340,9 +354,7 @@
     "kindRelayList": "Serverindstillinger",
     "kindArticle": "Lang artikel",
     "kindAppData": "App-data",
-    "kindGeneric": "Hændelsestype {kind}",
-    "moreOptions": "Flere muligheder",
-    "fewerOptions": "Færre muligheder"
+    "kindGeneric": "Hændelsestype {kind}"
   },
   "wallet": {
     "balance": "Saldo",
@@ -507,7 +519,13 @@
     "removeWalletWarning": "This will permanently delete all funds in this wallet. Make sure you have a backup.",
     "lightningReady": "Lightning-ready",
     "invoiceCopied": "Invoice copied",
-    "fileTooLarge": "File too large (max 10 MB)"
+    "fileTooLarge": "File too large (max 10 MB)",
+    "chooseType": "Vælg hvordan du vil forbinde din tegnebog",
+    "nwcDesc": "Forbindelse via Nostr-relay — fungerer med Alby, Buho, LNbits, Coinos og mere",
+    "lnbitsDesc": "Forbind direkte til din LNbits-instans via REST API",
+    "lnbitsHelp": "Find din URL og Admin Key i LNbits tegnebogsindstillinger under API-info.",
+    "lnbitsUrl": "LNbits URL",
+    "lnbitsAdminKey": "Admin Key"
   },
   "sites": {
     "title": "Site Details",
@@ -624,7 +642,8 @@
     "filterAll": "All",
     "filterDms": "DMs",
     "filterGroups": "Groups",
-    "joinOrCreate": "Join or create a group"
+    "joinOrCreate": "Join or create a group",
+    "messageDeletedLabel": "Denne besked blev slettet"
   },
   "group": {
     "title": "Groups",
@@ -698,7 +717,20 @@
     "searchMembers": "Search contacts...",
     "channelJoinDesc": "Paste a channel link to join a public conversation.",
     "serverHintOptional": "Optional — leave empty to use your default relays",
-    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave."
+    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave.",
+    "copyInviteLink": "Kopiér invitationslink",
+    "linkCopied": "Invitationslink kopieret",
+    "previewGroup": "Forhåndsvis gruppe",
+    "muteGroup": "Slå notifikationer fra",
+    "unmuteGroup": "Slå notifikationer til",
+    "muted": "Notifikationer slået fra",
+    "unmuted": "Notifikationer slået til",
+    "checkingRelay": "Tjekker server...",
+    "relayOnline": "Serveren er online og tilgængelig",
+    "relayUnreachable": "Serveren kan være offline — du kan stadig prøve",
+    "inviteCount": "Inviter {count}",
+    "usersInvited": "{count} medlemmer inviteret",
+    "inviteManualPlaceholder": "npub, NIP-05 eller hex pubkey"
   },
   "notifications": {
     "title": "Notifications",
@@ -767,6 +799,47 @@
     "pointCamera": "Ret dit kamera mod en QR-kode",
     "cameraBlocked": "Camera is blocked. Upload a QR code image instead, or allow camera access in your browser settings.",
     "noQrFound": "No QR code found in this image. Try a clearer photo.",
-    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead."
+    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead.",
+    "extensionHint": "Kamera er ikke tilgængeligt i udvidelsespopups"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "Mint'en opbevarer din ecash-saldo og behandler Lightning-betalinger på dine vegne.",
+    "mintExplainer": "Buho Jump opretter en øjeblikkelig ecash-tegnebog for hver konto, så du kan modtage Bitcoin med det samme — ingen opsætning nødvendig.",
+    "whatsAMint": "Hvad er en mint?",
+    "mintExplainerIntro": "En mint er en pålidelig server i ecash-økosystemet. Den opbevarer din saldo som ecash-tokens og håndterer Lightning-betalinger for dig — designet til at komme hurtigt i gang.",
+    "mintTooltipGood": "Hvorfor det er fantastisk",
+    "mintTooltipKnow": "Godt at vide",
+    "mintBulletInstant": "Modtag Bitcoin øjeblikkeligt, ingen node nødvendig",
+    "mintBulletNoSetup": "Fungerer med det samme for hver konto",
+    "mintBulletPrivacy": "Ecash giver stærk transaktionsbeskyttelse",
+    "mintBulletCustodial": "Forvaltet — mint'en holder dine midler",
+    "mintBulletSmall": "Bedst til små beløb, ikke til langtidsopbevaring",
+    "mintBulletAdvanced": "Skift kun hvis du driver din egen mint",
+    "changeWarningInline": "Dette er en avanceret indstilling. Skift kun mint, hvis du ved, hvad du gør. Din eksisterende saldo forbliver på den nuværende mint.",
+    "mintInfo": "Mint-detaljer",
+    "mintInfoFailed": "Kunne ikke indlæse mint-information",
+    "mintUnreachable": "Kunne ikke nå denne mint. Tjek URL'en og prøv igen.",
+    "changeMint": "Skift mint",
+    "newMint": "Ny Mint-URL",
+    "validateMint": "Valider og forhåndsvis",
+    "confirmChangeTitle": "Skifte Cashu Mint?",
+    "confirmChangeDesc": "Din eksisterende saldo forbliver på den nuværende mint og overføres ikke automatisk. Kun nye transaktioner vil bruge den nye mint.",
+    "confirmChange": "Skift Mint",
+    "mintChanged": "Mint opdateret",
+    "version": "Version",
+    "contact": "Kontakt",
+    "supportedNuts": "Understøttede NUTs"
+  },
+  "nutbits": {
+    "oneClick": "1-klik",
+    "connectDesc": "Dedikeret tegnebog med ét klik — finansier den via NUTbits",
+    "callbackSuccess": "Tegnebog forbundet!",
+    "callbackSuccessDesc": "Din dedikerede NUTbits-tegnebog er forbundet. Finansier den via NUTbits for at begynde at sende betalinger.",
+    "callbackClosing": "Denne fane lukker automatisk...",
+    "callbackFailed": "Forbindelse fejlede",
+    "callbackNoValue": "Ingen forbindelsesstreng modtaget fra NUTbits.",
+    "callbackInvalid": "Ugyldig forbindelsesstreng modtaget. Forventet en NWC URI.",
+    "callbackConnectFailed": "Kunne ikke gemme tegnebogsforbindelsen. Prøv igen."
   }
 }

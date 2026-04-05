@@ -28,7 +28,8 @@
     "showingOf": "{shown} sur {total} affichés",
     "showMore": "Afficher plus",
     "offline": "Pas de connexion Internet",
-    "open": "Open"
+    "open": "Open",
+    "validating": "Validation en cours..."
   },
   "errors": {
     "PERMISSION_DENIED": "Autorisation refusée",
@@ -93,7 +94,12 @@
     "relaySettings": "Paramètres des relais",
     "relaySettingsDesc": "Gérez vos connexions aux relais",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Ouvrir en pleine page"
+    "openFullPage": "Ouvrir en pleine page",
+    "more": "Plus",
+    "allSettings": "Tous les paramètres",
+    "popOut": "Fenêtre détachée",
+    "popOutTitle": "Détacher la fenêtre",
+    "popOutDesc": "Gardez Buho ouvert dans une fenêtre flottante que vous pouvez déplacer n'importe où. Naviguez librement sans perdre votre portefeuille."
   },
   "relay": {
     "title": "Paramètres des relais",
@@ -138,7 +144,10 @@
     "infoOperator": "Opérateur",
     "infoContact": "Contact",
     "infoYes": "Oui",
-    "infoNo": "Non"
+    "infoNo": "Non",
+    "statusConnected": "Le relais est accessible",
+    "statusUnreachable": "Le relais est inaccessible",
+    "refreshStatus": "Vérifier la connectivité du relais"
   },
   "account": {
     "activeDesc": "Compte actif — les applications utiliseront ce profil",
@@ -171,7 +180,12 @@
     "showQr": "Afficher le QR code",
     "connectedRelays": "Relais connectés",
     "relayCount": "{count} relais | {count} relais",
-    "noRelays": "Aucun relais configuré"
+    "noRelays": "Aucun relais configuré",
+    "deleteBackupWarning": "Sauvegardez d'abord votre clé !",
+    "deleteBackupHint": "Sans sauvegarde, supprimer cette identité signifie perdre l'accès pour toujours. Il n'y a pas de récupération.",
+    "deleteBackupCta": "Sauvegarder la clé dans les Paramètres",
+    "deleteLocalExplain": "Cette action supprime définitivement votre clé privée de Buho. Tous les sites connectés perdront l'accès à cette identité.",
+    "deleteRemoteExplain": "Cela déconnecte uniquement le signataire distant. Votre clé reste en sécurité sur l'appareil signataire — vous pouvez vous reconnecter à tout moment."
   },
   "wizard": {
     "addAccount": "Ajouter un compte",
@@ -340,9 +354,7 @@
     "kindRelayList": "Préférences de serveur",
     "kindArticle": "Article long",
     "kindAppData": "Données d'application",
-    "kindGeneric": "Type d'événement {kind}",
-    "moreOptions": "Plus d'options",
-    "fewerOptions": "Moins d'options"
+    "kindGeneric": "Type d'événement {kind}"
   },
   "wallet": {
     "balance": "Solde",
@@ -507,7 +519,13 @@
     "removeWalletWarning": "Supprimer ce portefeuille efface uniquement les données de connexion locales, pas le portefeuille lui-même.",
     "lightningReady": "Lightning est prêt",
     "invoiceCopied": "Invoice copied",
-    "fileTooLarge": "File too large (max 10 MB)"
+    "fileTooLarge": "File too large (max 10 MB)",
+    "chooseType": "Choisissez comment connecter votre portefeuille",
+    "nwcDesc": "Connexion via relais Nostr — fonctionne avec Alby, Buho, LNbits, Coinos et plus",
+    "lnbitsDesc": "Connectez-vous directement à votre instance LNbits via l'API REST",
+    "lnbitsHelp": "Trouvez votre URL et clé Admin dans les paramètres de votre portefeuille LNbits sous Info API.",
+    "lnbitsUrl": "URL LNbits",
+    "lnbitsAdminKey": "Clé Admin"
   },
   "sites": {
     "title": "Détails du site",
@@ -624,7 +642,8 @@
     "filterAll": "Tous",
     "filterDms": "DM",
     "filterGroups": "Groupes",
-    "joinOrCreate": "Rejoindre ou créer un groupe"
+    "joinOrCreate": "Rejoindre ou créer un groupe",
+    "messageDeletedLabel": "Ce message a été supprimé"
   },
   "group": {
     "title": "Groupes",
@@ -698,7 +717,20 @@
     "searchMembers": "Rechercher dans les contacts…",
     "channelJoinDesc": "Collez un lien de canal pour rejoindre une conversation publique.",
     "serverHintOptional": "Facultatif — laissez vide pour utiliser vos relais par défaut",
-    "soleAdminWarning": "Vous êtes le seul admin. Le groupe n’aura plus d’admin si vous partez."
+    "soleAdminWarning": "Vous êtes le seul admin. Le groupe n’aura plus d’admin si vous partez.",
+    "copyInviteLink": "Copier le lien d'invitation",
+    "linkCopied": "Lien d'invitation copié",
+    "previewGroup": "Aperçu du groupe",
+    "muteGroup": "Couper les notifications",
+    "unmuteGroup": "Activer les notifications",
+    "muted": "Notifications coupées",
+    "unmuted": "Notifications activées",
+    "checkingRelay": "Vérification du serveur...",
+    "relayOnline": "Le serveur est en ligne et accessible",
+    "relayUnreachable": "Le serveur est peut-être hors ligne — vous pouvez quand même essayer",
+    "inviteCount": "Inviter {count}",
+    "usersInvited": "{count} membres invités",
+    "inviteManualPlaceholder": "npub, NIP-05 ou clé publique hex"
   },
   "notifications": {
     "title": "Notifications",
@@ -767,6 +799,47 @@
     "pointCamera": "Dirigez votre caméra vers un code QR",
     "cameraBlocked": "La caméra est bloquée. Importez plutôt une image de QR code ou autorisez l’accès à la caméra dans les paramètres du navigateur.",
     "noQrFound": "Aucun QR code trouvé dans cette image. Essayez une photo plus nette.",
-    "cameraFailed": "Impossible de démarrer la caméra. Essayez plutôt d’importer une image de QR code."
+    "cameraFailed": "Impossible de démarrer la caméra. Essayez plutôt d’importer une image de QR code.",
+    "extensionHint": "La caméra n’est pas disponible dans les popups d’extension"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "Le mint détient votre solde ecash et traite les paiements Lightning en votre nom.",
+    "mintExplainer": "Buho Jump crée un portefeuille ecash instantané pour chaque compte afin que vous puissiez recevoir du Bitcoin immédiatement — sans configuration.",
+    "whatsAMint": "Qu’est-ce qu’un mint ?",
+    "mintExplainerIntro": "Un mint est un serveur fiable dans l’écosystème ecash. Il détient votre solde sous forme de tokens ecash et gère les paiements Lightning pour vous — conçu pour démarrer rapidement.",
+    "mintTooltipGood": "Pourquoi c’est génial",
+    "mintTooltipKnow": "Bon à savoir",
+    "mintBulletInstant": "Recevez du Bitcoin instantanément, sans nœud nécessaire",
+    "mintBulletNoSetup": "Fonctionne immédiatement pour chaque compte",
+    "mintBulletPrivacy": "L’ecash offre une forte confidentialité des transactions",
+    "mintBulletCustodial": "Custodial — le mint détient vos fonds",
+    "mintBulletSmall": "Idéal pour les petits montants, pas pour le stockage à long terme",
+    "mintBulletAdvanced": "Ne changez que si vous gérez votre propre mint",
+    "changeWarningInline": "Ceci est un paramètre avancé. Ne changez le mint que si vous savez ce que vous faites. Votre solde existant restera sur le mint actuel.",
+    "mintInfo": "Détails du Mint",
+    "mintInfoFailed": "Impossible de charger les informations du mint",
+    "mintUnreachable": "Impossible de joindre ce mint. Vérifiez l’URL et réessayez.",
+    "changeMint": "Changer de mint",
+    "newMint": "Nouvelle URL du Mint",
+    "validateMint": "Valider et prévisualiser",
+    "confirmChangeTitle": "Changer de Cashu Mint ?",
+    "confirmChangeDesc": "Votre solde existant reste sur le mint actuel et ne sera pas transféré automatiquement. Seules les nouvelles transactions utiliseront le nouveau mint.",
+    "confirmChange": "Changer de Mint",
+    "mintChanged": "Mint mis à jour avec succès",
+    "version": "Version",
+    "contact": "Contact",
+    "supportedNuts": "NUTs supportés"
+  },
+  "nutbits": {
+    "oneClick": "1-clic",
+    "connectDesc": "Portefeuille dédié en un clic — alimentez-le via NUTbits",
+    "callbackSuccess": "Portefeuille connecté !",
+    "callbackSuccessDesc": "Votre portefeuille NUTbits dédié est lié. Alimentez-le via NUTbits pour commencer à envoyer des paiements.",
+    "callbackClosing": "Cet onglet se fermera automatiquement...",
+    "callbackFailed": "Échec de la connexion",
+    "callbackNoValue": "Aucune chaîne de connexion reçue de NUTbits.",
+    "callbackInvalid": "Chaîne de connexion invalide. URI NWC attendu.",
+    "callbackConnectFailed": "Impossible d'enregistrer la connexion du portefeuille. Veuillez réessayer."
   }
 }

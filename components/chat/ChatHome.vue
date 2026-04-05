@@ -9,10 +9,13 @@ import { useChat } from '../../composables/useChat.js'
 import { useGroups } from '../../composables/useGroups.js'
 import { useContacts } from '../../composables/useContacts.js'
 import { useMuteList } from '../../composables/useMuteList.js'
+import { useOnline } from '../../composables/useOnline.js'
+import { useRelayHealth } from '../../composables/useRelayHealth.js'
 import ConversationItem from './ConversationItem.vue'
 import GroupConversationItem from './GroupConversationItem.vue'
 import GroupInvitationBanner from './GroupInvitationBanner.vue'
-import { MessageSquare, PenSquare, Search, ChevronDown, VolumeX, Users, AlertTriangle } from 'lucide-vue-next'
+import ErrorBanner from '../ErrorBanner.vue'
+import { MessageSquare, PenSquare, Search, ChevronDown, VolumeX, Users } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const emit = defineEmits(['open', 'open-group', 'new-chat', 'new-group'])
@@ -20,9 +23,12 @@ const emit = defineEmits(['open', 'open-group', 'new-chat', 'new-group'])
 const { conversations, messages: allMessages, init: initChat, initialized: chatInitialized, error: chatError, currentAccountPubkey } = useChat()
 const { groupConversations, init: initGroups, initialized: groupsInitialized, error: groupError } = useGroups()
 const { getCachedProfile, fetchProfiles } = useContacts()
+const { online } = useOnline()
+const { healthy: relayHealthy, refresh: refreshRelays } = useRelayHealth()
 
 const connectionError = computed(() => chatError.value || groupError.value)
-const { isMuted, load: loadMuteList } = useMuteList()
+const { isMuted, isGroupMuted, load: loadMuteList } = useMuteList()
+const dismissRelayWarning = ref(false)
 
 const search = ref('')
 const showMuted = ref(false)
@@ -39,8 +45,9 @@ const unified = computed(() => {
     .filter(c => !isMuted(c.pubkey))
     .map(c => ({ ...c, type: 'dm' }))
 
-  // Groups
+  // Groups (filter out muted)
   let grps = groupConversations.value
+    .filter(c => !isGroupMuted(c.groupKey))
     .map(c => ({ ...c, type: 'group' }))
 
   // Search filter
@@ -79,7 +86,11 @@ const hasAnyContent = computed(() =>
 )
 
 const dmCount = computed(() => conversations.value.filter(c => !isMuted(c.pubkey)).length)
-const groupCount = computed(() => groupConversations.value.length)
+const groupCount = computed(() => groupConversations.value.filter(c => !isGroupMuted(c.groupKey)).length)
+
+const mutedGroupConversations = computed(() =>
+  groupConversations.value.filter(c => isGroupMuted(c.groupKey))
+)
 
 function tabLabel(f) {
   const label = t(`chat.filter${f[0].toUpperCase() + f.slice(1)}`)
@@ -137,11 +148,19 @@ onMounted(async () => {
     <!-- Invitation banner -->
     <GroupInvitationBanner />
 
-    <!-- Connection error banner -->
-    <div v-if="connectionError" class="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-2xl bg-warning/10 border border-warning/20 text-[11px] text-warning">
-      <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
-      <span>{{ t(connectionError) }}</span>
-    </div>
+    <!-- Offline / relay health / init error banners -->
+    <ErrorBanner v-if="!online" type="warning" :message="t('common.offline')" class="mx-3 mb-2" />
+    <ErrorBanner
+      v-else-if="!relayHealthy && initialized && !dismissRelayWarning"
+      type="warning"
+      :message="t('chat.relaysDown')"
+      :retry-label="t('common.retry')"
+      @retry="refreshRelays"
+      dismissable
+      @dismiss="dismissRelayWarning = true"
+      class="mx-3 mb-2"
+    />
+    <ErrorBanner v-else-if="connectionError" type="error" :message="t(connectionError)" class="mx-3 mb-2" />
 
     <!-- Loading skeleton -->
     <div v-if="!initialized" class="px-3 space-y-1">

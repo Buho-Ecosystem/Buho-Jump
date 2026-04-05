@@ -28,7 +28,8 @@
     "showingOf": "Showing {shown} of {total}",
     "showMore": "Show more",
     "offline": "No internet connection",
-    "open": "Open"
+    "open": "Open",
+    "validating": "Tarkistetaan..."
   },
   "errors": {
     "PERMISSION_DENIED": "Permission denied",
@@ -93,7 +94,12 @@
     "relaySettings": "Välityspalvelinasetukset",
     "relaySettingsDesc": "Hallitse välityspalvelimia tilille, lompakolle ja chatille",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Open in full page"
+    "openFullPage": "Open in full page",
+    "more": "Lisää",
+    "allSettings": "Kaikki asetukset",
+    "popOut": "Irrotettava ikkuna",
+    "popOutTitle": "Irrota ikkuna",
+    "popOutDesc": "Pidä Buho auki kelluvana ikkunana, jota voit vetää minne tahansa. Selaa vapaasti menettämättä lompakkoasi."
   },
   "relay": {
     "title": "Välityspalvelinasetukset",
@@ -138,7 +144,10 @@
     "infoOperator": "Ylläpitäjä",
     "infoContact": "Yhteystieto",
     "infoYes": "Kyllä",
-    "infoNo": "Ei"
+    "infoNo": "Ei",
+    "statusConnected": "Rele on tavoitettavissa",
+    "statusUnreachable": "Rele ei ole tavoitettavissa",
+    "refreshStatus": "Tarkista rele-yhteys"
   },
   "account": {
     "activeDesc": "Aktiivinen tili — sovellukset käyttävät tätä profiilia",
@@ -171,7 +180,12 @@
     "showQr": "Show QR code",
     "connectedRelays": "Connected relays",
     "relayCount": "{count} relay | {count} relays",
-    "noRelays": "No relays configured"
+    "noRelays": "No relays configured",
+    "deleteBackupWarning": "Varmuuskopioi avaimesi ensin!",
+    "deleteBackupHint": "Ilman varmuuskopiota tämän identiteetin poistaminen tarkoittaa pääsyn menettämistä ikuisesti. Palautusta ei ole.",
+    "deleteBackupCta": "Varmuuskopioi avain Asetuksissa",
+    "deleteLocalExplain": "Tämä toiminto poistaa yksityisen avaimesi pysyvästi Buhosta. Kaikki yhdistetyt sivustot menettävät pääsyn tähän identiteettiin.",
+    "deleteRemoteExplain": "Tämä katkaisee vain yhteyden etäallekirjoittajaan. Avaimesi pysyy turvassa allekirjoituslaitteella — voit yhdistää uudelleen milloin tahansa."
   },
   "wizard": {
     "addAccount": "Lisää tili",
@@ -340,9 +354,7 @@
     "kindRelayList": "Palvelinasetukset",
     "kindArticle": "Pitkä artikkeli",
     "kindAppData": "Sovelluksen tiedot",
-    "kindGeneric": "Tapahtumatyyppi {kind}",
-    "moreOptions": "Lisää vaihtoehtoja",
-    "fewerOptions": "Vähemmän vaihtoehtoja"
+    "kindGeneric": "Tapahtumatyyppi {kind}"
   },
   "wallet": {
     "balance": "Saldo",
@@ -507,7 +519,13 @@
     "removeWalletWarning": "This will permanently delete all funds in this wallet. Make sure you have a backup.",
     "lightningReady": "Lightning-ready",
     "invoiceCopied": "Invoice copied",
-    "fileTooLarge": "File too large (max 10 MB)"
+    "fileTooLarge": "File too large (max 10 MB)",
+    "chooseType": "Valitse miten yhdistät lompakkosi",
+    "nwcDesc": "Yhteys Nostr-releen kautta — toimii Albyn, Buhon, LNbitsin, Coinosin ja muiden kanssa",
+    "lnbitsDesc": "Yhdistä suoraan LNbits-instanssiisi REST API:n kautta",
+    "lnbitsHelp": "Löydät URL:n ja Admin Keyn LNbits-lompakon asetuksista API-tiedoissa.",
+    "lnbitsUrl": "LNbits URL",
+    "lnbitsAdminKey": "Admin Key"
   },
   "sites": {
     "title": "Site Details",
@@ -624,7 +642,8 @@
     "filterAll": "All",
     "filterDms": "DMs",
     "filterGroups": "Groups",
-    "joinOrCreate": "Join or create a group"
+    "joinOrCreate": "Join or create a group",
+    "messageDeletedLabel": "Tämä viesti on poistettu"
   },
   "group": {
     "title": "Groups",
@@ -698,7 +717,20 @@
     "searchMembers": "Search contacts...",
     "channelJoinDesc": "Paste a channel link to join a public conversation.",
     "serverHintOptional": "Optional — leave empty to use your default relays",
-    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave."
+    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave.",
+    "copyInviteLink": "Kopioi kutsuslinkki",
+    "linkCopied": "Kutsulinkki kopioitu",
+    "previewGroup": "Esikatsele ryhmää",
+    "muteGroup": "Mykistä ilmoitukset",
+    "unmuteGroup": "Poista mykistys",
+    "muted": "Ilmoitukset mykistetty",
+    "unmuted": "Ilmoitukset käytössä",
+    "checkingRelay": "Tarkistetaan palvelinta...",
+    "relayOnline": "Palvelin on verkossa ja tavoitettavissa",
+    "relayUnreachable": "Palvelin saattaa olla offline — voit silti yrittää",
+    "inviteCount": "Kutsu {count}",
+    "usersInvited": "{count} jäsentä kutsuttu",
+    "inviteManualPlaceholder": "npub, NIP-05 tai hex pubkey"
   },
   "notifications": {
     "title": "Notifications",
@@ -767,6 +799,47 @@
     "pointCamera": "Osoita kamera QR-koodiin",
     "cameraBlocked": "Camera is blocked. Upload a QR code image instead, or allow camera access in your browser settings.",
     "noQrFound": "No QR code found in this image. Try a clearer photo.",
-    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead."
+    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead.",
+    "extensionHint": "Kamera ei ole käytettävissä laajennuksen ponnahdusikkunoissa"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "Mint säilyttää ecash-saldosi ja käsittelee Lightning-maksut puolestasi.",
+    "mintExplainer": "Buho Jump luo välittömän ecash-lompakon jokaiselle tilille, jotta voit vastaanottaa Bitcoinia heti — ilman asetuksia.",
+    "whatsAMint": "Mikä on mint?",
+    "mintExplainerIntro": "Mint on luotettava palvelin ecash-ekosysteemissä. Se säilyttää saldosi ecash-tokeneina ja käsittelee Lightning-maksut puolestasi — suunniteltu nopeaan alkuun.",
+    "mintTooltipGood": "Miksi se on loistava",
+    "mintTooltipKnow": "Hyvä tietää",
+    "mintBulletInstant": "Vastaanota Bitcoin välittömästi, ei nodea tarvita",
+    "mintBulletNoSetup": "Toimii heti jokaiselle tilille",
+    "mintBulletPrivacy": "Ecash tarjoaa vahvan maksuyksityisyyden",
+    "mintBulletCustodial": "Säilytetty — mint pitää varojasi",
+    "mintBulletSmall": "Parhaiten pienille summille, ei pitkäaikaiseen säilytykseen",
+    "mintBulletAdvanced": "Vaihda vain jos käytät omaa mintiä",
+    "changeWarningInline": "Tämä on edistynyt asetus. Vaihda mint vain jos tiedät mitä teet. Nykyinen saldosi jää nykyiselle mintille.",
+    "mintInfo": "Mint-tiedot",
+    "mintInfoFailed": "Mint-tietoja ei voitu ladata",
+    "mintUnreachable": "Tähän minttiin ei saatu yhteyttä. Tarkista URL ja yritä uudelleen.",
+    "changeMint": "Vaihda mint",
+    "newMint": "Uusi Mint-URL",
+    "validateMint": "Tarkista ja esikatsele",
+    "confirmChangeTitle": "Vaihdetaanko Cashu Mint?",
+    "confirmChangeDesc": "Nykyinen saldosi jää nykyiselle mintille eikä siirry automaattisesti. Vain uudet tapahtumat käyttävät uutta mintiä.",
+    "confirmChange": "Vaihda Mint",
+    "mintChanged": "Mint päivitetty onnistuneesti",
+    "version": "Versio",
+    "contact": "Yhteystiedot",
+    "supportedNuts": "Tuetut NUTit"
+  },
+  "nutbits": {
+    "oneClick": "1-klikkaus",
+    "connectDesc": "Oma lompakko yhdellä klikkauksella — rahoita se NUTbitsin kautta",
+    "callbackSuccess": "Lompakko yhdistetty!",
+    "callbackSuccessDesc": "NUTbits-lompakkosi on yhdistetty. Rahoita se NUTbitsin kautta aloittaaksesi maksujen lähettämisen.",
+    "callbackClosing": "Tämä välilehti sulkeutuu automaattisesti...",
+    "callbackFailed": "Yhteys epäonnistui",
+    "callbackNoValue": "NUTbitsiltä ei saatu yhteysmerkkijonoa.",
+    "callbackInvalid": "Virheellinen yhteysmerkkijono. Odotettiin NWC URI.",
+    "callbackConnectFailed": "Lompakkoyhteyden tallentaminen epäonnistui. Yritä uudelleen."
   }
 }

@@ -1,47 +1,90 @@
-# Buho Jump FAQ
+# FAQ
 
 ## What is Buho Jump?
 
-Buho Jump is an open-source browser extension that combines Nostr identity, encrypted messaging, and Bitcoin Lightning payments in one place. It works as a signer, chat client, and wallet companion directly in the browser.
+A browser extension that combines **Nostr identity**, **encrypted messaging**, and **Bitcoin Lightning payments** in one place. It works as a signer, chat client, and wallet — directly in your browser toolbar.
 
-## What can Buho Jump do?
+---
 
-Buho Jump supports NIP-07 signing for Nostr apps, NIP-46 remote signing with external signer apps, WebLN payments, NWC wallet connections, Cashu wallet support, encrypted DMs, group chat, multi-account switching, and per-site permissions.
+## What can it do?
 
-## Does Buho Jump support Lightning payments?
+- **Sign in** to Nostr apps (NIP-07)
+- **Connect remote signers** like Amber (NIP-46)
+- **Send and receive Bitcoin** via Lightning
+- **Chat privately** with end-to-end encryption
+- **Join group chats** — private groups, relay communities, and open channels
+- **Manage multiple accounts** and wallets
 
-Yes. Buho Jump includes a WebLN provider and can connect to Nostr Wallet Connect compatible wallets such as Alby Hub, Coinos, LNbits, Mutiny, and similar services. It also supports receiving payments and per-site spending budgets.
+---
 
-## Does Buho Jump store my private key on a server?
+## Which wallets are supported?
 
-No. Buho Jump stores account and wallet data locally in the browser. Sensitive data is encrypted at rest with AES-256-GCM derived from your master password. If you prefer not to keep your private key in the browser at all, you can use NIP-46 remote signing.
+Buho Jump supports three wallet types:
 
-## Which browsers does Buho Jump support?
+| Type | How it connects |
+|------|----------------|
+| **NWC** | Any Nostr Wallet Connect compatible wallet (Alby Hub, Coinos, Minibits, etc.) |
+| **Cashu** | Ecash wallet connected to a Cashu mint |
+| **LNbits** | Direct connection to an LNbits instance |
 
-Buho Jump targets Chromium-based browsers and Firefox. The project currently builds for Chrome, Edge, Brave-style Chromium targets, and Firefox.
+You can add multiple wallets and switch between them.
 
-## Is Buho Jump open source?
+---
 
-Yes. Buho Jump is open source under the AGPL-3.0-only license. The source code is available at https://github.com/Buho-Ecosystem/Buho-Jump.
+## Can I shop online with Bitcoin?
 
-## Does Buho Jump track users or collect analytics?
+Yes — if you're in South Africa, Buho Jump works with [MoneyBadger-supported online stores](https://www.moneybadger.co.za/stores). At checkout, the extension detects payment QR codes from SnapScan, Zapper, and Scan to Pay, converts them to Lightning payments, and lets you pay in Bitcoin from your connected wallet.
 
-No. Buho Jump does not include analytics, telemetry, ad tracking, or remote data collection operated by the project. Data stays on the device except when you intentionally connect to Nostr relays, Lightning services, or signer providers you choose.
+---
+
+## Does it store my private key on a server?
+
+No. Everything stays on your device. Private keys and wallet credentials are encrypted at rest with AES-256-GCM. If you prefer not to store keys in the browser at all, use NIP-46 remote signing with an app like Amber.
+
+---
+
+## Which browsers are supported?
+
+Chrome, Brave, Edge, and other Chromium-based browsers. Firefox is also supported.
+
+---
+
+## Is it open source?
+
+Yes - [AGPL-3.0](LICENSE). The full source code is at https://github.com/Buho-Ecosystem/Buho-Jump.
+
+---
+
+## Does it track me?
+
+No analytics, no telemetry, no ads, no remote data collection. See the [Privacy Policy](PRIVACY_POLICY.md).
+
+---
 
 ## Can I migrate from nos2x or another Nostr extension?
 
-Yes. You can import an existing `nsec` or hex private key, or move to a NIP-46 external signer flow. Buho Jump also adds wallet support, encrypted messaging, and more granular permissions compared with older signer-only extensions.
+Yes. Import your existing `nsec` or hex private key, or switch to NIP-46 remote signing (NIP-46 lacks support of privacy features in Chat). Buho Jump adds wallet support, encrypted messaging, and more granular permissions.
 
-## Where can I read more?
+---
 
-Start with the project README, privacy policy, and blog posts in this repository:
+## How does group chat work?
 
-- `README.md`
-- `PRIVACY_POLICY.md`
-- `blog/01-nip46-remote-signing.md`
-- `blog/02-why-another-nostr-extension.md`
-- `blog/03-your-keys-your-rules.md`
-- `blog/04-lightning-in-your-browser.md`
-- `blog/05-private-messaging.md`
-- `blog/06-from-nos2x-to-buho.md`
-- `blog/07-built-different.md`
+Buho Jump supports three types of group messaging:
+
+- **Private groups** — invite-only, end-to-end encrypted
+- **Relay communities** (NIP-29) — moderated groups hosted on a relay
+- **Open channels** (NIP-28) — public chat rooms
+
+---
+
+## How do I report a bug?
+
+Open an [issue on GitHub](https://github.com/Buho-Ecosystem/Buho-Jump/issues) with what you expected, what happened, and your browser name/version.
+
+## How do I report a security issue?
+
+See [SECURITY.md](SECURITY.md) — please don't open public issues for vulnerabilities.
+
+## How can I help?
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) — code, translations, and bug reports are all welcome.

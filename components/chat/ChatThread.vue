@@ -11,11 +11,13 @@ import { useWallet } from '../../composables/useWallet.js'
 import { useMuteList } from '../../composables/useMuteList.js'
 import { useToast } from '../../composables/useToast.js'
 import { useOnline } from '../../composables/useOnline.js'
+import { useRelayHealth } from '../../composables/useRelayHealth.js'
 import { useMessaging } from '../../composables/useMessaging.js'
 import { nip19 } from 'nostr-core'
 import { formatSats } from '../../lib/utils.js'
 import ChatBubble from './ChatBubble.vue'
 import ErrorBanner from '../ErrorBanner.vue'
+import { searchEmojis } from '../../lib/emojiData.js'
 import { getAvatarColor } from '../../lib/avatarColor.js'
 import {
   ArrowLeft, Send, Zap, Loader2, Lock, X,
@@ -30,12 +32,13 @@ const props = defineProps({
 const emit = defineEmits(['back', 'report'])
 
 const { t } = useI18n()
-const { getMessages, sendMessage, retryMessage, markRead, addZapMessage, updateZapStatus, currentAccountPubkey } = useChat()
+const { getMessages, sendMessage, retryMessage, markRead, addZapMessage, updateZapStatus, currentAccountPubkey, reactions, isDeleted } = useChat()
 const { fetchProfile, getCachedProfile } = useContacts()
 const { status: walletStatus, sendZap } = useWallet()
 const { isMuted, mute, unmute } = useMuteList()
 const toast = useToast()
 const { online } = useOnline()
+const { healthy: relayHealthy } = useRelayHealth()
 const { send } = useMessaging()
 
 const muted = computed(() => isMuted(props.pubkey))
@@ -44,7 +47,11 @@ let mountedAccountPubkey = null
 
 // ── State ──
 const profile = ref(getCachedProfile(props.pubkey))
-const input = ref('')
+
+// Draft persistence: restore unsent text when reopening a conversation
+const DRAFT_KEY = `chatDraft_${props.pubkey}`
+const savedDraft = sessionStorage.getItem(DRAFT_KEY) || ''
+const input = ref(savedDraft)
 const scrollRef = ref(null)
 const textareaRef = ref(null)
 const copied = ref(false)
@@ -73,6 +80,10 @@ const showZapPicker = ref(false)
 const zapAmounts = [21, 100, 500, 1000, 5000]
 const customZapAmount = ref('')
 const zapping = ref(false)
+
+// Emoji autocomplete state
+const emojiSuggestions = ref([])
+const emojiSelectedIdx = ref(0)
 
 const messageList = getMessages(props.pubkey)
 
@@ -143,9 +154,9 @@ function formatDateLabel(date) {
 function truncateNpub(pubkey) {
   try {
     const npub = nip19.npubEncode(pubkey)
-    return npub.slice(0, 8) + '...' + npub.slice(-4)
+    return 'User ' + npub.slice(5, 9) + '...' + npub.slice(-4)
   } catch {
-    return pubkey.slice(0, 8) + '...'
+    return 'User ' + pubkey.slice(0, 6) + '...'
   }
 }
 
@@ -163,6 +174,7 @@ function handleSend() {
 
   // Clear input immediately — message appears instantly with "sending" tick
   input.value = ''
+  sessionStorage.removeItem(DRAFT_KEY)
   resetTextareaHeight()
   scrollToBottom()
 
@@ -182,7 +194,7 @@ function handleSend() {
 
   // Send in background — status updates via optimistic message ticks
   sendMessage(props.pubkey, text, sendOpts).catch(() => {
-    // Failed status shown on the bubble itself (tap to retry)
+    toast.error(t('chat.sendFailedDetail'))
   })
 }
 
@@ -199,7 +211,7 @@ function handleReact({ messageId, emoji }) {
 
 async function handleDeleteMessage(message) {
   try {
-    await send('DELETE_EVENT', message.id)
+    await send('DELETE_EVENT', message.id, props.pubkey)
     toast.success(t('chat.messageDeleted'))
   } catch {
     toast.error(t('chat.sendFailed'))
@@ -300,6 +312,29 @@ function onScroll() {
 }
 
 function onKeydown(e) {
+  // Emoji autocomplete navigation
+  if (emojiSuggestions.value.length > 0) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      emojiSelectedIdx.value = (emojiSelectedIdx.value + 1) % emojiSuggestions.value.length
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      emojiSelectedIdx.value = (emojiSelectedIdx.value - 1 + emojiSuggestions.value.length) % emojiSuggestions.value.length
+      return
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      const [emoji, name] = emojiSuggestions.value[emojiSelectedIdx.value]
+      selectEmoji(emoji, name)
+      return
+    }
+    if (e.key === 'Escape') {
+      emojiSuggestions.value = []
+      return
+    }
+  }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     handleSend()
@@ -310,6 +345,36 @@ function autoResize(e) {
   const el = e.target
   el.style.height = 'auto'
   el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  // Persist draft
+  sessionStorage.setItem(DRAFT_KEY, input.value)
+  // Emoji autocomplete: detect `:query` pattern
+  updateEmojiSuggestions()
+}
+
+function updateEmojiSuggestions() {
+  const text = input.value
+  const cursorPos = textareaRef.value?.selectionStart ?? text.length
+  const beforeCursor = text.slice(0, cursorPos)
+  // Match `:query` only at start of text or after whitespace/bracket (prevents mid-word triggers)
+  const colonMatch = beforeCursor.match(/(?:^|[\s([{]):([a-z_]{2,})$/i)
+  if (colonMatch) {
+    emojiSuggestions.value = searchEmojis(colonMatch[1])
+    emojiSelectedIdx.value = 0
+  } else {
+    emojiSuggestions.value = []
+  }
+}
+
+function selectEmoji(emoji, name) {
+  const text = input.value
+  const cursorPos = textareaRef.value?.selectionStart ?? text.length
+  const beforeCursor = text.slice(0, cursorPos)
+  const colonIdx = beforeCursor.lastIndexOf(':')
+  if (colonIdx === -1) return
+  input.value = text.slice(0, colonIdx) + emoji + text.slice(cursorPos)
+  emojiSuggestions.value = []
+  sessionStorage.setItem(DRAFT_KEY, input.value)
+  nextTick(() => textareaRef.value?.focus())
 }
 
 function resetTextareaHeight() {
@@ -368,7 +433,9 @@ watch(messageList, () => {
         </div>
         <div class="min-w-0">
           <div class="text-[14px] font-semibold truncate leading-tight">{{ displayName }}</div>
-          <div v-if="nip05Display" class="text-[11px] text-brand truncate leading-tight">{{ nip05Display }}</div>
+          <div v-if="!online" class="text-[10px] text-error leading-tight">{{ t('common.offline') }}</div>
+          <div v-else-if="!relayHealthy" class="text-[10px] text-warning leading-tight">{{ t('chat.connectionSlow') }}</div>
+          <div v-else-if="nip05Display" class="text-[11px] text-brand truncate leading-tight">{{ nip05Display }}</div>
         </div>
       </div>
 
@@ -420,6 +487,8 @@ watch(messageList, () => {
             :message="item.message"
             :is-first-in-group="item.isFirstInGroup"
             :is-last-in-group="item.isLastInGroup"
+            :reactions="reactions[item.message.id] || []"
+            :deleted="isDeleted(item.message.id)"
             @retry="handleRetry"
             @react="handleReact"
             @reply="handleReply"
@@ -530,6 +599,21 @@ watch(messageList, () => {
       </button>
     </div>
 
+    <!-- Emoji autocomplete suggestions -->
+    <div v-if="emojiSuggestions.length > 0" class="px-2 pb-1 bg-surface-base">
+      <div class="bg-surface-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <button
+          v-for="([emoji, name], idx) in emojiSuggestions" :key="name"
+          @click="selectEmoji(emoji, name)"
+          class="w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors text-xs"
+          :class="idx === emojiSelectedIdx ? 'bg-brand/10 text-brand' : 'hover:bg-surface-elevated text-text-secondary'"
+        >
+          <span class="text-base">{{ emoji }}</span>
+          <span class="font-mono text-[11px] text-text-muted">:{{ name }}:</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Input bar (Telegram-style) -->
     <div class="flex items-end gap-2 px-2 py-2 bg-surface-base border-t border-border shrink-0">
       <!-- Compose option buttons -->
@@ -563,8 +647,8 @@ watch(messageList, () => {
         @click="showZapPicker = !showZapPicker"
         class="p-2 rounded-full transition-all duration-200 shrink-0"
         :class="showZapPicker ? 'bg-warning/15 text-warning' : 'hover:bg-surface-elevated text-text-muted'"
-        :title="t('chat.zapTitle')"
-        :aria-label="t('chat.zapTitle')"
+        :title="t('chat.zapHint')"
+        :aria-label="t('chat.zapHint')"
       >
         <Zap class="w-5 h-5" />
       </button>

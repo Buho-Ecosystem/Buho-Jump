@@ -7,6 +7,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useGroups } from '../../composables/useGroups.js'
 import { useContacts } from '../../composables/useContacts.js'
+import { useMuteList } from '../../composables/useMuteList.js'
 import { useToast } from '../../composables/useToast.js'
 import { getAvatarColor } from '../../lib/avatarColor.js'
 import BottomSheet from '../BottomSheet.vue'
@@ -14,6 +15,7 @@ import {
   ArrowLeft, Users, Shield, Globe, Lock,
   UserPlus, UserMinus, Pencil, RefreshCw,
   Loader2, AlertTriangle, LogOut, AlertCircle,
+  Copy, Check, Link2, VolumeX, Volume2, UserSearch,
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -27,7 +29,8 @@ const {
   addMemberToPrivateGroup, removeMemberFromPrivateGroup,
   currentAccountPubkey, gkey,
 } = useGroups()
-const { getCachedProfile, fetchProfiles, resolveInput } = useContacts()
+const { getCachedProfile, fetchProfiles, resolveInput, searchContacts, contacts } = useContacts()
+const { isGroupMuted, muteGroup, unmuteGroup } = useMuteList()
 const toast = useToast()
 
 const group = computed(() =>
@@ -45,9 +48,43 @@ const leaving = ref(false)
 const showInvite = ref(false)
 const inviteInput = ref('')
 const inviting = ref(false)
+const inviteSearch = ref('')
+const selectedInvites = ref([]) // pubkeys selected for bulk invite
 
 // Remove member state
 const removingMember = ref(null)
+
+// Invite link
+const linkCopied = ref(false)
+
+function copyInviteLink() {
+  const g = group.value
+  let link = ''
+  if (g.type === 'relay' && g.relay) {
+    link = `${g.relay}/${g.id}`
+  } else if (g.type === 'channel' && g.relay) {
+    link = `${g.relay}/${g.id}`
+  } else if (g.type === 'private') {
+    link = `Private group: ${g.name} (${g.id})`
+  }
+  if (!link) return
+  navigator.clipboard.writeText(link)
+  linkCopied.value = true
+  toast.success(t('group.linkCopied'))
+  setTimeout(() => (linkCopied.value = false), 2500)
+}
+
+const groupMuted = computed(() => isGroupMuted(props.groupKey))
+
+async function toggleGroupMute() {
+  if (groupMuted.value) {
+    await unmuteGroup(currentAccountPubkey.value, props.groupKey)
+    toast.info(t('group.unmuted'))
+  } else {
+    await muteGroup(currentAccountPubkey.value, props.groupKey)
+    toast.info(t('group.muted'))
+  }
+}
 
 const isAdmin = computed(() =>
   admins.value.some(a => a.pubkey === currentAccountPubkey.value)
@@ -55,6 +92,11 @@ const isAdmin = computed(() =>
 
 const isSoleAdmin = computed(() =>
   isAdmin.value && admins.value.length === 1
+)
+
+// Owner: for private groups, the account that holds the group privkey
+const isOwner = computed(() =>
+  group.value.type === 'private' && !!group.value.groupPrivkeyEncrypted
 )
 
 const typeLabel = computed(() => {
@@ -133,25 +175,51 @@ async function handleLeave() {
   }
 }
 
+// Filtered contacts for invite search (exclude existing members)
+const filteredInviteContacts = computed(() => {
+  const results = searchContacts(inviteSearch.value)
+  const memberSet = new Set(members.value)
+  return results.filter(c => !memberSet.has(c.pubkey) && !selectedInvites.value.includes(c.pubkey))
+})
+
+function toggleInviteSelect(pubkey) {
+  if (selectedInvites.value.includes(pubkey)) {
+    selectedInvites.value = selectedInvites.value.filter(pk => pk !== pubkey)
+  } else {
+    selectedInvites.value = [...selectedInvites.value, pubkey]
+  }
+}
+
 async function handleInvite() {
-  const val = inviteInput.value.trim()
-  if (!val) return
+  // Collect pubkeys: from selected contacts + manual input
+  const pubkeys = [...selectedInvites.value]
+  const manualVal = inviteInput.value.trim()
+
+  if (manualVal) {
+    const resolved = await resolveInput(manualVal)
+    if (!resolved) { toast.error(t('chat.resolveNotFound')); return }
+    if (!pubkeys.includes(resolved)) pubkeys.push(resolved)
+  }
+
+  if (pubkeys.length === 0) return
+
   inviting.value = true
   try {
     const g = group.value
-    if (g.type === 'private') {
-      const pubkey = await resolveInput(val)
-      if (!pubkey) { toast.error(t('chat.resolveNotFound')); return }
-      addMemberToPrivateGroup(g.id, pubkey)
-      members.value = [...(g.members || [])]
-      toast.success(t('group.userInvited'))
-    } else if (g.type === 'relay') {
-      const pubkey = await resolveInput(val)
-      if (!pubkey) { toast.error(t('chat.resolveNotFound')); return }
-      await inviteUser(g.id, g.relay, pubkey)
-      toast.success(t('group.userInvited'))
+    let added = 0
+    for (const pubkey of pubkeys) {
+      if (g.type === 'private') {
+        addMemberToPrivateGroup(g.id, pubkey)
+      } else if (g.type === 'relay') {
+        await inviteUser(g.id, g.relay, pubkey)
+      }
+      added++
     }
+    if (g.type === 'private') members.value = [...(g.members || [])]
+    toast.success(added === 1 ? t('group.userInvited') : t('group.usersInvited', { count: added }))
     inviteInput.value = ''
+    inviteSearch.value = ''
+    selectedInvites.value = []
     showInvite.value = false
   } catch (err) {
     toast.error(err.message || t('group.joinFailed'))
@@ -160,27 +228,32 @@ async function handleInvite() {
   }
 }
 
+const removingLoading = ref(false)
+
 async function handleRemoveMember() {
   if (!removingMember.value) return
   const g = group.value
+  removingLoading.value = true
   try {
     if (g.type === 'private') {
-      removeMemberFromPrivateGroup(g.id, removingMember.value)
+      await removeMemberFromPrivateGroup(g.id, removingMember.value)
       members.value = members.value.filter(pk => pk !== removingMember.value)
+      toast.success(t('group.memberRemovedSecure'))
     } else if (g.type === 'relay') {
       await adminAction(g.id, g.relay, { type: 'remove-user', pubkey: removingMember.value })
+      toast.success(t('group.userRemoved'))
     }
-    toast.success(t('group.userRemoved'))
   } catch (err) {
     toast.error(err.message || t('group.leaveFailed'))
   } finally {
     removingMember.value = null
+    removingLoading.value = false
   }
 }
 
 function profileName(pubkey) {
   const p = getCachedProfile(pubkey)
-  return p?.display_name || p?.name || pubkey.slice(0, 12) + '...'
+  return p?.display_name || p?.name || 'Someone'
 }
 
 const permissionLabels = {
@@ -219,9 +292,18 @@ function humanPermissions(perms) {
         <p class="text-[10px] text-text-muted mt-0.5">{{ typeLabel }}</p>
         <p v-if="group.about" class="text-xs text-text-muted mt-1.5 line-clamp-3 leading-relaxed">{{ group.about }}</p>
 
-        <!-- Badges for relay groups -->
-        <div v-if="group.type === 'relay'" class="flex items-center justify-center gap-2 mt-2">
-          <span class="text-[9px] px-2 py-0.5 rounded-full font-semibold"
+        <!-- Badges -->
+        <div class="flex items-center justify-center gap-2 mt-2 flex-wrap">
+          <span v-if="isOwner" class="text-[9px] px-2 py-0.5 rounded-full font-semibold bg-brand/10 text-brand">
+            {{ t('group.owner') }}
+          </span>
+          <span v-if="group.type === 'private' && group.currentEpoch != null"
+            class="text-[9px] px-2 py-0.5 rounded-full font-semibold bg-success/10 text-success inline-flex items-center gap-1">
+            <Lock class="w-2.5 h-2.5" />
+            {{ t('group.encrypted') }}
+          </span>
+          <span v-if="group.type === 'relay'"
+            class="text-[9px] px-2 py-0.5 rounded-full font-semibold"
             :class="group.isOpen ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'">
             {{ group.isOpen ? t('group.openGroup') : t('group.closedGroup') }}
           </span>
@@ -264,21 +346,55 @@ function humanPermissions(perms) {
             <span class="text-xs font-medium">{{ t('group.inviteUser') }}</span>
           </button>
 
-          <!-- Invite input -->
-          <div v-else class="bg-surface-card rounded-2xl border border-border p-3 space-y-2">
+          <!-- Invite form -->
+          <div v-else class="bg-surface-card rounded-2xl border border-border p-3 space-y-2.5">
             <p class="text-[10px] text-text-muted">{{ t('group.inviteUserDesc') }}</p>
+
+            <!-- Selected chips -->
+            <div v-if="selectedInvites.length > 0" class="flex flex-wrap gap-1">
+              <span v-for="pk in selectedInvites" :key="pk"
+                @click="toggleInviteSelect(pk)"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-brand/10 text-brand text-[10px] font-medium cursor-pointer hover:bg-brand/20 transition-colors">
+                {{ profileName(pk) }}
+                <span class="text-brand/60">&times;</span>
+              </span>
+            </div>
+
+            <!-- Contact search -->
+            <div class="relative">
+              <UserSearch class="w-3.5 h-3.5 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+              <input v-model="inviteSearch" :placeholder="t('group.searchMembers')"
+                class="w-full bg-surface-base border border-border rounded-xl pl-9 pr-3 py-2 text-xs outline-none focus:border-brand transition-colors placeholder:text-text-muted" />
+            </div>
+
+            <!-- Contact list -->
+            <div v-if="filteredInviteContacts.length > 0" class="max-h-32 overflow-y-auto space-y-0 -mx-1">
+              <button v-for="c in filteredInviteContacts" :key="c.pubkey"
+                @click="toggleInviteSelect(c.pubkey)"
+                class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-surface-elevated transition-colors text-left">
+                <div class="w-6 h-6 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
+                  :style="!c.profile?.picture ? { background: getAvatarColor(c.pubkey) } : {}">
+                  <img v-if="c.profile?.picture" :src="c.profile.picture" alt="" class="w-full h-full object-cover" />
+                  <span v-else class="text-[8px] font-bold text-white">{{ ((c.profile?.name || '?')[0]).toUpperCase() }}</span>
+                </div>
+                <span class="text-xs font-medium truncate flex-1">{{ c.profile?.display_name || c.profile?.name || 'Someone' }}</span>
+              </button>
+            </div>
+
+            <!-- Manual input (npub, nip05, hex) -->
             <input v-model="inviteInput"
-              :placeholder="t('chat.inputHint')"
-              class="w-full bg-surface-base border border-border rounded-xl px-3 py-2 text-xs outline-none focus:border-brand transition-colors placeholder:text-text-muted" />
+              :placeholder="t('group.inviteManualPlaceholder')"
+              class="w-full bg-surface-base border border-border rounded-xl px-3 py-2 text-xs outline-none focus:border-brand transition-colors font-mono placeholder:text-text-muted" />
+
             <div class="flex gap-2">
-              <button @click="showInvite = false; inviteInput = ''"
+              <button @click="showInvite = false; inviteInput = ''; inviteSearch = ''; selectedInvites = []"
                 class="flex-1 py-2 text-xs rounded-xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all font-semibold">
                 {{ t('common.cancel') }}
               </button>
-              <button @click="handleInvite" :disabled="!inviteInput.trim() || inviting"
+              <button @click="handleInvite" :disabled="(selectedInvites.length === 0 && !inviteInput.trim()) || inviting"
                 class="flex-1 py-2 text-xs rounded-xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 transition-all font-semibold btn-primary flex items-center justify-center gap-1">
                 <Loader2 v-if="inviting" class="w-3 h-3 animate-spin" />
-                {{ t('group.inviteUser') }}
+                {{ selectedInvites.length > 1 ? t('group.inviteCount', { count: selectedInvites.length }) : t('group.inviteUser') }}
               </button>
             </div>
           </div>
@@ -338,6 +454,25 @@ function humanPermissions(perms) {
         </div>
       </template>
 
+      <!-- Invite link -->
+      <button v-if="group.type !== 'private' && group.relay"
+        @click="copyInviteLink"
+        class="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs rounded-2xl border border-border hover:border-brand/30 hover:bg-brand/5 transition-all font-medium"
+        :class="linkCopied ? 'text-success border-success/30 bg-success/5' : 'text-text-secondary'"
+      >
+        <component :is="linkCopied ? Check : Link2" class="w-3.5 h-3.5" />
+        {{ linkCopied ? t('common.copied') : t('group.copyInviteLink') }}
+      </button>
+
+      <!-- Mute / Unmute -->
+      <button @click="toggleGroupMute"
+        class="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs rounded-2xl transition-colors font-medium"
+        :class="groupMuted ? 'text-success hover:bg-success/5' : 'text-text-muted hover:bg-surface-elevated'">
+        <Volume2 v-if="groupMuted" class="w-3.5 h-3.5" />
+        <VolumeX v-else class="w-3.5 h-3.5" />
+        {{ groupMuted ? t('group.unmuteGroup') : t('group.muteGroup') }}
+      </button>
+
       <!-- Leave group -->
       <button @click="confirmLeave = true"
         class="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs text-error hover:bg-error/5 rounded-2xl transition-colors font-medium">
@@ -379,9 +514,10 @@ function humanPermissions(perms) {
           class="py-2 text-xs rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all font-semibold">
           {{ t('common.cancel') }}
         </button>
-        <button @click="handleRemoveMember"
-          class="py-2 text-xs rounded-2xl bg-error text-white hover:bg-error/90 transition-all font-semibold">
-          {{ t('group.removeUser') }}
+        <button @click="handleRemoveMember" :disabled="removingLoading"
+          class="py-2 text-xs rounded-2xl bg-error text-white hover:bg-error/90 transition-all font-semibold disabled:opacity-60 flex items-center justify-center gap-1.5">
+          <Loader2 v-if="removingLoading" class="w-3 h-3 animate-spin" />
+          {{ removingLoading ? t('group.rotatingKeys') : t('group.removeUser') }}
         </button>
       </template>
     </BottomSheet>

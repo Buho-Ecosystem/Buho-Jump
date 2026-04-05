@@ -57,9 +57,9 @@ const isZap = computed(() => props.lastMessage?.type === 'zap')
 function truncateNpub(pubkey) {
   try {
     const npub = nip19.npubEncode(pubkey)
-    return npub.slice(0, 8) + '...' + npub.slice(-4)
+    return 'User ' + npub.slice(5, 9) + '...' + npub.slice(-4)
   } catch {
-    return pubkey.slice(0, 8) + '...'
+    return 'User ' + pubkey.slice(0, 6) + '...'
   }
 }
 </script>

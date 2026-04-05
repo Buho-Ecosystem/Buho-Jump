@@ -28,7 +28,8 @@
     "showingOf": "Showing {shown} of {total}",
     "showMore": "Show more",
     "offline": "No internet connection",
-    "open": "Open"
+    "open": "Open",
+    "validating": "Validerar..."
   },
   "errors": {
     "PERMISSION_DENIED": "Permission denied",
@@ -93,7 +94,12 @@
     "relaySettings": "Reläinställningar",
     "relaySettingsDesc": "Hantera reläer för konto, plånbok och chatt",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Open in full page"
+    "openFullPage": "Open in full page",
+    "more": "Mer",
+    "allSettings": "Alla inställningar",
+    "popOut": "Lösgjort fönster",
+    "popOutTitle": "Lossa fönstret",
+    "popOutDesc": "Håll Buho öppet som ett flytande fönster du kan dra var som helst. Surfa fritt utan att förlora din plånbok."
   },
   "relay": {
     "title": "Reläinställningar",
@@ -138,7 +144,10 @@
     "infoOperator": "Operatör",
     "infoContact": "Kontakt",
     "infoYes": "Ja",
-    "infoNo": "Nej"
+    "infoNo": "Nej",
+    "statusConnected": "Relay nåbar",
+    "statusUnreachable": "Relay ej nåbar",
+    "refreshStatus": "Kontrollera relay-anslutning"
   },
   "account": {
     "activeDesc": "Aktivt konto — appar kommer använda den här profilen",
@@ -171,7 +180,12 @@
     "showQr": "Show QR code",
     "connectedRelays": "Connected relays",
     "relayCount": "{count} relay | {count} relays",
-    "noRelays": "No relays configured"
+    "noRelays": "No relays configured",
+    "deleteBackupWarning": "Säkerhetskopiera din nyckel först!",
+    "deleteBackupHint": "Utan säkerhetskopia innebär borttagning av denna identitet att åtkomsten förloras för alltid. Det finns ingen återställning.",
+    "deleteBackupCta": "Säkerhetskopiera nyckel i Inställningar",
+    "deleteLocalExplain": "Denna åtgärd tar permanent bort din privata nyckel från Buho. Alla anslutna webbplatser förlorar åtkomst till denna identitet.",
+    "deleteRemoteExplain": "Detta kopplar bara bort fjärrsigneraren. Din nyckel förblir säker på signeringsenheten — du kan återansluta när som helst."
   },
   "wizard": {
     "addAccount": "Lägg till ett Konto",
@@ -340,9 +354,7 @@
     "kindRelayList": "Serverinställningar",
     "kindArticle": "Längre artikel",
     "kindAppData": "Appdata",
-    "kindGeneric": "Händelsetyp {kind}",
-    "moreOptions": "Fler alternativ",
-    "fewerOptions": "Färre alternativ"
+    "kindGeneric": "Händelsetyp {kind}"
   },
   "wallet": {
     "balance": "Saldo",
@@ -507,7 +519,13 @@
     "removeWalletWarning": "This will permanently delete all funds in this wallet. Make sure you have a backup.",
     "lightningReady": "Lightning-ready",
     "invoiceCopied": "Invoice copied",
-    "fileTooLarge": "File too large (max 10 MB)"
+    "fileTooLarge": "File too large (max 10 MB)",
+    "chooseType": "Välj hur du vill ansluta din plånbok",
+    "nwcDesc": "Anslut via Nostr-relay — fungerar med Alby, Buho, LNbits, Coinos med mera",
+    "lnbitsDesc": "Anslut direkt till din LNbits-instans via REST API",
+    "lnbitsHelp": "Hitta din URL och Admin Key i LNbits plånboksinställningar under API-info.",
+    "lnbitsUrl": "LNbits URL",
+    "lnbitsAdminKey": "Admin Key"
   },
   "sites": {
     "title": "Site Details",
@@ -624,7 +642,8 @@
     "filterAll": "All",
     "filterDms": "DMs",
     "filterGroups": "Groups",
-    "joinOrCreate": "Join or create a group"
+    "joinOrCreate": "Join or create a group",
+    "messageDeletedLabel": "Detta meddelande har raderats"
   },
   "group": {
     "title": "Groups",
@@ -698,7 +717,20 @@
     "searchMembers": "Search contacts...",
     "channelJoinDesc": "Paste a channel link to join a public conversation.",
     "serverHintOptional": "Optional — leave empty to use your default relays",
-    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave."
+    "soleAdminWarning": "You are the only admin. The group will have no admin if you leave.",
+    "copyInviteLink": "Kopiera inbjudningslänk",
+    "linkCopied": "Inbjudningslänk kopierad",
+    "previewGroup": "Förhandsgranska grupp",
+    "muteGroup": "Stäng av aviseringar",
+    "unmuteGroup": "Slå på aviseringar",
+    "muted": "Aviseringar avstängda",
+    "unmuted": "Aviseringar påslagna",
+    "checkingRelay": "Kontrollerar server...",
+    "relayOnline": "Servern är online och nåbar",
+    "relayUnreachable": "Servern kan vara offline — du kan ändå försöka",
+    "inviteCount": "Bjud in {count}",
+    "usersInvited": "{count} medlemmar inbjudna",
+    "inviteManualPlaceholder": "npub, NIP-05 eller hex pubkey"
   },
   "notifications": {
     "title": "Notifications",
@@ -767,6 +799,47 @@
     "pointCamera": "Rikta kameran mot en QR-kod",
     "cameraBlocked": "Camera is blocked. Upload a QR code image instead, or allow camera access in your browser settings.",
     "noQrFound": "No QR code found in this image. Try a clearer photo.",
-    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead."
+    "cameraFailed": "Could not start the camera. Try uploading a QR code image instead.",
+    "extensionHint": "Kameran är inte tillgänglig i tilläggs-popups"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "Minten förvarar ditt ecash-saldo och hanterar Lightning-betalningar åt dig.",
+    "mintExplainer": "Buho Jump skapar en direkt ecash-plånbok för varje konto så att du kan ta emot Bitcoin direkt — ingen konfiguration behövs.",
+    "whatsAMint": "Vad är en mint?",
+    "mintExplainerIntro": "En mint är en pålitlig server i ecash-ekosystemet. Den förvarar ditt saldo som ecash-tokens och hanterar Lightning-betalningar åt dig — utformad för att komma igång snabbt.",
+    "mintTooltipGood": "Varför det är bra",
+    "mintTooltipKnow": "Bra att veta",
+    "mintBulletInstant": "Ta emot Bitcoin direkt, ingen nod behövs",
+    "mintBulletNoSetup": "Fungerar direkt för varje konto",
+    "mintBulletPrivacy": "Ecash ger stark transaktionssekretess",
+    "mintBulletCustodial": "Förvarad — minten håller dina medel",
+    "mintBulletSmall": "Bäst för små belopp, inte för långsiktig förvaring",
+    "mintBulletAdvanced": "Ändra bara om du driver din egen mint",
+    "changeWarningInline": "Detta är en avancerad inställning. Ändra bara minten om du vet vad du gör. Ditt befintliga saldo stannar på den nuvarande minten.",
+    "mintInfo": "Mint-detaljer",
+    "mintInfoFailed": "Kunde inte ladda mint-information",
+    "mintUnreachable": "Kunde inte nå denna mint. Kontrollera URL:en och försök igen.",
+    "changeMint": "Byt mint",
+    "newMint": "Ny Mint-URL",
+    "validateMint": "Validera och förhandsgranska",
+    "confirmChangeTitle": "Byta Cashu Mint?",
+    "confirmChangeDesc": "Ditt befintliga saldo stannar på den nuvarande minten och överförs inte automatiskt. Endast nya transaktioner kommer att använda den nya minten.",
+    "confirmChange": "Byt Mint",
+    "mintChanged": "Mint uppdaterad",
+    "version": "Version",
+    "contact": "Kontakt",
+    "supportedNuts": "Stödda NUTs"
+  },
+  "nutbits": {
+    "oneClick": "1-klick",
+    "connectDesc": "Dedikerad plånbok med ett klick — fyll på via NUTbits",
+    "callbackSuccess": "Plånbok ansluten!",
+    "callbackSuccessDesc": "Din dedikerade NUTbits-plånbok är ansluten. Fyll på via NUTbits för att börja skicka betalningar.",
+    "callbackClosing": "Denna flik stängs automatiskt...",
+    "callbackFailed": "Anslutning misslyckades",
+    "callbackNoValue": "Ingen anslutningssträng mottagen från NUTbits.",
+    "callbackInvalid": "Ogiltig anslutningssträng mottagen. NWC URI förväntad.",
+    "callbackConnectFailed": "Kunde inte spara plånboksanslutningen. Försök igen."
   }
 }

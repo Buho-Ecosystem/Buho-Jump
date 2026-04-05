@@ -7,10 +7,12 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useGroups } from '../../composables/useGroups.js'
 import { useContacts } from '../../composables/useContacts.js'
+import { useMessaging } from '../../composables/useMessaging.js'
 import { useToast } from '../../composables/useToast.js'
 import { nip19 } from 'nostr-core'
 import { truncateKey } from '../../lib/utils.js'
 import GroupBubble from './GroupBubble.vue'
+import { searchEmojis } from '../../lib/emojiData.js'
 import {
   ArrowLeft, Send, Lock, X, Globe,
   MoreHorizontal, Copy, Check, ExternalLink, Info,
@@ -24,6 +26,7 @@ const props = defineProps({
 const emit = defineEmits(['back', 'info'])
 const { t } = useI18n()
 const { groups, getMessages, sendGroupMessage, retryMessage, markRead, currentAccountPubkey, gkey } = useGroups()
+const { send } = useMessaging()
 const { getCachedProfile, fetchProfiles } = useContacts()
 const toast = useToast()
 
@@ -31,7 +34,14 @@ const group = computed(() => {
   return groups.value.find(g => gkey(g) === props.groupKey) || { id: props.groupKey, name: props.groupKey, type: 'relay' }
 })
 
-const input = ref('')
+// Draft persistence
+const DRAFT_KEY = `groupDraft_${props.groupKey}`
+const input = ref(sessionStorage.getItem(DRAFT_KEY) || '')
+
+// Emoji autocomplete
+const emojiSuggestions = ref([])
+const emojiSelectedIdx = ref(0)
+
 const scrollRef = ref(null)
 const textareaRef = ref(null)
 const showMenu = ref(false)
@@ -72,6 +82,11 @@ const groupedMessages = computed(() => {
     const sameDay = (a, b) => a && b && new Date(a.created_at * 1000).toDateString() === new Date(b.created_at * 1000).toDateString()
     const sameGroup = (a, b) => a && b && a.sender === b.sender && sameDay(a, b) && Math.abs(a.created_at - b.created_at) < 60
 
+    // Epoch separator — show when encryption keys changed
+    if (prev && msg.epochNumber != null && prev.epochNumber != null && msg.epochNumber !== prev.epochNumber) {
+      result.push({ type: 'epoch', label: t('group.keysUpdated') })
+    }
+
     const isFirst = !sameGroup(prev, msg)
     const isLast = !sameGroup(msg, next)
     const isMe = msg.sender === currentAccountPubkey.value
@@ -105,12 +120,13 @@ function handleSend() {
 
   const reply = replyingTo.value?.id
   input.value = ''
+  sessionStorage.removeItem(DRAFT_KEY)
   replyingTo.value = null
   resetTextareaHeight()
   scrollToBottom()
 
   sendGroupMessage(group.value, text, reply).catch(() => {
-    // Failed status shown on the bubble itself
+    toast.error(t('chat.sendFailedDetail'))
   })
 }
 
@@ -130,6 +146,29 @@ function handleReply(msg) {
 
 function cancelReply() {
   replyingTo.value = null
+}
+
+function handleReact({ messageId, emoji }) {
+  // For group messages, publish reaction to the group's relay
+  const g = group.value
+  const targetPubkey = g.type === 'private' ? messageList.value.find(m => m.id === messageId)?.sender : null
+  send('SEND_REACTION', messageId, targetPubkey || currentAccountPubkey.value, emoji).catch(() => {
+    toast.error(t('group.sendFailed'))
+  })
+}
+
+async function handleDelete(message) {
+  try {
+    await send('DELETE_EVENT', message.id)
+    toast.success(t('chat.messageDeleted'))
+  } catch {
+    toast.error(t('group.sendFailed'))
+  }
+}
+
+function handleForward(message) {
+  navigator.clipboard.writeText(message.content || '')
+  toast.success(t('chat.messageCopied'))
 }
 
 function scrollToBottom() {
@@ -152,6 +191,33 @@ function handleTextareaInput(e) {
   const el = e.target
   el.style.height = 'auto'
   el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  sessionStorage.setItem(DRAFT_KEY, input.value)
+  updateEmojiSuggestions()
+}
+
+function updateEmojiSuggestions() {
+  const text = input.value
+  const cursorPos = textareaRef.value?.selectionStart ?? text.length
+  const beforeCursor = text.slice(0, cursorPos)
+  const colonMatch = beforeCursor.match(/(?:^|[\s([{]):([a-z_]{2,})$/i)
+  if (colonMatch) {
+    emojiSuggestions.value = searchEmojis(colonMatch[1])
+    emojiSelectedIdx.value = 0
+  } else {
+    emojiSuggestions.value = []
+  }
+}
+
+function selectEmoji(emoji) {
+  const text = input.value
+  const cursorPos = textareaRef.value?.selectionStart ?? text.length
+  const beforeCursor = text.slice(0, cursorPos)
+  const colonIdx = beforeCursor.lastIndexOf(':')
+  if (colonIdx === -1) return
+  input.value = text.slice(0, colonIdx) + emoji + text.slice(cursorPos)
+  emojiSuggestions.value = []
+  sessionStorage.setItem(DRAFT_KEY, input.value)
+  nextTick(() => textareaRef.value?.focus())
 }
 
 function resetTextareaHeight() {
@@ -159,6 +225,28 @@ function resetTextareaHeight() {
 }
 
 function handleKeydown(e) {
+  if (emojiSuggestions.value.length > 0) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      emojiSelectedIdx.value = (emojiSelectedIdx.value + 1) % emojiSuggestions.value.length
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      emojiSelectedIdx.value = (emojiSelectedIdx.value - 1 + emojiSuggestions.value.length) % emojiSuggestions.value.length
+      return
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      const [emoji] = emojiSuggestions.value[emojiSelectedIdx.value]
+      selectEmoji(emoji)
+      return
+    }
+    if (e.key === 'Escape') {
+      emojiSuggestions.value = []
+      return
+    }
+  }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     handleSend()
@@ -243,6 +331,13 @@ watch(messageList, () => {
               {{ item.label }}
             </span>
           </div>
+          <!-- Epoch separator (encryption keys rotated) -->
+          <div v-else-if="item.type === 'epoch'" class="flex justify-center my-2">
+            <span class="inline-flex items-center gap-1.5 text-[10px] text-success bg-success/8 border border-success/15 px-3 py-1 rounded-full font-medium">
+              <Lock class="w-3 h-3" />
+              {{ item.label }}
+            </span>
+          </div>
           <!-- Message bubble -->
           <GroupBubble
             v-else
@@ -252,8 +347,13 @@ watch(messageList, () => {
             :is-last-in-group="item.isLast"
             :reply-content="item.replyContent"
             :reply-sender-name="item.replySenderName"
+            :reactions="[]"
+            :deleted="false"
             @retry="handleRetry"
             @reply="handleReply"
+            @react="handleReact"
+            @delete="handleDelete"
+            @forward="handleForward"
           />
         </template>
       </template>
@@ -286,6 +386,21 @@ watch(messageList, () => {
       <button @click="cancelReply" class="p-0.5 rounded hover:bg-surface-elevated transition-colors">
         <X class="w-3.5 h-3.5 text-text-muted" />
       </button>
+    </div>
+
+    <!-- Emoji autocomplete -->
+    <div v-if="emojiSuggestions.length > 0" class="px-2 pb-1">
+      <div class="bg-surface-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <button
+          v-for="([emoji, name], idx) in emojiSuggestions" :key="name"
+          @click="selectEmoji(emoji)"
+          class="w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors text-xs"
+          :class="idx === emojiSelectedIdx ? 'bg-brand/10 text-brand' : 'hover:bg-surface-elevated text-text-secondary'"
+        >
+          <span class="text-base">{{ emoji }}</span>
+          <span class="font-mono text-[11px] text-text-muted">:{{ name }}:</span>
+        </button>
+      </div>
     </div>
 
     <!-- Input -->

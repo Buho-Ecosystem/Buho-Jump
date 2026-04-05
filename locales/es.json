@@ -28,7 +28,8 @@
     "showingOf": "Mostrando {shown} de {total}",
     "showMore": "Mostrar más",
     "offline": "Sin conexión a Internet",
-    "open": "Open"
+    "open": "Open",
+    "validating": "Validando..."
   },
   "errors": {
     "PERMISSION_DENIED": "Permiso denegado",
@@ -93,7 +94,12 @@
     "relaySettings": "Configuración de relays",
     "relaySettingsDesc": "Administra tus conexiones de relay",
     "version": "Buho Jump v{version}",
-    "openFullPage": "Abrir en página completa"
+    "openFullPage": "Abrir en página completa",
+    "more": "Más",
+    "allSettings": "Todos los ajustes",
+    "popOut": "Ventana flotante",
+    "popOutTitle": "Separar ventana",
+    "popOutDesc": "Mantén Buho abierto como una ventana flotante que puedes arrastrar a cualquier lugar. Navega libremente sin perder tu wallet."
   },
   "relay": {
     "title": "Configuración de relays",
@@ -138,7 +144,10 @@
     "infoOperator": "Operador",
     "infoContact": "Contacto",
     "infoYes": "Sí",
-    "infoNo": "No"
+    "infoNo": "No",
+    "statusConnected": "El relay es accesible",
+    "statusUnreachable": "El relay no es accesible",
+    "refreshStatus": "Verificar conectividad del relay"
   },
   "account": {
     "activeDesc": "Cuenta activa — las aplicaciones usarán este perfil",
@@ -171,7 +180,12 @@
     "showQr": "Mostrar código QR",
     "connectedRelays": "Relays conectados",
     "relayCount": "{count} relay | {count} relays",
-    "noRelays": "No hay relays configurados"
+    "noRelays": "No hay relays configurados",
+    "deleteBackupWarning": "¡Haz una copia de seguridad primero!",
+    "deleteBackupHint": "Sin una copia de seguridad, eliminar esta identidad significa perder el acceso para siempre. No hay recuperación.",
+    "deleteBackupCta": "Respaldar clave en Ajustes",
+    "deleteLocalExplain": "Esta acción elimina permanentemente tu clave privada de Buho. Todos los sitios conectados perderán acceso a esta identidad.",
+    "deleteRemoteExplain": "Esto solo desconecta el firmante remoto. Tu clave sigue segura en el dispositivo firmante — puedes reconectarte en cualquier momento."
   },
   "wizard": {
     "addAccount": "Agregar una cuenta",
@@ -340,9 +354,7 @@
     "kindRelayList": "Preferencias de servidor",
     "kindArticle": "Artículo extenso",
     "kindAppData": "Datos de aplicación",
-    "kindGeneric": "Tipo de evento {kind}",
-    "moreOptions": "Más opciones",
-    "fewerOptions": "Menos opciones"
+    "kindGeneric": "Tipo de evento {kind}"
   },
   "wallet": {
     "balance": "Saldo",
@@ -507,7 +519,13 @@
     "removeWalletWarning": "Eliminar esta wallet solo borra los datos de conexión locales, no la wallet en sí.",
     "lightningReady": "Lightning está listo",
     "invoiceCopied": "Invoice copied",
-    "fileTooLarge": "File too large (max 10 MB)"
+    "fileTooLarge": "File too large (max 10 MB)",
+    "chooseType": "Elige cómo conectar tu wallet",
+    "nwcDesc": "Conexión vía relay Nostr — funciona con Alby, Buho, LNbits, Coinos y más",
+    "lnbitsDesc": "Conecta directamente a tu instancia de LNbits vía API REST",
+    "lnbitsHelp": "Encuentra tu URL y Admin Key en los ajustes de tu wallet LNbits en Información de API.",
+    "lnbitsUrl": "URL de LNbits",
+    "lnbitsAdminKey": "Clave de Admin"
   },
   "sites": {
     "title": "Detalles del sitio",
@@ -624,7 +642,8 @@
     "filterAll": "Todos",
     "filterDms": "DMs",
     "filterGroups": "Grupos",
-    "joinOrCreate": "Unirte o crear un grupo"
+    "joinOrCreate": "Unirte o crear un grupo",
+    "messageDeletedLabel": "Este mensaje fue eliminado"
   },
   "group": {
     "title": "Grupos",
@@ -698,7 +717,20 @@
     "searchMembers": "Buscar contactos...",
     "channelJoinDesc": "Pega un enlace de canal para unirte a una conversación pública.",
     "serverHintOptional": "Opcional: déjalo vacío para usar tus relays predeterminados",
-    "soleAdminWarning": "Eres el único admin. El grupo se quedará sin admin si te vas."
+    "soleAdminWarning": "Eres el único admin. El grupo se quedará sin admin si te vas.",
+    "copyInviteLink": "Copiar enlace de invitación",
+    "linkCopied": "Enlace de invitación copiado",
+    "previewGroup": "Vista previa del grupo",
+    "muteGroup": "Silenciar notificaciones",
+    "unmuteGroup": "Activar notificaciones",
+    "muted": "Notificaciones silenciadas",
+    "unmuted": "Notificaciones activadas",
+    "checkingRelay": "Verificando servidor...",
+    "relayOnline": "El servidor está en línea y accesible",
+    "relayUnreachable": "El servidor puede estar sin conexión — puedes intentarlo",
+    "inviteCount": "Invitar a {count}",
+    "usersInvited": "{count} miembros invitados",
+    "inviteManualPlaceholder": "npub, NIP-05 o pubkey hex"
   },
   "notifications": {
     "title": "Notificaciones",
@@ -767,6 +799,47 @@
     "pointCamera": "Apunta tu cámara a un código QR",
     "cameraBlocked": "La cámara está bloqueada. Sube una imagen con un código QR o permite el acceso a la cámara en la configuración del navegador.",
     "noQrFound": "No se encontró ningún código QR en esta imagen. Prueba con una foto más nítida.",
-    "cameraFailed": "No se pudo iniciar la cámara. Prueba a subir una imagen con un código QR."
+    "cameraFailed": "No se pudo iniciar la cámara. Prueba a subir una imagen con un código QR.",
+    "extensionHint": "La cámara no está disponible en popups de extensiones"
+  },
+  "cashu": {
+    "mintTitle": "Cashu Mint",
+    "mintDesc": "El mint custodia tu saldo en ecash y procesa pagos Lightning en tu nombre.",
+    "mintExplainer": "Buho Jump crea un wallet ecash instantáneo para cada cuenta para que puedas recibir Bitcoin al instante — sin configuración.",
+    "whatsAMint": "¿Qué es un mint?",
+    "mintExplainerIntro": "Un mint es un servidor confiable en el ecosistema ecash. Custodia tu saldo como tokens ecash y procesa pagos Lightning por ti — diseñado para que empieces rápidamente.",
+    "mintTooltipGood": "Por qué es genial",
+    "mintTooltipKnow": "Bueno saberlo",
+    "mintBulletInstant": "Recibe Bitcoin al instante, sin nodo necesario",
+    "mintBulletNoSetup": "Funciona de inmediato para cada cuenta",
+    "mintBulletPrivacy": "Ecash ofrece fuerte privacidad en transacciones",
+    "mintBulletCustodial": "Custodial — el mint custodia tus fondos",
+    "mintBulletSmall": "Ideal para pequeñas cantidades, no para almacenamiento a largo plazo",
+    "mintBulletAdvanced": "Cambia solo si operas tu propio mint",
+    "changeWarningInline": "Esta es una configuración avanzada. Solo cambia el mint si sabes lo que haces. Tu saldo existente permanecerá en el mint actual.",
+    "mintInfo": "Detalles del Mint",
+    "mintInfoFailed": "No se pudo cargar la información del mint",
+    "mintUnreachable": "No se pudo contactar este mint. Verifica la URL e inténtalo de nuevo.",
+    "changeMint": "Cambiar mint",
+    "newMint": "Nueva URL del Mint",
+    "validateMint": "Validar y previsualizar",
+    "confirmChangeTitle": "¿Cambiar Cashu Mint?",
+    "confirmChangeDesc": "Tu saldo existente permanece en el mint actual y no se transferirá automáticamente. Solo las nuevas transacciones usarán el nuevo mint.",
+    "confirmChange": "Cambiar Mint",
+    "mintChanged": "Mint actualizado exitosamente",
+    "version": "Versión",
+    "contact": "Contacto",
+    "supportedNuts": "NUTs compatibles"
+  },
+  "nutbits": {
+    "oneClick": "1-clic",
+    "connectDesc": "Wallet dedicado con un clic — fináncelo a través de NUTbits",
+    "callbackSuccess": "¡Wallet conectado!",
+    "callbackSuccessDesc": "Tu wallet dedicado de NUTbits está vinculado. Fináncelo a través de NUTbits para empezar a enviar pagos.",
+    "callbackClosing": "Esta pestaña se cerrará automáticamente...",
+    "callbackFailed": "Conexión fallida",
+    "callbackNoValue": "No se recibió cadena de conexión de NUTbits.",
+    "callbackInvalid": "Cadena de conexión inválida. Se esperaba un URI NWC.",
+    "callbackConnectFailed": "No se pudo guardar la conexión del wallet. Inténtelo de nuevo."
   }
 }
