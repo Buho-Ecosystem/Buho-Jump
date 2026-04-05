@@ -28,6 +28,7 @@
     "settings": "Settings",
     "showingOf": "Showing {shown} of {total}",
     "showMore": "Show more",
+    "more": "More options",
     "offline": "No internet connection",
     "open": "Open"
   },
@@ -45,6 +46,22 @@
     "WALLET_DISCONNECTED": "Wallet disconnected",
     "TIMEOUT": "Request timed out",
     "INSUFFICIENT_BALANCE": "Insufficient balance"
+  },
+
+  "welcome": {
+    "headline": "Hey, nice to meet you",
+    "subline": "Buho Jump lives in your browser. It helps you show up online, talk to people, and pay — all on your terms.",
+    "verb1Full": "Be yourself on any site — sign in with your own identity, not someone else's account.",
+    "verb2Full": "Message anyone privately — every conversation is encrypted end-to-end.",
+    "verb3Full": "Pay instantly with Bitcoin — one tap, no bank, no middleman.",
+    "continue": "Sounds good",
+    "securityTitle": "Let's lock the door",
+    "securityDesc": "This password protects everything stored in this browser. If someone else uses your computer, they can't get in.",
+    "protects1": "Your identity on this device",
+    "protects2": "Messages stored locally",
+    "protects3": "Wallet connections and payment history",
+    "createPassword": "Create my password",
+    "noReset": "We can't reset this password. Only you know it."
   },
 
   "lock": {
@@ -374,8 +391,9 @@
     "payAmountUnknown": "Unknown amount",
     "confirmPayment": "Confirm payment",
     "budgetRemaining": "Budget remaining",
-    "rememberBudget": "Remember and set a budget",
-    "rememberBudgetHint": "Auto-approve future payments within this budget",
+    "rememberBudget": "Set a spending budget",
+    "rememberBudgetDesc": "Allow this site to withdraw funds without asking you again, up to the limit below.",
+    "rememberBudgetHint": "When the budget runs out, payments will require your approval again.",
 
     "permDefaultWhat": "This app is requesting access to your account.",
     "permDefaultRisk": "Permission",
@@ -593,15 +611,26 @@
     "allowed": "allow",
     "denied": "deny",
     "budget": "Spending Budget",
+    "budgetExplainer": "Payments within this budget are auto-approved. When the budget runs out, you'll be asked again.",
+    "budgetEnabled": "Auto-approve enabled",
+    "budgetPaused": "Auto-approve paused",
     "spent": "Spent",
     "remaining": "sats remaining",
-    "resetSpend": "Reset",
+    "resetSpend": "Reset counter to zero",
     "budgetPlaceholder": "Budget in sats",
     "budgetSaved": "Budget saved",
     "budgetRemoved": "Budget removed",
     "budgetFailed": "Failed to save budget",
     "spendReset": "Spend counter reset",
     "removeBudget": "Remove budget",
+    "removeBudgetConfirm": "Remove the spending budget for {host}? Future payments will always require your approval.",
+    "recentPayments": "Recent Payments",
+    "noPayments": "No auto-approved payments yet",
+    "budgetBar": {
+      "setLimit": "Set a spending limit",
+      "almostOut": "Almost out of budget",
+      "exhausted": "Budget used up — payments need your approval"
+    },
     "revokeAll": "Revoke all access",
     "revokeAllConfirm": "Remove all permissions and budget for {host}?",
 

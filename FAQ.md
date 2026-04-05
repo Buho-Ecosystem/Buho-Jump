@@ -37,6 +37,16 @@ Yes — if you're in South Africa, Buho Jump works with [MoneyBadger-supported o
 
 ---
 
+## What is a spending budget?
+
+When a website requests a Lightning payment, Buho Jump asks for your approval. If you trust the site and don't want to be asked every time, you can set a **spending budget**.
+
+A budget lets the site withdraw funds automatically — up to the limit you set. Once the budget runs out, payments go back to requiring your approval.
+
+You can pause, adjust, or remove a budget at any time from the site detail view in the popup or the Connected Sites page in settings.
+
+---
+
 ## Does it store my private key on a server?
 
 No. Everything stays on your device. Private keys and wallet credentials are encrypted at rest with AES-256-GCM. If you prefer not to store keys in the browser at all, use NIP-46 remote signing with an app like Amber.

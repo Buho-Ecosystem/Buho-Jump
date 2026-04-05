@@ -69,7 +69,7 @@ import { fetchLnurlWithdrawParams, executeLnurlWithdraw } from '../lib/lnurl.js'
 import { recordCashuTx, updateCashuTx, getCashuTransactions, clearCashuTxHistory } from '../lib/cashu-transactions.js'
 import { DEFAULT_MINT, DEFAULT_WALLET_NAME } from '../lib/cashu-constants.js'
 import {
-  getAllowances, getAllowance, setAllowance,
+  getAllowances, getAllowance, setAllowance, setAllowanceEnabled,
   recordSpend, checkBudget, removeAllowance, resetAllowanceSpend,
 } from '../lib/allowances.js'
 import { publishProfile, fetchProfile } from '../lib/profile.js'
@@ -83,7 +83,7 @@ import { getPool, setAuthHandler } from '../lib/relayPool.js'
 import { connectBunker, createNostrConnectURI, awaitNostrConnect, parseConnectionURI } from '../lib/nip46-bridge.js'
 import { openPromptWindow } from '../lib/browser/capabilities.js'
 import { buildNutbitsDeepLink, getCallbackUrl, rotateCallbackToken } from '../lib/nutbits.js'
-import { notifyDm, notifyPayment, notifyGroup, setupNotificationClickHandler } from '../lib/notifications.js'
+import { notifyDm, notifyPayment, notifyGroup, notifyBudgetSpend, setupNotificationClickHandler } from '../lib/notifications.js'
 import { startNotificationPoller } from '../lib/notificationPoller.js'
 import { saveSession, getSession, clearSession } from '../lib/session.js'
 import { performAccountSwitch } from '../lib/accountSwitch.js'
@@ -165,10 +165,15 @@ const ALL_PERMISSION_METHODS = [
   'weblnEnable',
 ]
 
+// Payment methods always require per-transaction approval — never auto-approve from stored perms
+const PAYMENT_METHODS = ['weblnSendPayment', 'weblnKeysend']
+
 async function requestPermission(host, method, kind, eventData, meta) {
   const activeId = await getActiveAccountId()
-  // Payment prompts always show (per-transaction approval) — never auto-approve from stored perms
-  if (method !== 'weblnSendPayment') {
+  const isPayment = PAYMENT_METHODS.includes(method)
+
+  // Payment prompts always show — never auto-approve from stored perms
+  if (!isPayment) {
     const existing = await checkPermission(host, method, kind, activeId)
     if (existing === 'allow') return true
     if (existing === 'deny') return false
@@ -178,7 +183,7 @@ async function requestPermission(host, method, kind, eventData, meta) {
   // Payment prompts never use the first-visit flow — they always show per-transaction
   const allPerms = await getPermissions(activeId)
   const hostPerms = allPerms[host]
-  const firstVisit = method !== 'weblnSendPayment' && (!hostPerms || Object.keys(hostPerms).length === 0)
+  const firstVisit = !isPayment && (!hostPerms || Object.keys(hostPerms).length === 0)
 
   return new Promise((resolve) => {
     const requestId = crypto.randomUUID()
@@ -628,7 +633,8 @@ async function handleWeblnSendPayment(params, sender) {
   if (amountSats && await checkBudget(host, amountSats)) {
     try {
       const result = await walletPayInvoice(invoice, amountSats)
-      await recordSpend(host, amountSats)
+      const updated = await recordSpend(host, amountSats)
+      if (updated) notifyBudgetSpend(host, amountSats, updated.budget - updated.spent).catch(() => {})
       return { result: { preimage: result.preimage } }
     } catch (err) { return { error: classifyError(err) } }
   }
@@ -680,7 +686,8 @@ async function handleWeblnKeysend(params, sender) {
   if (await checkBudget(host, amountSats)) {
     try {
       const result = await walletKeysend(destination, amountSats, customRecords)
-      await recordSpend(host, amountSats)
+      const updated = await recordSpend(host, amountSats)
+      if (updated) notifyBudgetSpend(host, amountSats, updated.budget - updated.spent).catch(() => {})
       return { result }
     } catch (err) { return { error: classifyError(err) } }
   }
@@ -691,7 +698,7 @@ async function handleWeblnKeysend(params, sender) {
   if (!allowed) return { error: 'PERMISSION_DENIED' }
   try {
     const result = await walletKeysend(destination, amountSats, customRecords)
-    await recordSpend(host, amountSats)
+    if (amountSats) await recordSpend(host, amountSats)
     return { result }
   } catch (err) { return { error: classifyError(err) } }
 }
@@ -1607,6 +1614,19 @@ export default defineBackground(() => {
           case 'RESET_ALLOWANCE':
             await resetAllowanceSpend(params?.[0])
             return { result: { ok: true } }
+          case 'TOGGLE_ALLOWANCE':
+            await setAllowanceEnabled(params?.[0], params?.[1])
+            return { result: { ok: true } }
+          case 'GET_ACTIVE_TAB_INFO': {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+            if (!tab?.url || tab.url.startsWith('chrome') || tab.url.startsWith('about') || tab.url.startsWith('moz-extension')) {
+              return { result: null }
+            }
+            try {
+              const { hostname } = new URL(tab.url)
+              return { result: { host: hostname, title: tab.title, favIconUrl: tab.favIconUrl } }
+            } catch { return { result: null } }
+          }
 
           // ── Permissions ──
           case 'GET_PERMISSIONS': {
@@ -1888,7 +1908,7 @@ export default defineBackground(() => {
               await requestCoordinator.resolve(requestId, true)
             } else if (decision === 'deny_all') {
               // Block all methods for this host
-              for (const m of [...ALL_PERMISSION_METHODS, 'weblnSendPayment']) {
+              for (const m of [...ALL_PERMISSION_METHODS, ...PAYMENT_METHODS]) {
                 await setPermission(host, m, 'deny', null, activeId)
               }
               await requestCoordinator.resolve(requestId, false)
@@ -1902,7 +1922,7 @@ export default defineBackground(() => {
             // Set budget if user opted in during payment approval
             if (setBudget && setBudget > 0 && host && decision.startsWith('allow')) {
               try {
-                await setAllowance(host, { budget: setBudget, spent: 0 })
+                await setAllowance(host, setBudget)
                 log.info('permissions', 'BUDGET_SET_FROM_PROMPT', { host, budget: setBudget })
               } catch (err) {
                 log.warn('permissions', 'BUDGET_SET_FAILED', { host, err: err?.message })

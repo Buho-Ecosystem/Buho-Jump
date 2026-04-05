@@ -15,7 +15,7 @@ import TransactionItem from './TransactionItem.vue'
 import BottomSheet from '../BottomSheet.vue'
 import {
   ArrowUpRight, ArrowDownLeft, RefreshCw, ArrowLeftRight,
-  Unlink, ChevronRight, Zap, Loader2, AlertTriangle,
+  Unlink, ChevronRight, Wallet, Loader2, AlertTriangle,
 } from 'lucide-vue-next'
 
 const emit = defineEmits(['send', 'receive', 'history', 'detail', 'disconnect'])
@@ -229,7 +229,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-else class="bg-surface-card rounded-3xl border border-border p-6 text-center shadow-sm">
-        <Zap class="w-5 h-5 text-text-muted mx-auto mb-2" />
+        <Wallet class="w-5 h-5 text-text-muted mx-auto mb-2" />
         <p class="text-xs text-text-muted">{{ t('wallet.noTransactions') }}</p>
         <p class="text-[10px] text-text-muted mt-0.5">{{ t('wallet.noTransactionsHint') }}</p>
       </div>

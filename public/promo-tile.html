@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 440px;
+    height: 280px;
+    overflow: hidden;
+    font-family: 'Manrope', system-ui, sans-serif;
+    background: #FAFAF8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  /* Subtle brand accent in corner */
+  .accent-top {
+    position: absolute;
+    top: -60px;
+    right: -60px;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #059573 0%, #78D53C 100%);
+    opacity: 0.06;
+  }
+
+  .accent-bottom {
+    position: absolute;
+    bottom: -40px;
+    left: -40px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: #059573;
+    opacity: 0.04;
+  }
+
+  .content {
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .logo {
+    width: 52px;
+    height: 56px;
+    margin: 0 auto 16px;
+  }
+
+  .title {
+    font-size: 22px;
+    font-weight: 800;
+    color: #1A1A1A;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+  }
+
+  .tagline {
+    font-size: 13px;
+    font-weight: 600;
+    color: #888;
+    margin-top: 8px;
+    letter-spacing: -0.2px;
+  }
+
+  .pills {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 18px;
+  }
+
+  .pill {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #059573;
+    color: white;
+    letter-spacing: 0.2px;
+  }
+
+  .pill.alt {
+    background: rgba(5, 149, 115, 0.08);
+    color: #059573;
+  }
+</style>
+</head>
+<body>
+  <div class="accent-top"></div>
+  <div class="accent-bottom"></div>
+
+  <div class="content">
+    <div class="logo">
+      <svg xmlns="http://www.w3.org/2000/svg" width="52" height="56" viewBox="0 0 30 32" fill="none">
+        <path d="M0 13.4423C0 6.01833 6.01833 0 13.4423 0V18.5577C13.4423 25.9817 7.42399 32 0 32V13.4423Z" fill="#059573"/>
+        <path d="M15.3906 7.30444C15.3906 3.27031 18.6609 0 22.6951 0C26.7292 0 29.9995 3.27031 29.9995 7.30444V7.72091C29.9995 11.755 26.7292 15.0253 22.6951 15.0253C18.6609 15.0253 15.3906 11.755 15.3906 7.72091V7.30444Z" fill="#78D53C"/>
+        <path d="M15.3906 24.281C15.3906 20.2469 18.6609 16.9766 22.6951 16.9766C26.7292 16.9766 29.9995 20.2469 29.9995 24.281V24.6975C29.9995 28.7316 26.7292 32.0019 22.6951 32.0019C18.6609 32.0019 15.3906 28.7316 15.3906 24.6975V24.281Z" fill="#43B65B"/>
+      </svg>
+    </div>
+    <div class="title">Buho Jump</div>
+    <div class="tagline">Identity, Messaging & Payments</div>
+    <div class="pills">
+      <span class="pill">Nostr</span>
+      <span class="pill alt">Lightning</span>
+      <span class="pill alt">E2E Encrypted</span>
+    </div>
+  </div>
+</body>
+</html>

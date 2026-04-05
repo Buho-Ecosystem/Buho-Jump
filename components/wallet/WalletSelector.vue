@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { formatSats } from '../../lib/utils.js'
 import {
   Wallet, ChevronDown, Check, Plus, Pencil, Trash2,
-  Loader2, Zap, AlertTriangle, X,
+  Loader2, AlertTriangle, X,
 } from 'lucide-vue-next'
 import BottomSheet from '../BottomSheet.vue'
 
@@ -133,7 +133,7 @@ function handleAdd() {
                 :alt="activeWallet.type"
                 class="w-full h-full object-cover rounded-xl"
               />
-              <Zap v-else class="w-4 h-4 text-brand" />
+              <Wallet v-else class="w-4 h-4 text-brand" />
             </div>
             <div class="flex-1 min-w-0">
               <!-- Rename mode -->

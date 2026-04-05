@@ -6,11 +6,14 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePermissions } from '../../composables/usePermissions.js'
+import { useAllowanceSync } from '../../composables/useAllowanceSync.js'
+import { formatSats } from '../../lib/utils.js'
 import SiteDetail from '../SiteDetail.vue'
 import { Globe, ChevronRight, Search, ShieldOff } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { policies, load } = usePermissions()
+const { getForHost } = useAllowanceSync()
 
 const selectedSite = ref(null)
 const search = ref('')
@@ -23,10 +26,20 @@ onMounted(async () => {
 })
 
 const filteredSites = computed(() => {
-  const entries = Object.entries(policies.value)
-  if (!search.value.trim()) return entries
-  const q = search.value.toLowerCase()
-  return entries.filter(([host]) => host.toLowerCase().includes(q))
+  let entries = Object.entries(policies.value)
+  if (search.value.trim()) {
+    const q = search.value.toLowerCase()
+    entries = entries.filter(([host]) => host.toLowerCase().includes(q))
+  }
+  // Sort: sites with recent budget activity first, then alphabetical
+  return entries.sort(([a], [b]) => {
+    const aa = getForHost(a)
+    const bb = getForHost(b)
+    const ta = aa?.updated_at || 0
+    const tb = bb?.updated_at || 0
+    if (ta !== tb) return tb - ta // most recent first
+    return a.localeCompare(b)
+  })
 })
 
 function methodCount(methods) {
@@ -38,7 +51,16 @@ function allowedCount(methods) {
 }
 
 function faviconUrl(host) {
-  try { return `https://${host}/favicon.ico` } catch { return '' }
+  try { return `https://www.google.com/s2/favicons?domain=${host}&sz=64` } catch { return '' }
+}
+
+function budgetInfo(host) {
+  const a = getForHost(host)
+  if (!a) return null
+  if (a.enabled === false) return { label: `${a.budget.toLocaleString()} sats`, color: 'bg-surface-elevated text-text-muted', paused: true }
+  const ratio = a.spent / a.budget
+  const color = ratio > 0.9 ? 'bg-error/10 text-error' : ratio > 0.7 ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'
+  return { label: `${formatSats(a.spent)} / ${formatSats(a.budget)} sats`, color, paused: false }
 }
 
 function onRevoked() {
@@ -109,6 +131,10 @@ function onRevoked() {
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-[10px] text-text-muted">
                 {{ allowedCount(methods) }} {{ t('options.allowed') }}, {{ methodCount(methods) - allowedCount(methods) }} {{ t('options.denied') }}
+              </span>
+              <span v-if="budgetInfo(host)" class="text-[9px] px-1.5 py-0.5 rounded-full font-semibold"
+                :class="budgetInfo(host).color">
+                {{ budgetInfo(host).paused ? t('sites.budgetPaused') : budgetInfo(host).label }}
               </span>
             </div>
           </div>

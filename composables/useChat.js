@@ -326,12 +326,17 @@ export function useChat() {
         const sealForSelf = nip59.createSeal(rumor, secretKey, senderPubkey)
         const wrapForSelf = nip59.createWrap(sealForSelf, senderPubkey)
 
+        // Pre-register rumor ID in dedup set BEFORE publishing.
+        // The relay may echo the self-copy back before publish() resolves,
+        // which would bypass dedup if we wait until updateMessageStatus.
+        finalId = rumor.id
+        if (!messageIdSets[recipientPubkey]) messageIdSets[recipientPubkey] = new Set()
+        messageIdSets[recipientPubkey].add(finalId)
+
         await Promise.all([
           pool.publish(publishRelays, wrapForRecipient),
           pool.publish(publishRelays, wrapForSelf),
         ])
-
-        finalId = rumor.id
       } else {
         // ── NIP-46 account → kind 4 via remote signer (NIP-44 encrypt, NIP-04 fallback) ──
         const { send } = useMessaging()
@@ -348,9 +353,12 @@ export function useChat() {
           created_at: now,
         })
 
-        await pool.publish(publishRelays, signed)
-
+        // Pre-register in dedup set before publishing (same race guard as NIP-17)
         finalId = signed.id
+        if (!messageIdSets[recipientPubkey]) messageIdSets[recipientPubkey] = new Set()
+        messageIdSets[recipientPubkey].add(finalId)
+
+        await pool.publish(publishRelays, signed)
       }
 
       // Update optimistic message: replace temp ID with real ID, mark as sent
@@ -448,11 +456,14 @@ export function useChat() {
     // Go back 1 hour from latest to catch any we missed
     const since = Math.max(latest - 3600, thirtyDaysAgo)
 
-    // Inbox model: own chat relays + own NIP-65 read relays
+    // Inbox model: chat relays + NIP-65 read relays + account relays (broad net)
+    // Senders publish to our NIP-65 inbox relays, but if that list is missing
+    // or incomplete, we also check account relays and defaults as fallback.
     const ownChatRelays = await getPoolRelays(myPubkey, 'chat').catch(() => DEFAULT_CHAT_RELAYS)
+    const ownAccountRelays = await getPoolRelays(myPubkey, 'account').catch(() => [])
     let inboxRelays = []
     try { inboxRelays = await getInboxRelays(myPubkey) } catch { /* ignore */ }
-    const subscribeRelays = [...new Set([...ownChatRelays, ...inboxRelays])]
+    const subscribeRelays = [...new Set([...ownChatRelays, ...inboxRelays, ...ownAccountRelays])]
 
     // Subscription signature: skip re-subscribe if filters unchanged (prevents duplicate subs)
     const sig = `${myPubkey}:${isLocal}:${subscribeRelays.sort().join(',')}:${since}`

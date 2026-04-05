@@ -11,15 +11,17 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTheme } from '../../composables/useTheme.js'
+import { useFiat } from '../../composables/useFiat.js'
 import { truncateKey } from '../../lib/utils.js'
 import {
   ShieldCheck, ShieldPlus, Globe, Fingerprint, FileSignature, Lock, Unlock,
-  Check, X, Zap, Clock, KeyRound, Eye, EyeOff, AlertTriangle, ShieldOff,
+  Check, X, Clock, KeyRound, Eye, EyeOff, AlertTriangle, ShieldOff,
   Ban, Loader2, Wallet,
 } from 'lucide-vue-next'
 
 useTheme()
 const { t } = useI18n()
+const { toFiat, loadRate } = useFiat()
 
 const mode = ref('permission') // 'permission' or 'unlock'
 const host = ref('')
@@ -84,6 +86,9 @@ onMounted(async () => {
     return
   }
 
+  // Load fiat rate for payment prompts (non-blocking)
+  if (PAYMENT_METHODS.includes(method.value)) loadRate()
+
   try {
     const accountsRes = await fetchWithTimeout({ type: 'GET_ACCOUNTS', params: [] })
     const accountList = accountsRes?.result || accountsRes
@@ -116,9 +121,9 @@ onMounted(async () => {
       const data = await chrome.storage.local.get(key)
       if (data[key]) {
         eventData.value = data[key]
-        // Default budget to 10x payment amount (Alby pattern)
+        // Default budget to 2x payment amount — conservative default
         if (PAYMENT_METHODS.includes(method.value) && data[key].amountSats) {
-          budgetAmount.value = String(data[key].amountSats * 10)
+          budgetAmount.value = String(data[key].amountSats * 2)
         }
       }
     } catch {}
@@ -286,6 +291,12 @@ const isPayment = computed(() => PAYMENT_METHODS.includes(method.value))
 const paymentAmount = computed(() => {
   if (!isPayment.value || !eventData.value) return null
   return eventData.value.amountSats || null
+})
+
+const budgetAmountFiat = computed(() => {
+  const sats = parseInt(budgetAmount.value)
+  if (!sats || sats <= 0) return null
+  return toFiat(sats)
 })
 
 const paymentBudget = computed(() => {
@@ -556,7 +567,10 @@ async function submitUnlock() {
           <div v-if="isPayment" class="px-4 py-3 border-t border-border bg-surface-elevated/40">
             <div class="flex items-center justify-between">
               <span class="text-[11px] text-text-muted font-medium">{{ t('prompt.payAmount') }}</span>
-              <span class="text-base font-extrabold text-error">{{ paymentAmount ? paymentAmount.toLocaleString() + ' sats' : t('prompt.payAmountUnknown') }}</span>
+              <div class="text-right">
+                <span class="text-base font-extrabold text-error">{{ paymentAmount ? paymentAmount.toLocaleString() + ' sats' : t('prompt.payAmountUnknown') }}</span>
+                <span v-if="paymentAmount && toFiat(paymentAmount)" class="block text-[10px] text-text-muted">≈ {{ toFiat(paymentAmount) }}</span>
+              </div>
             </div>
             <div v-if="paymentBudget" class="flex items-center justify-between mt-1.5 pt-1.5 border-t border-border/50">
               <span class="text-[10px] text-text-muted">{{ t('prompt.budgetRemaining') }}</span>
@@ -699,7 +713,7 @@ async function submitUnlock() {
             <!-- ── Payment prompt: budget checkbox + allow_once / deny ── -->
             <template v-if="isPayment">
 
-              <!-- Budget "remember" checkbox (Alby BudgetControl pattern) -->
+              <!-- Budget checkbox (Alby BudgetControl pattern) -->
               <div v-if="!paymentBudget" class="rounded-2xl border border-border bg-surface-card overflow-hidden transition-all duration-200">
                 <label class="flex items-center gap-3 px-3.5 py-2.5 cursor-pointer select-none hover:bg-surface-elevated/50 transition-colors">
                   <input
@@ -707,9 +721,12 @@ async function submitUnlock() {
                     type="checkbox"
                     class="w-4 h-4 rounded border-border text-brand focus:ring-brand/30 accent-[var(--brand-primary)]"
                   />
-                  <div class="flex items-center gap-1.5 min-w-0">
-                    <Wallet class="w-3.5 h-3.5 text-text-muted shrink-0" />
-                    <span class="text-[11px] font-semibold text-text-secondary">{{ t('prompt.rememberBudget') }}</span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <Wallet class="w-3.5 h-3.5 text-text-muted shrink-0" />
+                      <span class="text-[11px] font-semibold text-text-secondary">{{ t('prompt.rememberBudget') }}</span>
+                    </div>
+                    <p class="text-[9px] text-text-muted mt-0.5 leading-relaxed pl-5">{{ t('prompt.rememberBudgetDesc') }}</p>
                   </div>
                 </label>
                 <!-- Budget amount input (revealed on check) -->
@@ -723,7 +740,10 @@ async function submitUnlock() {
                     />
                     <span class="text-[10px] text-text-muted font-semibold shrink-0">sats</span>
                   </div>
-                  <p class="text-[9px] text-text-muted mt-1 px-0.5">{{ t('prompt.rememberBudgetHint') }}</p>
+                  <div class="flex items-center justify-between mt-1 px-0.5">
+                    <p class="text-[9px] text-text-muted">{{ t('prompt.rememberBudgetHint') }}</p>
+                    <span v-if="budgetAmountFiat" class="text-[9px] text-text-muted tabular-nums">≈ {{ budgetAmountFiat }}</span>
+                  </div>
                 </div>
               </div>
 
@@ -732,7 +752,7 @@ async function submitUnlock() {
                 :disabled="!!deciding"
                 class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all duration-200 btn-primary"
               >
-                <Zap v-if="deciding !== 'allow_once'" class="w-4 h-4" />
+                <Wallet v-if="deciding !== 'allow_once'" class="w-4 h-4" />
                 <Loader2 v-else class="w-4 h-4 animate-spin" />
                 {{ t('prompt.confirmPayment') }}
               </button>

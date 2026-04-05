@@ -20,9 +20,9 @@ import ErrorBanner from '../ErrorBanner.vue'
 import { searchEmojis } from '../../lib/emojiData.js'
 import { getAvatarColor } from '../../lib/avatarColor.js'
 import {
-  ArrowLeft, Send, Zap, Loader2, Lock, X,
+  ArrowLeft, Send, Zap, Loader2, Lock, X, Plus,
   MoreHorizontal, Copy, Check, ExternalLink,
-  ChevronDown, VolumeX, Volume2, Timer, ShieldAlert,
+  ChevronDown, VolumeX, Volume2, TimerOff, EyeOff,
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -58,6 +58,7 @@ const copied = ref(false)
 const showMenu = ref(false)
 const menuRef = ref(null)
 const showScrollBtn = ref(false)
+const showComposeMenu = ref(false)
 
 // Reply state
 const replyingTo = ref(null)
@@ -570,19 +571,18 @@ watch(messageList, () => {
     <!-- Offline banner -->
     <ErrorBanner v-if="!online" type="warning" :message="t('common.offline')" class="mx-2 mb-0" />
 
-    <!-- Compose toolbar (expiry + CW toggles) -->
-    <div v-if="expiryMinutes > 0 || cwEnabled" class="flex items-center gap-2 px-3 py-1 bg-surface-elevated/50 border-t border-border text-[10px]">
-      <div v-if="expiryMinutes > 0" class="flex items-center gap-1 text-warning">
-        <Timer class="w-3 h-3" />
-        <span class="font-medium">{{ EXPIRY_OPTIONS.find(o => o.minutes === expiryMinutes)?.label }}</span>
-        <button @click="expiryMinutes = 0" class="ml-0.5 opacity-60 hover:opacity-100" :aria-label="t('common.cancel')">
-          <X class="w-2.5 h-2.5" />
-        </button>
-      </div>
-      <div v-if="cwEnabled" class="flex items-center gap-1 text-text-muted flex-1 min-w-0">
-        <ShieldAlert class="w-3 h-3 shrink-0" />
-        <input v-model="cwReason" :placeholder="t('chat.cwPlaceholder')" class="flex-1 bg-transparent text-[10px] outline-none min-w-0" />
-        <button @click="cwEnabled = false; cwReason = ''" class="opacity-60 hover:opacity-100" :aria-label="t('common.cancel')">
+    <!-- Active compose options (pills above input) -->
+    <div v-if="expiryMinutes > 0 || cwEnabled" class="flex items-center gap-1.5 px-3 py-1.5 border-t border-border bg-surface-base">
+      <button v-if="expiryMinutes > 0" @click="expiryMinutes = 0"
+        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning/10 text-warning text-[10px] font-medium hover:bg-warning/15 transition-colors">
+        <TimerOff class="w-3 h-3" />
+        {{ EXPIRY_OPTIONS.find(o => o.minutes === expiryMinutes)?.label }}
+        <X class="w-2.5 h-2.5 opacity-60" />
+      </button>
+      <div v-if="cwEnabled" class="flex items-center gap-1 flex-1 min-w-0 px-2 py-0.5 rounded-full bg-surface-elevated text-[10px]">
+        <EyeOff class="w-3 h-3 text-text-muted shrink-0" />
+        <input v-model="cwReason" :placeholder="t('chat.cwPlaceholder')" class="flex-1 bg-transparent outline-none min-w-0 text-text-secondary" />
+        <button @click="cwEnabled = false; cwReason = ''" class="text-text-muted opacity-60 hover:opacity-100">
           <X class="w-2.5 h-2.5" />
         </button>
       </div>
@@ -614,43 +614,49 @@ watch(messageList, () => {
       </div>
     </div>
 
-    <!-- Input bar (Telegram-style) -->
-    <div class="flex items-end gap-2 px-2 py-2 bg-surface-base border-t border-border shrink-0">
-      <!-- Compose option buttons -->
-      <div class="flex items-center shrink-0">
-        <!-- Expiry timer toggle -->
+    <!-- Compose options menu (Telegram-style expandable) -->
+    <div v-if="showComposeMenu" class="px-2 pb-1.5 bg-surface-base border-t border-border animate-fade-in-up">
+      <div class="flex items-center gap-1 py-1">
         <button
           @click="expiryMinutes = expiryMinutes === 0 ? 5 : (EXPIRY_OPTIONS[(EXPIRY_OPTIONS.findIndex(o => o.minutes === expiryMinutes) + 1) % EXPIRY_OPTIONS.length].minutes)"
-          class="p-1.5 rounded-full transition-all duration-200"
-          :class="expiryMinutes > 0 ? 'text-warning bg-warning/10' : 'text-text-muted/40 hover:text-text-muted'"
-          :title="t('chat.expiringMessage')"
-          :aria-label="t('chat.expiringMessage')"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium transition-colors"
+          :class="expiryMinutes > 0 ? 'bg-warning/10 text-warning' : 'bg-surface-card text-text-secondary hover:bg-surface-elevated'"
         >
-          <Timer class="w-4 h-4" />
+          <TimerOff class="w-3.5 h-3.5" />
+          {{ expiryMinutes > 0 ? EXPIRY_OPTIONS.find(o => o.minutes === expiryMinutes)?.label : t('chat.expiringMessage') }}
         </button>
-
-        <!-- CW toggle -->
         <button
-          @click="cwEnabled = !cwEnabled"
-          class="p-1.5 rounded-full transition-all duration-200"
-          :class="cwEnabled ? 'text-warning bg-warning/10' : 'text-text-muted/40 hover:text-text-muted'"
-          :title="t('chat.addContentWarning')"
-          :aria-label="t('chat.addContentWarning')"
+          @click="cwEnabled = !cwEnabled; showComposeMenu = false"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium transition-colors"
+          :class="cwEnabled ? 'bg-warning/10 text-warning' : 'bg-surface-card text-text-secondary hover:bg-surface-elevated'"
         >
-          <ShieldAlert class="w-4 h-4" />
+          <EyeOff class="w-3.5 h-3.5" />
+          {{ t('chat.addContentWarning') }}
+        </button>
+        <button
+          v-if="canZap"
+          @click="showZapPicker = !showZapPicker; showComposeMenu = false"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium transition-colors"
+          :class="showZapPicker ? 'bg-warning/10 text-warning' : 'bg-surface-card text-text-secondary hover:bg-surface-elevated'"
+        >
+          <Zap class="w-3.5 h-3.5" />
+          {{ t('chat.zapHint') }}
         </button>
       </div>
+    </div>
 
-      <!-- Zap button -->
+    <!-- Input bar -->
+    <div class="flex items-end gap-1.5 px-2 py-2 bg-surface-base border-t border-border shrink-0">
+      <!-- Options menu toggle -->
       <button
-        v-if="canZap"
-        @click="showZapPicker = !showZapPicker"
-        class="p-2 rounded-full transition-all duration-200 shrink-0"
-        :class="showZapPicker ? 'bg-warning/15 text-warning' : 'hover:bg-surface-elevated text-text-muted'"
-        :title="t('chat.zapHint')"
-        :aria-label="t('chat.zapHint')"
+        @click="showComposeMenu = !showComposeMenu"
+        class="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-200"
+        :class="showComposeMenu || expiryMinutes > 0 || cwEnabled
+          ? 'bg-brand/10 text-brand rotate-45'
+          : 'text-text-muted hover:bg-surface-elevated'"
+        :aria-label="t('common.more')"
       >
-        <Zap class="w-5 h-5" />
+        <Plus class="w-5 h-5 transition-transform duration-200" />
       </button>
 
       <!-- Text input (pill shape) -->

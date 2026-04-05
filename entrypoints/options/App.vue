@@ -19,7 +19,7 @@ import AboutPage from '../../components/options/AboutPage.vue'
 import WalletPage from '../../components/options/WalletPage.vue'
 import MessagingPage from '../../components/options/MessagingPage.vue'
 import RelaySettings from '../../components/RelaySettings.vue'
-import { Zap } from 'lucide-vue-next'
+import { Loader2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 useTheme()
@@ -88,7 +88,7 @@ async function handleUnlock(password) {
     <!-- Loading -->
     <div v-if="lockLoading" class="flex items-center justify-center min-h-screen">
       <div class="text-center space-y-3 animate-fade-in">
-        <Zap class="w-8 h-8 text-brand mx-auto animate-pulse" />
+        <Loader2 class="w-8 h-8 text-brand mx-auto animate-spin" />
         <p class="text-sm text-text-muted">{{ t('common.loading') }}</p>
       </div>
     </div>

@@ -19,7 +19,7 @@ import { formatSats } from '../../lib/utils.js'
 import SatButtons from './SatButtons.vue'
 import {
   ArrowLeft, Copy, Check, Loader2, AlertTriangle,
-  QrCode, RefreshCw, ArrowLeftRight, ArrowDownLeft, Zap,
+  QrCode, RefreshCw, ArrowLeftRight, ArrowDownLeft, Wallet,
   ScanLine, Clipboard,
 } from 'lucide-vue-next'
 
@@ -338,7 +338,7 @@ onBeforeUnmount(() => {
         class="w-full py-3 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 font-bold btn-primary flex items-center justify-center gap-2"
       >
         <Loader2 v-if="creating" class="w-4 h-4 animate-spin" />
-        <Zap v-else class="w-4 h-4" />
+        <Wallet v-else class="w-4 h-4" />
         {{ creating ? t('wallet.creating') : t('wallet.createInvoice') }}
       </button>
 

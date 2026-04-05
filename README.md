@@ -36,6 +36,7 @@ Buho Jump is an open-source browser extension that brings **Nostr** and **Lightn
 
 **Wallet**
 - NWC, Cashu, and LNbits - three wallet types, one-click switching
+- NUTbits one-click wallet setup - connect a dedicated wallet instantly
 - Send and receive Bitcoin Lightning payments
 - WebLN provider for in-browser payments
 - Per-site spending budgets

@@ -26,7 +26,7 @@ import QrScanner from '../QrScanner.vue'
 import ErrorBanner from '../ErrorBanner.vue'
 import SatButtons from './SatButtons.vue'
 import {
-  ArrowLeft, ScanLine, Zap, ArrowUpRight, ArrowDownLeft, ArrowLeftRight,
+  ArrowLeft, ScanLine, Wallet, ArrowUpRight, ArrowDownLeft, ArrowLeftRight,
   Check, AlertTriangle, Loader2, AtSign, Store, Timer, Code,
 } from 'lucide-vue-next'
 
@@ -649,7 +649,7 @@ function reset() {
             <p class="text-sm font-extrabold truncate">{{ nostrProfile.name || 'Unknown' }}</p>
             <p v-if="nostrProfile.nip05" class="text-[11px] text-brand truncate">{{ nostrProfile.nip05 }}</p>
             <p v-if="nostrProfile.lud16" class="text-[10px] text-success truncate flex items-center gap-1 mt-0.5">
-              <Zap class="w-3 h-3" />
+              <Wallet class="w-3 h-3" />
               {{ nostrProfile.lud16 }}
             </p>
           </div>
@@ -957,7 +957,7 @@ function reset() {
           class="py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-50 transition-all duration-200 font-bold btn-primary flex items-center justify-center gap-1.5"
         >
           <Loader2 v-if="paying" class="w-4 h-4 animate-spin" />
-          <Zap v-else class="w-4 h-4" />
+          <Wallet v-else class="w-4 h-4" />
           {{ paying ? t('wallet.paying') : t('common.confirm') }}
         </button>
       </div>

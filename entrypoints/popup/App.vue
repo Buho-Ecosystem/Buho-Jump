@@ -5,6 +5,7 @@ import { useLock } from '../../composables/useLock.js'
 import { useAccounts } from '../../composables/useAccounts.js'
 import { useWallet } from '../../composables/useWallet.js'
 import { usePermissions } from '../../composables/usePermissions.js'
+import { useAllowanceSync } from '../../composables/useAllowanceSync.js'
 import { useTheme } from '../../composables/useTheme.js'
 import { useToast } from '../../composables/useToast.js'
 import { useFiat, CURRENCIES } from '../../composables/useFiat.js'
@@ -15,12 +16,14 @@ import { truncateKey } from '../../lib/utils.js'
 import { nip19, nip21 } from 'nostr-core'
 import QRCode from 'qrcode'
 import LockScreen from '../../components/LockScreen.vue'
+import WelcomeScreen from '../../components/WelcomeScreen.vue'
 import IdentityWizard from '../../components/IdentityWizard.vue'
 import LanguagePicker from '../../components/LanguagePicker.vue'
 import ToastContainer from '../../components/ToastContainer.vue'
 import SkeletonLoader from '../../components/SkeletonLoader.vue'
 import EmptyState from '../../components/EmptyState.vue'
 import SiteDetail from '../../components/SiteDetail.vue'
+import SiteContextBar from '../../components/SiteContextBar.vue'
 import BottomSheet from '../../components/BottomSheet.vue'
 import SlidePanel from '../../components/SlidePanel.vue'
 import BottomTabs from '../../components/popup/BottomTabs.vue'
@@ -50,7 +53,7 @@ import NotificationSettings from '../../components/NotificationSettings.vue'
 import OpenInBrowserButton from '../../components/OpenInBrowserButton.vue'
 import {
   Plus, ArrowLeft, Globe, Coins,
-  Copy, Check, Trash2, Zap, Sun, Moon,
+  Copy, Check, Trash2, Wallet as WalletIcon, Sun, Moon,
   Lock, ShieldCheck, ChevronDown, AlertTriangle,
   Settings, Loader2, CheckCircle, Languages, Radio, Bell,
   QrCode, PictureInPicture2, WifiOff, KeyRound, ShieldAlert,
@@ -69,6 +72,7 @@ const activeTab = ref('wallet')
 const showLanguagePicker = ref(false)
 const copied = ref(false)
 const dataLoaded = ref(false)
+const welcomeCompleted = ref(true) // assume true until checked (prevents flash)
 const lockError = ref('')
 const lockBusy = ref(false)
 
@@ -134,6 +138,7 @@ const { locked, passwordSet, loading: lockLoading, autoLockCountdown, setup: set
 const { accounts, activeAccount, nip46Status, load: loadAccounts, switchTo, remove, fetchProfile, loadNip46Status } = useAccounts()
 const { status: walletStatus, wallets: savedWallets, switching: walletSwitching, walletType, loadStatus: loadWallet, loadWallets, disconnect: disconnectWallet, switchWallet, rename: renameWallet, autoCreateWallet } = useWallet()
 const { policies: permissions, load: loadPermissions, revokeDomain } = usePermissions()
+const { getForHost: getAllowanceForHost } = useAllowanceSync()
 const { currentTheme, currentMode, themes, themeIds, setTheme, toggleMode } = useTheme()
 const toast = useToast()
 const { currency: fiatCurrency, setCurrency: setFiatCurrency } = useFiat()
@@ -178,6 +183,34 @@ const showCurrencyPicker = ref(false)
 function toggleIdentity() {
   activeTab.value = activeTab.value === 'identity' ? 'wallet' : 'identity'
 }
+
+// Site detail opened from wallet budget bar — stays on wallet tab via SlidePanel
+const showSiteBudgetPanel = ref(false)
+const siteBudgetHost = ref('')
+
+function navigateToSiteDetail(host) {
+  siteBudgetHost.value = host
+  showSiteBudgetPanel.value = true
+}
+
+function siteBudgetPill(host) {
+  const a = getAllowanceForHost(host)
+  if (!a) return null
+  if (a.enabled === false) return { label: `${a.budget.toLocaleString()} sats`, color: 'bg-surface-elevated text-text-muted', paused: true }
+  const ratio = a.spent / a.budget
+  const color = ratio > 0.9 ? 'bg-error/10 text-error' : ratio > 0.7 ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'
+  return { label: `${a.spent.toLocaleString()} / ${a.budget.toLocaleString()}`, color, paused: false }
+}
+
+// Sort sites: most recent budget activity first, then alphabetical
+const sortedPermissions = computed(() => {
+  return Object.entries(permissions.value).sort(([a], [b]) => {
+    const ta = getAllowanceForHost(a)?.updated_at || 0
+    const tb = getAllowanceForHost(b)?.updated_at || 0
+    if (ta !== tb) return tb - ta
+    return a.localeCompare(b)
+  })
+})
 
 const permissionCount = computed(() => Object.keys(permissions.value).length)
 
@@ -237,7 +270,12 @@ function onClickOutside(e) {
     showSettings.value = false
   }
 }
-onMounted(() => document.addEventListener('click', onClickOutside, true))
+onMounted(async () => {
+  document.addEventListener('click', onClickOutside, true)
+  // Check if welcome screen has been completed (first-run detection)
+  const stored = await chrome.storage.local.get('welcomeCompleted')
+  welcomeCompleted.value = !!stored.welcomeCompleted
+})
 onUnmounted(() => {
   document.removeEventListener('click', onClickOutside, true)
   if (nip46PollTimer) clearInterval(nip46PollTimer)
@@ -548,6 +586,11 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
       </div>
     </div>
 
+    <!-- Welcome screen (first run only — before password setup) -->
+    <template v-else-if="!passwordSet && !welcomeCompleted">
+      <WelcomeScreen @complete="welcomeCompleted = true" />
+    </template>
+
     <!-- Lock screen / Password setup -->
     <template v-else-if="locked || !passwordSet">
       <header class="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -855,7 +898,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               </div>
 
               <div v-if="permissionCount > 0" class="space-y-1">
-                <button v-for="(methods, host) in permissions" :key="host"
+                <button v-for="[host, methods] in sortedPermissions" :key="host"
                   @click="selectedSite = host"
                   class="w-full flex items-center justify-between px-3 py-2.5 bg-surface-card rounded-3xl border border-border shadow-sm hover:border-brand/30 transition-all duration-200 group">
                   <div class="flex items-center gap-2.5 min-w-0 flex-1">
@@ -864,7 +907,12 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                     </div>
                     <div class="min-w-0">
                       <span class="text-xs font-medium truncate block">{{ host }}</span>
-                      <span class="text-[9px] text-text-muted">{{ Object.keys(methods).length }} {{ t('sites.permissionsGranted') }}</span>
+                      <div class="flex items-center gap-1.5 mt-0.5">
+                        <span class="text-[9px] text-text-muted">{{ Object.keys(methods).length }} {{ t('sites.permissionsGranted') }}</span>
+                        <span v-if="siteBudgetPill(host)" class="text-[8px] px-1.5 py-px rounded-full font-semibold" :class="siteBudgetPill(host).color">
+                          {{ siteBudgetPill(host).paused ? t('sites.budgetPaused') : siteBudgetPill(host).label }}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <ChevronDown class="w-3 h-3 text-text-muted -rotate-90 group-hover:text-brand transition-all duration-200 shrink-0" />
@@ -967,11 +1015,11 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                 <!-- Profile metadata pills -->
                 <div v-if="profileData?.lud16 || profileData?.lud19 || profileLoading" class="flex items-center gap-2 flex-wrap">
                   <div v-if="profileData?.lud16" class="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
-                    <Zap class="w-2.5 h-2.5" />
+                    <WalletIcon class="w-2.5 h-2.5" />
                     <span class="truncate max-w-[180px]">{{ profileData.lud16 }}</span>
                   </div>
                   <div v-else-if="profileData?.lud19" class="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
-                    <Zap class="w-2.5 h-2.5" />
+                    <WalletIcon class="w-2.5 h-2.5" />
                     <span>LNURL set</span>
                   </div>
                   <div v-if="profileLoading && !profileData" class="skeleton-shimmer h-4 w-24 rounded-full" />
@@ -1215,6 +1263,11 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 
             <!-- Connected: sub-views -->
             <template v-else>
+              <SiteContextBar
+                v-if="walletView === 'home'"
+                @navigate-site="navigateToSiteDetail"
+                class="mx-4 mb-2"
+              />
               <WalletHome
                 v-if="walletView === 'home'"
                 @send="showSendPanel = true"
@@ -1304,6 +1357,17 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         <!-- Receive slide panel -->
         <SlidePanel :open="showReceivePanel" @close="showReceivePanel = false">
           <ReceiveFlow @back="showReceivePanel = false" @done="showReceivePanel = false" />
+        </SlidePanel>
+
+        <!-- Site budget panel (opened from SiteContextBar on wallet tab) -->
+        <SlidePanel :open="showSiteBudgetPanel" @close="showSiteBudgetPanel = false">
+          <SiteDetail
+            v-if="siteBudgetHost"
+            :host="siteBudgetHost"
+            :methods="permissions[siteBudgetHost] || {}"
+            @back="showSiteBudgetPanel = false"
+            @revoked="showSiteBudgetPanel = false; loadPermissions()"
+          />
         </SlidePanel>
 
       </template>

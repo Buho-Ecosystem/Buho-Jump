@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   modules: ['@wxt-dev/module-vue'],
+  manifestVersion: 3,
   vite: () => ({
     plugins: [tailwindcss()],
   }),

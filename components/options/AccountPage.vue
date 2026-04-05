@@ -13,7 +13,7 @@ import IdentityWizard from '../IdentityWizard.vue'
 import BottomSheet from '../BottomSheet.vue'
 import {
   Copy, Check, Trash2, User, Plus, Loader2, AlertTriangle,
-  Eye, EyeOff, Download, ShieldAlert, KeyRound, Zap,
+  Eye, EyeOff, Download, ShieldAlert, KeyRound, Wallet,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -227,11 +227,11 @@ function onWizardComplete() {
           <!-- Profile metadata pills -->
           <div v-if="profileData?.lud16 || profileData?.lud19 || (profileLoading && !profileData)" class="flex items-center gap-2 flex-wrap">
             <div v-if="profileData?.lud16" class="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
-              <Zap class="w-3 h-3" />
+              <Wallet class="w-3 h-3" />
               <span class="truncate max-w-[220px]">{{ profileData.lud16 }}</span>
             </div>
             <div v-else-if="profileData?.lud19" class="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
-              <Zap class="w-3 h-3" />
+              <Wallet class="w-3 h-3" />
               <span>LNURL set</span>
             </div>
             <div v-if="profileLoading && !profileData" class="skeleton-shimmer h-5 w-28 rounded-full" />

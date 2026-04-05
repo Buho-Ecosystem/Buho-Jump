@@ -2,6 +2,7 @@
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAccounts } from '../composables/useAccounts.js'
+import { useMessaging } from '../composables/useMessaging.js'
 import { truncateKey } from '../lib/utils.js'
 import { nip06 } from 'nostr-core'
 import {
@@ -16,6 +17,7 @@ const emit = defineEmits(['complete', 'cancel'])
 const { t } = useI18n()
 
 const { create, createWithMnemonic, importKey, importMnemonic, createRemote, connectRemote, startNostrConnect, cancelNostrConnect, loadNip46Status, nip46Status: nip46GlobalStatus, publishProfile, fetchProfile, load: loadAccounts, remove: removeAccount } = useAccounts()
+const { send: sendMsg } = useMessaging()
 
 // ── Wizard state ──
 const step = ref(1)
@@ -328,6 +330,26 @@ function skipPublish() {
 }
 
 function finish() {
+  // Publish NIP-65 relay list so other clients know where to reach us.
+  // Without this, senders don't know which relays to send DMs to.
+  // For new accounts: always publish (no existing list).
+  // For imports: only publish if no NIP-65 exists yet (don't overwrite).
+  // Fire-and-forget — don't block the user from entering the app.
+  if (createdAccount.value?.mode === 'local') {
+    const isImport = mode.value === 'import' || mode.value === 'recover'
+    sendMsg('GET_RELAY_CONFIG')
+      .then(async (config) => {
+        const relays = config?.account || []
+        if (relays.length === 0) return
+        if (isImport) {
+          // Check if imported account already has a NIP-65 on the network
+          const existing = await sendMsg('FETCH_NIP65').catch(() => null)
+          if (existing) return // don't overwrite
+        }
+        return sendMsg('PUBLISH_NIP65', { both: relays, read: [], write: [] })
+      })
+      .catch(() => { /* best effort */ })
+  }
   emit('complete')
 }
 

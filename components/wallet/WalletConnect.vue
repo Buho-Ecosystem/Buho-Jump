@@ -9,7 +9,7 @@ import { useWallet } from '../../composables/useWallet.js'
 import { useToast } from '../../composables/useToast.js'
 import QrScanner from '../QrScanner.vue'
 import {
-  Link, ScanLine, Loader2, ArrowLeft, Server, Eye, EyeOff, Zap,
+  Link, ScanLine, Loader2, ArrowLeft, Server, Eye, EyeOff, Wallet,
 } from 'lucide-vue-next'
 
 const emit = defineEmits(['back'])
@@ -134,7 +134,7 @@ function handleConnectNutbits() {
             <span class="text-sm font-bold block group-hover:text-brand transition-colors">NUTbits</span>
             <span class="text-[10px] text-text-muted leading-relaxed">{{ t('nutbits.connectDesc') }}</span>
           </div>
-          <Zap class="w-4 h-4 text-brand shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <Wallet class="w-4 h-4 text-brand shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
         </button>
 
         <!-- NWC option -->
