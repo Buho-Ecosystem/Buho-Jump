@@ -1,0 +1,2 @@
+[     173ms] [ERROR] Failed to load resource: net::ERR_SSL_PROTOCOL_ERROR @ https://umami.kaffeesats.net/buhostats.js:0
+[     413ms] [WARNING] Error while trying to use the following icon from the Manifest: https://raw.githubusercontent.com/DoktorShift/images/main/buho_logo.png (Resource size is not correct - typo in the Manifest?) @ https://home.mybuho.de/buhogo:0
