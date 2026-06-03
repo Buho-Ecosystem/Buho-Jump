@@ -13,7 +13,10 @@ export default defineConfig({
     },
   },
   manifest: ({ browser }) => ({
-    name: 'Buho Jump - Bitcoin Wallet for Lightning & Nostr',
+    // AMO caps the manifest name at 45 chars; Chromium allows the longer form.
+    name: browser === 'firefox'
+      ? 'Buho Jump - Bitcoin Lightning & Nostr Wallet'
+      : 'Buho Jump - Bitcoin Wallet for Lightning & Nostr',
     short_name: 'Buho Jump',
     description: 'Your Bitcoin Lightning wallet and companion for Nostr apps, social identity, encrypted messaging and instant payments.',
     version: '1.0.0',
