@@ -45,6 +45,12 @@ const messageIdSets = {}   // { [pubkey]: Set<id> } — for O(1) dedup
 const dirtyKeys = new Set() // pubkeys with unsaved changes
 let latestTimestamp = 0     // cached latest message timestamp across all conversations
 
+// Cap per-conversation history to bound memory + storage growth (matches groups' cap).
+const MAX_MESSAGES_PER_CONVERSATION = 500
+
+// Serializes concurrent init() calls so account switches don't clean up / re-subscribe over each other.
+let _initChain = Promise.resolve()
+
 // EOSE sync token — scoped per subscription to prevent race conditions.
 // When subscribe() is called, a new token replaces the old one. Old subscription
 // callbacks still reference their captured (abandoned) token, harmlessly.
@@ -160,7 +166,16 @@ export function useChat() {
     if (messageIdSets[pubkey].has(msg.id)) return
     messageIdSets[pubkey].add(msg.id)
 
-    messages.value[pubkey] = [...messages.value[pubkey], msg]
+    let next = [...messages.value[pubkey], msg]
+    // Cap per-conversation history — drop the oldest beyond the limit and keep
+    // the dedup set in sync so memory and chrome.storage don't grow unbounded.
+    if (next.length > MAX_MESSAGES_PER_CONVERSATION) {
+      next.sort((a, b) => a.created_at - b.created_at)
+      const dropped = next.slice(0, next.length - MAX_MESSAGES_PER_CONVERSATION)
+      for (const d of dropped) messageIdSets[pubkey]?.delete(d.id)
+      next = next.slice(next.length - MAX_MESSAGES_PER_CONVERSATION)
+    }
+    messages.value[pubkey] = next
     dirtyKeys.add(pubkey)
     if (msg.created_at > latestTimestamp) latestTimestamp = msg.created_at
     persistMessages()
@@ -233,12 +248,15 @@ export function useChat() {
         reactions.value = { ...reactions.value, [messageId]: [...existing, r] }
       }
     }
-    // Apply pending deletions (with author validation)
+    // Apply pending deletions (with author validation). Resolve the now-arrived
+    // target message so we can verify the deleter is actually its author.
+    const convPubkey = findMessageConversation(messageId)
+    const targetMsg = convPubkey ? (messages.value[convPubkey] || []).find(m => m.id === messageId) : null
     for (let i = pendingDeletions.length - 1; i >= 0; i--) {
       if (pendingDeletions[i].targetId === messageId) {
         const pending = pendingDeletions.splice(i, 1)[0]
-        // Validate: deletion sender must match message author
-        const authorPubkey = msg.sender === 'me' ? currentAccountPubkey.value : msg.sender
+        if (!targetMsg) continue
+        const authorPubkey = targetMsg.sender === 'me' ? currentAccountPubkey.value : targetMsg.sender
         if (pending.sender === authorPubkey) {
           deletedIds.value = { ...deletedIds.value, [messageId]: true }
         }
@@ -659,9 +677,17 @@ export function useChat() {
 
   /**
    * Initialize chat for the current active account.
-   * Safe to call multiple times — only reinits when account changes.
+   * Safe to call multiple times — concurrent calls are serialized (via _initChain)
+   * so a re-mount and an account switch can't clean up / re-subscribe over each other.
+   * Only reinits when the account actually changes.
    */
-  async function init() {
+  function init() {
+    const next = _initChain.catch(() => {}).then(() => _runInit())
+    _initChain = next
+    return next
+  }
+
+  async function _runInit() {
     try {
       error.value = null
       const account = await getActiveAccount()
