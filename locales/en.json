@@ -32,7 +32,6 @@
     "offline": "No internet connection",
     "open": "Open"
   },
-
   "errors": {
     "PERMISSION_DENIED": "Permission denied",
     "NO_SIGNER": "No signer available",
@@ -47,7 +46,6 @@
     "TIMEOUT": "Request timed out",
     "INSUFFICIENT_BALANCE": "Insufficient balance"
   },
-
   "welcome": {
     "headline": "Hey, nice to meet you",
     "subline": "Buho Jump lives in your browser. It helps you show up online, talk to people, and pay — all on your terms.",
@@ -63,7 +61,6 @@
     "createPassword": "Create my password",
     "noReset": "We can't reset this password. Only you know it."
   },
-
   "lock": {
     "createTitle": "Create a Password",
     "unlockTitle": "Welcome Back",
@@ -89,13 +86,11 @@
     "stayUnlocked": "Stay unlocked",
     "backupReminder": "Back up your account key to avoid losing access"
   },
-
   "tabs": {
     "account": "Account",
     "wallet": "Wallet",
     "chat": "Chat"
   },
-
   "settings": {
     "appearance": "Appearance",
     "lightMode": "Light mode",
@@ -122,7 +117,6 @@
     "popOutTitle": "Detach window",
     "popOutDesc": "Keep Buho open as a floating window you can drag anywhere. Browse freely without losing your wallet."
   },
-
   "relay": {
     "title": "Relay Settings",
     "warning": "Warning: Changing these settings can affect your core experience",
@@ -171,7 +165,6 @@
     "infoYes": "Yes",
     "infoNo": "No"
   },
-
   "account": {
     "activeDesc": "Active account — apps will use this profile",
     "appPermissions": "App permissions",
@@ -210,12 +203,10 @@
     "relayCount": "{count} relay | {count} relays",
     "noRelays": "No relays configured"
   },
-
   "wizard": {
     "addAccount": "Add an Account",
     "addAccountDesc": "Your account lets you log in to apps, post, and send messages — all without a central server.",
     "recommended": "Recommended",
-
     "modeNewTitle": "Create New Account",
     "modeNewDesc": "Generate a fresh key pair with a 12-word recovery phrase you can back up.",
     "modeImportTitle": "I Already Have an Account",
@@ -223,7 +214,6 @@
     "modeSignerTitle": "External Signer",
     "modeSignerDesc": "Your keys stay on a signer app (nsec.app, Amber, Primal). Most secure option.",
     "advancedOptions": "More options",
-
     "stepSetup": "Setup",
     "stepName": "Name",
     "stepImport": "Import",
@@ -231,14 +221,12 @@
     "stepBackup": "Backup",
     "stepProfile": "Profile",
     "stepDone": "Done",
-
     "chooseName": "Choose a Name",
     "chooseNameDesc": "Pick a name people will see when they interact with you. You can change it anytime.",
     "importAccount": "Import Your Account",
     "importAccountDesc": "Enter the backup key from your existing account to restore it here.",
     "connectSigner": "Connect Your Signer",
     "connectSignerDesc": "Paste the connection link from your signer app.",
-
     "displayName": "Display name",
     "namePlaceholder": "e.g. satoshi, alice, your_name",
     "nameHint": "This is how others see you. Use your real name, a nickname, or anything you like.",
@@ -258,11 +246,9 @@
     "copyUri": "Copy URI",
     "waitingForSigner": "Waiting for signer to connect…",
     "connectExpired": "Connection timed out — try again",
-
     "createAccount": "Create Account",
     "importAccountBtn": "Import Account",
     "connect": "Connect",
-
     "connectPreparing": "Preparing...",
     "connectConnecting": "Connecting to your signer...",
     "connectFetchingProfile": "Loading your profile...",
@@ -271,7 +257,6 @@
     "progressSecureConnection": "Setting up secure connection",
     "progressConnecting": "Connecting to your signer app",
     "progressLoadingProfile": "Loading your profile",
-
     "backupTitle": "Save Your Recovery Key",
     "backupDesc": "This is the only way to recover your account. If you lose it, no one can help — not even us.",
     "backupWarning": "Never share this with anyone — it controls your entire account",
@@ -280,7 +265,6 @@
     "downloadFile": "Download file",
     "backupConfirm": "I've saved my recovery key in a secure place",
     "backupConfirmHint": "Use a password manager (1Password, Bitwarden), encrypted notes, or write it down on paper and store it safely.",
-
     "profileTitle": "Your Profile",
     "profileDesc": "Review your profile info. You can update this anytime.",
     "completeProfile": "Complete Your Profile",
@@ -289,13 +273,11 @@
     "aboutPlaceholder": "Tell the world about yourself...",
     "saveProfile": "Save Profile",
     "saving": "Saving...",
-
     "connectedTitle": "Connected",
     "connectedDesc": "Your signer is linked and ready to use",
     "connectedBadge": "Live",
     "signerExplainer": "Your keys stay safely on the signer app. When an app needs to act as you, the request is sent to your signer for approval.",
     "howItWorks": "How it works:",
-
     "modeRecoverTitle": "Recover with Words",
     "modeRecoverDesc": "Restore your account using the 12 recovery words you saved.",
     "stepRecover": "Recover",
@@ -305,12 +287,10 @@
     "recoveryWords": "Recovery words",
     "recoveryWordsPlaceholder": "Enter your 12 words separated by spaces",
     "recoveryWordsHint": "Enter the words in the exact order you received them.",
-
     "mnemonicWarning": "Write these words down — they're the only way to recover your account",
     "copyWords": "Copy words",
     "backupMnemonicTitle": "Save Your Recovery Words",
     "backupMnemonicDesc": "These 12 words are the only way to recover your account. Write them down and keep them safe.",
-
     "doneTitle": "You're All Set",
     "doneDesc": "Your account is ready. Apps can now ask to use it — you'll always be asked first.",
     "profileSaved": "Profile saved successfully",
@@ -318,7 +298,6 @@
     "pinTitle": "Pin Buho Jump to your toolbar",
     "pinDesc": "Click the puzzle piece icon in your browser toolbar and pin Buho Jump for quick access."
   },
-
   "prompt": {
     "wantsAccess": "wants to access your account",
     "yourAccount": "Your Account",
@@ -340,20 +319,16 @@
     "allowAllExclude": "Payments always require your approval",
     "decideSeparately": "Decide per request",
     "decideSeparatelyDesc": "You'll be asked each time",
-
     "lockedTitle": "Unlock to continue",
     "lockedDesc": "Enter your password to continue.",
     "lockedRequestedBy": "Requested by",
     "showPassword": "Show",
     "hidePassword": "Hide",
-
     "httpWarning": "This site is not secure — your data could be intercepted",
-
     "permPublicLabel": "See your public profile",
     "permPublicWhat": "The app wants to know who you are — like showing your profile card.",
     "permPublicDetail": "This only shares your public info. It cannot post or act on your behalf.",
     "permPublicRisk": "Read only",
-
     "permSignLabel": "Post or act as you",
     "permSignWhat": "The app wants to publish something using your account — like a post, reaction, or action.",
     "permSignDetail": "This is like pressing \"send\". The content will be visible to others.",
@@ -361,32 +336,26 @@
     "httpAuth": "HTTP Authentication",
     "viewEvent": "View event data",
     "hideEvent": "Hide event data",
-
     "permEncryptLabel": "Encrypt a message",
     "permEncryptWhat": "The app wants to send a private message that only the recipient can read.",
     "permEncryptDetail": "The message will be encrypted before it's sent.",
     "permEncryptRisk": "Messaging",
-
     "permDecryptLabel": "Read a private message",
     "permDecryptWhat": "The app wants to open a private message that was sent to you.",
     "permDecryptDetail": "The decrypted message will be visible to the app.",
     "permDecryptRisk": "Messaging",
-
     "permWeblnLabel": "Connect your wallet",
     "permWeblnWhat": "The app wants to interact with your Lightning wallet — check balance and create invoices.",
     "permWeblnDetail": "This does not allow the app to send payments without your approval.",
     "permWeblnRisk": "Wallet access",
-
     "permWeblnPayLabel": "Send a payment",
     "permWeblnPayWhat": "The app wants to pay a Lightning invoice using your wallet.",
     "permWeblnPayDetail": "Sats will leave your wallet. Only approve if you trust this app and expected this payment.",
     "permWeblnPayRisk": "Sends sats",
-
     "permKeysendLabel": "Send a direct payment",
     "permKeysendWhat": "The app wants to send sats directly to a node — no invoice involved.",
     "permKeysendDetail": "Sats will leave your wallet immediately. Only approve if you trust this app.",
     "permKeysendRisk": "Sends sats",
-
     "payAmount": "Amount",
     "payAmountUnknown": "Unknown amount",
     "confirmPayment": "Confirm payment",
@@ -394,10 +363,8 @@
     "rememberBudget": "Set a spending budget",
     "rememberBudgetDesc": "Allow this site to withdraw funds without asking you again, up to the limit below.",
     "rememberBudgetHint": "When the budget runs out, payments will require your approval again.",
-
     "permDefaultWhat": "This app is requesting access to your account.",
     "permDefaultRisk": "Permission",
-
     "kindProfile": "Profile metadata",
     "kindNote": "Short text note",
     "kindContacts": "Contact list",
@@ -410,7 +377,6 @@
     "kindAppData": "App data",
     "kindGeneric": "Event type {kind}"
   },
-
   "wallet": {
     "balance": "Balance",
     "reconnecting": "Reconnecting…",
@@ -432,7 +398,6 @@
     "failedRefresh": "Failed to refresh",
     "walletConnected": "Wallet connected",
     "connectFailed": "Failed to connect wallet",
-
     "noWallet": "No wallet connected",
     "noWalletDesc": "Paste the connection link from your wallet app to enable payments.",
     "noWalletHomeDesc": "Connect a Lightning wallet to send and receive sats instantly.",
@@ -461,7 +426,6 @@
     "removeWallet": "Remove",
     "noWallets": "No wallets connected",
     "connectPrompt": "Connect Wallet",
-
     "sendTitle": "Send Payment",
     "sendResult": "Payment Result",
     "invoiceLabel": "Invoice or address",
@@ -499,7 +463,6 @@
     "hideInvoiceDetails": "Hide invoice details",
     "sendAnother": "Send another payment",
     "rateUnavailable": "Exchange rate unavailable — enter amount in sats instead",
-
     "qrFailed": "QR code generation failed",
     "receiveTitle": "Receive",
     "receiveHintCashu": "Create a Lightning invoice or redeem an ecash token",
@@ -512,12 +475,10 @@
     "creating": "Creating...",
     "requesting": "Requesting",
     "newInvoice": "New Invoice",
-
     "historyTitle": "Transaction History",
     "loadMore": "Load more",
     "noResults": "No transactions found",
     "noResultsHint": "Transactions will appear here once you send or receive payments",
-
     "detailTitle": "Transaction Details",
     "description": "Description",
     "noDescription": "No description",
@@ -526,7 +487,6 @@
     "feesNone": "No fees",
     "technicalDetails": "Technical details",
     "paymentHash": "Payment hash",
-
     "statusPending": "Pending",
     "statusExpired": "Expired",
     "statusFailed": "Failed",
@@ -539,7 +499,6 @@
     "filterSent": "Sent",
     "groupToday": "Today",
     "groupYesterday": "Yesterday",
-
     "merchantPayment": "Retail Payment",
     "merchantDetected": "Retail QR detected",
     "merchantPaying": "Paying at",
@@ -560,7 +519,6 @@
     "addressResolveFailed": "Could not resolve this address. Check it's correct and try again.",
     "lnurlFailed": "Could not complete this request. The service may be temporarily unavailable.",
     "connectFailedDetail": "Could not connect to wallet. Make sure your connection link is correct and not expired.",
-
     "withdrawTitle": "Claim Payment",
     "withdrawDesc": "Someone is sending you sats",
     "withdrawClaiming": "Claiming...",
@@ -570,11 +528,9 @@
     "withdrawFailed": "Could not claim this payment. The link may have expired or already been used.",
     "withdrawMin": "Min: {min} sats",
     "withdrawMax": "Max: {max} sats",
-
     "successActionMessage": "Message from sender",
     "successActionUrl": "Link from sender",
     "successActionSecret": "Secret message",
-
     "lightning": "Lightning",
     "token": "Token",
     "pasteToken": "Paste a payment token",
@@ -584,7 +540,6 @@
     "receivedSats": "{amount} sats received",
     "waitingForPayment": "Waiting for payment...",
     "ecashTokenDetected": "Payment token detected",
-
     "backupWallet": "Backup Wallet",
     "backupDesc": "Download an encrypted backup of your wallet.",
     "backupExport": "Download Backup",
@@ -597,13 +552,11 @@
     "backupImported": "Backup imported",
     "backupExported": "Backup downloaded",
     "backupWarning": "Anyone with this file can spend these funds. Store it safely.",
-
     "removeWalletWarning": "This will permanently delete all funds in this wallet. Make sure you have a backup.",
     "lightningReady": "Lightning-ready",
     "invoiceCopied": "Invoice copied",
     "fileTooLarge": "File too large (max 10 MB)"
   },
-
   "sites": {
     "title": "Site Details",
     "permissionsGranted": "permissions",
@@ -633,7 +586,6 @@
     },
     "revokeAll": "Revoke all access",
     "revokeAllConfirm": "Remove all permissions and budget for {host}?",
-
     "methodLabel_getPublicKey": "See public identity",
     "methodLabel_signEvent": "Sign posts & actions",
     "methodLabel_nip04_encrypt": "Encrypt messages",
@@ -643,7 +595,6 @@
     "methodLabel_weblnEnable": "Connect wallet",
     "methodLabel_weblnSendPayment": "Send payments"
   },
-
   "toast": {
     "accountReady": "Account ready",
     "switchedTo": "Switched to {name}",
@@ -655,7 +606,6 @@
     "failedRevoke": "Failed to remove access",
     "failedPublish": "Failed to save profile"
   },
-
   "chat": {
     "title": "Messages",
     "newChat": "New Chat",
@@ -737,114 +687,15 @@
     "searchNostr": "Search network",
     "searchingNostr": "Searching for people...",
     "nostrResults": "More results",
-    "filterAll": "All",
     "filterDms": "DMs",
-    "filterGroups": "Groups",
     "joinOrCreate": "Join or create a group"
   },
-
-  "group": {
-    "title": "Groups",
-    "createGroup": "Create Group",
-    "joinGroup": "Join Group",
-    "leaveGroup": "Leave Group",
-    "groupName": "Group name",
-    "groupNamePlaceholder": "e.g. Weekend Hikers",
-    "groupAbout": "Description",
-    "groupAboutPlaceholder": "What is this group about?",
-    "groupPicture": "Picture URL",
-    "openGroup": "Open",
-    "closedGroup": "Invite only",
-    "publicGroup": "Public",
-    "privateGroup": "Private",
-    "members": "{count} members",
-    "admins": "Admins",
-    "memberList": "Members",
-    "noGroups": "No groups yet",
-    "noGroupsDesc": "Join or create a group to start chatting with multiple people",
-    "joinExisting": "Join a Group",
-    "joinDesc": "Paste the invite link someone shared with you.",
-    "joinPlaceholder": "Paste group link here...",
-    "joinFormatHint": "Example: groups.example.com/my-group",
-    "createNew": "Create a Group",
-    "createDesc": "Start a new group on a community server. You'll be the admin.",
-    "serverPlaceholder": "groups.example.com",
-    "serverHint": "The server where your group will live",
-    "invalidRelay": "This doesn't look like a valid server address",
-    "checkingRelay": "Checking server...",
-    "relayOnline": "Server is online and reachable",
-    "relayUnreachable": "Server may be offline — you can still try",
-    "joining": "Joining...",
-    "creating": "Creating...",
-    "joinFailed": "Could not join this group. Check the address and try again.",
-    "leaveFailed": "Could not leave group. Try again.",
-    "leaveConfirm": "Leave this group?",
-    "leaveConfirmDesc": "You can rejoin later if the group is open.",
-    "sendFailed": "Message not sent. Try again.",
-    "initFailed": "Couldn't load groups. Check your connection or try reloading.",
-    "replyTo": "Replying to {name}",
-    "invitation": "Group invitation",
-    "invitationDesc": "{inviter} invited you to join",
-    "invitations": "{count} group invitations",
-    "accept": "Join",
-    "decline": "Decline",
-    "accepted": "Joined group",
-    "declined": "Invitation declined",
-    "copyInviteLink": "Copy invite link",
-    "linkCopied": "Invite link copied",
-    "previewGroup": "Preview group",
-    "keysUpdated": "Group security refreshed",
-    "owner": "Owner",
-    "encrypted": "End-to-end encrypted",
-    "rotatingKeys": "Securing group...",
-    "memberRemovedSecure": "Member removed. Only current members can read future messages.",
-    "muteGroup": "Mute notifications",
-    "unmuteGroup": "Unmute notifications",
-    "muted": "Notifications muted",
-    "unmuted": "Notifications unmuted",
-    "inviteUser": "Invite",
-    "inviteCount": "Invite {count}",
-    "usersInvited": "{count} members invited",
-    "inviteManualPlaceholder": "Name, user@domain.com, or paste an address",
-    "inviteUserDesc": "Select contacts or paste an address",
-    "removeUser": "Remove from group",
-    "editMetadata": "Edit group info",
-    "deleteMessage": "Delete message",
-    "adminActions": "Admin",
-    "adminActionFailed": "That action didn't go through. Try again.",
-    "groupInfo": "Group Info",
-    "messageSent": "Message sent",
-    "metadataUpdated": "Group info updated",
-    "userInvited": "Invitation sent",
-    "userRemoved": "User removed",
-    "permCanInvite": "Can invite members",
-    "permCanRemove": "Can remove members",
-    "permCanEdit": "Can edit group info",
-    "permCanDelete": "Can delete messages",
-    "permAdmin": "Full admin",
-    "chooseTypeDesc": "Choose the type of group you want to create or join",
-    "typePrivate": "Private Group",
-    "typePrivateDesc": "End-to-end encrypted. Only members can read messages. Best for close friends.",
-    "typeCommunity": "Community",
-    "typeCommunityDesc": "Large groups with moderators. Great for communities and teams.",
-    "typeChannel": "Open Channel",
-    "typeChannelDesc": "Public space where anyone can join and chat freely.",
-    "privateExplain": "Every message is end-to-end encrypted. Works best with up to 100 people. Security refreshes automatically when members change.",
-    "addMembers": "Add members",
-    "searchMembers": "Search contacts...",
-    "channelJoinDesc": "Paste the channel link to join a public conversation.",
-    "serverHintOptional": "Optional — we'll pick the best server for you",
-    "soleAdminWarning": "You're the only admin. If you leave, nobody can manage the group."
-  },
-
   "notifications": {
     "title": "Notifications",
     "desc": "Choose which browser notifications you'd like to receive. You can change these anytime.",
     "categories": "Categories",
     "dms": "Messages",
     "dmsDesc": "New encrypted messages from contacts",
-    "groups": "Group Messages",
-    "groupsDesc": "New messages in your groups and channels",
     "payments": "Payments",
     "paymentsDesc": "Incoming Lightning payments to your wallet",
     "schedule": "Schedule",
@@ -858,7 +709,6 @@
     "settingsLabel": "Notifications",
     "settingsDesc": "Manage browser alerts"
   },
-
   "options": {
     "openInTab": "Open in full tab",
     "sites": "Connected Sites",
@@ -897,7 +747,6 @@
     "messaging": "Messaging",
     "messagingDesc": "Conversations, groups, and contacts"
   },
-
   "qr": {
     "scanTitle": "Scan QR Code",
     "startingCamera": "Starting camera...",
@@ -909,7 +758,6 @@
     "cameraFailed": "Could not start the camera. Try uploading a QR code image instead.",
     "extensionHint": "Camera is not available in extension popups"
   },
-
   "cashu": {
     "mintTitle": "Cashu Mint",
     "mintDesc": "The mint holds your ecash balance and processes Lightning payments on your behalf.",
@@ -939,7 +787,6 @@
     "contact": "Contact",
     "supportedNuts": "Supported NUTs"
   },
-
   "nutbits": {
     "oneClick": "1-click",
     "connectDesc": "One-click dedicated wallet — fund it through NUTbits",

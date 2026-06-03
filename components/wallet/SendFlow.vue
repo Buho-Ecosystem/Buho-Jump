@@ -21,13 +21,13 @@ const { t } = useI18n()
 import { formatSats, detectPaymentInput } from '../../lib/utils.js'
 import { parseZARFromMetadata, getMerchantInitials } from '../../lib/merchantQR.js'
 import { fetchInvoice, lnurl as lnurlCore, parseSuccessAction, decryptAesSuccessAction } from 'nostr-core'
-import { fetchLnurlPayParams, fetchLnurlPayInvoice, executeLnurlPay, verifyLnurlPayment } from '../../lib/lnurl.js'
+import { fetchLnurlPayParams, fetchLnurlPayInvoice, fetchLnurlPayInvoiceMsat, executeLnurlPay, verifyLnurlPayment } from '../../lib/lnurl.js'
 import QrScanner from '../QrScanner.vue'
 import ErrorBanner from '../ErrorBanner.vue'
 import SatButtons from './SatButtons.vue'
 import {
   ArrowLeft, ScanLine, Wallet, ArrowUpRight, ArrowDownLeft, ArrowLeftRight,
-  Check, AlertTriangle, Loader2, AtSign, Store, Timer, Code,
+  Check, AlertTriangle, Loader2, AtSign, Store, Timer, Code, Zap,
 } from 'lucide-vue-next'
 
 const emit = defineEmits(['back', 'done'])
@@ -313,23 +313,22 @@ async function resolveMerchantPayment() {
       if (zarInfo.storeName) merchantStoreName.value = zarInfo.storeName
     }
 
-    // Use maxSendable for the payment amount — this is what CryptoQR expects
-    // to cover the full ZAR amount the merchant requires. Our own fiatToSats
-    // rate may differ from CryptoQR's rate, causing underpayment.
-    // When min === max it's a fixed-amount invoice; when min !== max, max
-    // represents the full ZAR amount converted by CryptoQR.
-    const amountToSend = params.maxSendable
-    merchantSats.value = amountToSend
+    // Pay the exact millisatoshi amount CryptoQR requires. Fixed-amount LNURL is
+    // rarely a whole number of sats, so rounding to sats and re-multiplying would
+    // fall outside the service's allowed range and the callback would reject the
+    // request (underpayment / "amount outside range"). Use the raw msat instead.
+    const amountMsat = params.maxSendableMsat
+    merchantSats.value = Math.ceil(amountMsat / 1000) // display + balance check (round up)
 
     // Check balance before proceeding
-    if (status.value?.balance != null && amountToSend > status.value.balance) {
+    if (status.value?.balance != null && merchantSats.value > status.value.balance) {
       payError.value = t('wallet.merchantInsufficientBalance')
       resolving.value = false
       return
     }
 
-    // Fetch the invoice from CryptoQR callback
-    const lnResult = await fetchLnurlPayInvoice(params, amountToSend)
+    // Fetch the invoice from CryptoQR callback (exact msat, no rounding)
+    const lnResult = await fetchLnurlPayInvoiceMsat(params, amountMsat)
     resolvedInvoice.value = lnResult.invoice
     pendingSuccessAction.value = lnResult.successAction || null
     pendingVerifyUrl.value = lnResult.verify || null

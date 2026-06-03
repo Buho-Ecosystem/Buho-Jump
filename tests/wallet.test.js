@@ -11,8 +11,9 @@ import {
 } from '../lib/wallet.js'
 
 const PW = 'wallet-test-pw-123'
-const NWC_URI_1 = 'nostr+walletconnect://pubkey1?relay=wss://relay.example.com&secret=abc123'
-const NWC_URI_2 = 'nostr+walletconnect://pubkey2?relay=wss://relay2.example.com&secret=def456'
+// Valid NWC URIs: 64-char hex pubkey host + secret + wss relay (passes addWallet validation)
+const NWC_URI_1 = 'nostr+walletconnect://' + 'a'.repeat(64) + '?relay=wss://relay.example.com&secret=' + 'b'.repeat(64)
+const NWC_URI_2 = 'nostr+walletconnect://' + 'c'.repeat(64) + '?relay=wss://relay2.example.com&secret=' + 'd'.repeat(64)
 
 beforeEach(() => {
   resetStorage()

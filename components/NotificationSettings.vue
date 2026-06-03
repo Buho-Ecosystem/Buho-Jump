@@ -6,14 +6,14 @@
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useNotifications } from '../composables/useNotifications.js'
-import { ArrowLeft, Bell, MessageSquare, Users, Wallet, MoonStar, Clock } from 'lucide-vue-next'
+import { ArrowLeft, Bell, MessageSquare, Wallet, MoonStar, Clock } from 'lucide-vue-next'
 
 const emit = defineEmits(['back'])
 
 const { t } = useI18n()
 const {
   settings, loaded, load,
-  toggleDms, toggleGroups, togglePayments,
+  toggleDms, togglePayments,
   toggleDnd, toggleQuietHours,
   setQuietStart, setQuietEnd,
 } = useNotifications()
@@ -66,32 +66,6 @@ onMounted(() => { load() })
             <span
               class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
               :class="settings.dms ? 'translate-x-4' : 'translate-x-0.5'"
-            />
-          </button>
-        </div>
-
-        <!-- Groups toggle -->
-        <div class="flex items-center justify-between px-3 py-2.5 bg-surface-card rounded-3xl border border-border shadow-sm">
-          <div class="flex items-center gap-2.5 min-w-0 flex-1">
-            <div class="w-8 h-8 rounded-lg bg-surface-elevated border border-border flex items-center justify-center shrink-0">
-              <Users class="w-3.5 h-3.5 text-text-muted" />
-            </div>
-            <div class="min-w-0">
-              <span class="text-xs font-medium block">{{ t('notifications.groups') }}</span>
-              <span class="text-[9px] text-text-muted">{{ t('notifications.groupsDesc') }}</span>
-            </div>
-          </div>
-          <button
-            @click="toggleGroups"
-            role="switch"
-            :aria-checked="settings.groups"
-            :aria-label="t('notifications.groups')"
-            class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0"
-            :class="settings.groups ? 'bg-brand' : 'bg-surface-elevated border border-border'"
-          >
-            <span
-              class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
-              :class="settings.groups ? 'translate-x-4' : 'translate-x-0.5'"
             />
           </button>
         </div>

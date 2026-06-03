@@ -31,13 +31,10 @@ import BottomTabs from '../../components/popup/BottomTabs.vue'
 import ChatHome from '../../components/chat/ChatHome.vue'
 import ChatThread from '../../components/chat/ChatThread.vue'
 import ContactPicker from '../../components/chat/ContactPicker.vue'
-import GroupThread from '../../components/chat/GroupThread.vue'
-import GroupCreate from '../../components/chat/GroupCreate.vue'
-import GroupInfo from '../../components/chat/GroupInfo.vue'
 import { useChat } from '../../composables/useChat.js'
 import { useOnline } from '../../composables/useOnline.js'
-import { useGroups } from '../../composables/useGroups.js'
 import { useContacts } from '../../composables/useContacts.js'
+import { useMuteList } from '../../composables/useMuteList.js'
 import { useRelays } from '../../composables/useRelays.js'
 // Wallet sub-views
 import WalletConnect from '../../components/wallet/WalletConnect.vue'
@@ -56,7 +53,7 @@ import {
   Copy, Check, Trash2, Wallet as WalletIcon, Sun, Moon,
   Lock, ShieldCheck, ChevronDown, AlertTriangle,
   Settings, Loader2, CheckCircle, Languages, Radio, Bell,
-  QrCode, PictureInPicture2, WifiOff, KeyRound, ShieldAlert,
+  QrCode, PictureInPicture2, WifiOff, KeyRound, ShieldAlert, User,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -143,8 +140,8 @@ const { currentTheme, currentMode, themes, themeIds, setTheme, toggleMode } = us
 const toast = useToast()
 const { currency: fiatCurrency, setCurrency: setFiatCurrency } = useFiat()
 const { switchAccount: switchChatAccount, unreadTotal: chatUnreadTotal } = useChat()
-const { switchAccount: switchGroupAccount, unreadTotal: groupUnreadTotal } = useGroups()
 const { resetContacts } = useContacts()
+const { reset: resetMuteList } = useMuteList()
 const { relayConfig, loadRelays } = useRelays()
 const { online } = useOnline()
 const {
@@ -161,15 +158,12 @@ const {
   selectedTx,
   chatView,
   chatPubkey,
-  chatGroupKey,
   resetForTabSwitch,
   resetForAccountSwitch,
   showTxDetail,
   closeTxDetail,
   openChatThread,
   closeChatThread,
-  openGroupThread,
-  closeGroupThread,
 } = usePopupState()
 const { highlightedIndex: currencyHighlight, onKeydown: onCurrencyKeydown, resetHighlight: resetCurrencyHighlight } = useListKeyboard({
   itemCount: () => CURRENCIES.length,
@@ -246,8 +240,8 @@ watch(() => activeAccount.value?.pubkey, (newPubkey, oldPubkey) => {
   if (oldPubkey && newPubkey !== oldPubkey) {
     resetForAccountSwitch()
     resetContacts()
+    resetMuteList()
     switchChatAccount()
-    switchGroupAccount()
 
     // Reload account-scoped relay config
     loadRelays()
@@ -1295,14 +1289,11 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
           <!-- ══ Chat Tab                               ══ -->
           <!-- ══════════════════════════════════════════════ -->
           <section v-else-if="activeTab === 'chat'"
-            class="flex flex-col flex-1 min-h-0"
-            :class="chatView === 'thread' || chatView === 'group-thread' ? '' : ''">
+            class="flex flex-col flex-1 min-h-0">
             <ChatHome
               v-if="chatView === 'home'"
               @open="openChatThread"
-              @open-group="openGroupThread"
               @new-chat="chatView = 'new'"
-              @new-group="chatView = 'group-create'"
               class="flex-1 min-h-0 pt-2"
             />
 
@@ -1318,26 +1309,6 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               @back="chatView = 'home'"
               @open="openChatThread"
             />
-
-            <GroupThread
-              v-else-if="chatView === 'group-thread' && chatGroupKey"
-              :group-key="chatGroupKey"
-              @back="closeGroupThread"
-              @info="chatView = 'group-info'"
-              class="flex-1 min-h-0"
-            />
-
-            <GroupCreate
-              v-else-if="chatView === 'group-create'"
-              @back="chatView = 'home'"
-              @joined="openGroupThread"
-            />
-
-            <GroupInfo
-              v-else-if="chatView === 'group-info' && chatGroupKey"
-              :group-key="chatGroupKey"
-              @back="chatView = 'group-thread'"
-            />
           </section>
 
           </div><!-- /scrollable content -->
@@ -1345,7 +1316,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         <!-- ═══ Bottom Tab Bar ═══ -->
         <BottomTabs
           :active-tab="activeTab"
-          :unread-count="chatUnreadTotal + groupUnreadTotal"
+          :unread-count="chatUnreadTotal"
           @update:active-tab="activeTab = $event"
         />
 

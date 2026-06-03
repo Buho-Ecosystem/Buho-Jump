@@ -1,14 +1,13 @@
 /**
  * Notification settings composable — reactive toggle state for the popup UI.
  *
- * Supports: DMs, groups, payments, DND, quiet hours.
+ * Supports: DMs, payments, DND, quiet hours.
  */
 
 import { ref } from 'vue'
 
 const DEFAULTS = {
   dms: true,
-  groups: true,
   payments: true,
   dnd: false,
   quietHours: false,
@@ -41,7 +40,6 @@ export function useNotifications() {
   }
 
   async function toggleDms() { return toggle('dms') }
-  async function toggleGroups() { return toggle('groups') }
   async function togglePayments() { return toggle('payments') }
   async function toggleDnd() { return toggle('dnd') }
   async function toggleQuietHours() { return toggle('quietHours') }
@@ -61,7 +59,6 @@ export function useNotifications() {
     loaded,
     load,
     toggleDms,
-    toggleGroups,
     togglePayments,
     toggleDnd,
     toggleQuietHours,

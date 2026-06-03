@@ -21,7 +21,6 @@ export function usePopupState() {
 
   const chatView = ref('home')
   const chatPubkey = ref(null)
-  const chatGroupKey = ref(null)
 
   function resetWalletState() {
     walletView.value = 'home'
@@ -35,7 +34,6 @@ export function usePopupState() {
   function resetChatState() {
     chatView.value = 'home'
     chatPubkey.value = null
-    chatGroupKey.value = null
   }
 
   function resetAccountOverlays() {
@@ -81,16 +79,6 @@ export function usePopupState() {
     chatView.value = 'home'
   }
 
-  function openGroupThread(groupKey) {
-    chatGroupKey.value = groupKey
-    chatView.value = 'group-thread'
-  }
-
-  function closeGroupThread() {
-    chatGroupKey.value = null
-    chatView.value = 'home'
-  }
-
   return {
     showWizard,
     showSettings,
@@ -106,7 +94,6 @@ export function usePopupState() {
     selectedTx,
     chatView,
     chatPubkey,
-    chatGroupKey,
     resetWalletState,
     resetChatState,
     resetAccountOverlays,
@@ -116,7 +103,5 @@ export function usePopupState() {
     closeTxDetail,
     openChatThread,
     closeChatThread,
-    openGroupThread,
-    closeGroupThread,
   }
 }

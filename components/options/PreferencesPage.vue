@@ -3,7 +3,7 @@
  * Preferences page — flat layout combining appearance, notifications, and security.
  * Grouped visually with section headers (Alby-style flat settings page).
  */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTheme } from '../../composables/useTheme.js'
 import { useLocale } from '../../composables/useLocale.js'
@@ -13,7 +13,7 @@ import { useLock } from '../../composables/useLock.js'
 import { useToast } from '../../composables/useToast.js'
 import LanguagePicker from '../LanguagePicker.vue'
 import {
-  Sun, Moon, Check, Languages, Coins, Bell, MessageSquare, Users,
+  Sun, Moon, Check, Languages, Coins, Bell, MessageSquare,
   Wallet, Lock, Clock, Eye, EyeOff, Loader2, KeyRound, MoonStar,
 } from 'lucide-vue-next'
 
@@ -23,7 +23,7 @@ const { locale, locales, switchLocale } = useLocale()
 const { currency: fiatCurrency, setCurrency: setFiatCurrency } = useFiat()
 const {
   settings: notifSettings, loaded: notifLoaded, load: loadNotif,
-  toggleDms, toggleGroups, togglePayments,
+  toggleDms, togglePayments,
   toggleDnd, toggleQuietHours, setQuietStart, setQuietEnd,
 } = useNotifications()
 const { lock, changePassword } = useLock()
@@ -226,25 +226,6 @@ function handleLock() {
               :class="notifSettings.dms ? 'bg-brand' : 'bg-surface-elevated border border-border'">
               <span class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
                 :class="notifSettings.dms ? 'translate-x-4' : 'translate-x-0.5'" />
-            </button>
-          </div>
-
-          <!-- Groups -->
-          <div class="flex items-center justify-between px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center">
-                <Users class="w-4 h-4 text-text-muted" />
-              </div>
-              <div>
-                <span class="text-sm font-medium block">{{ t('notifications.groups') }}</span>
-                <span class="text-[10px] text-text-muted">{{ t('notifications.groupsDesc') }}</span>
-              </div>
-            </div>
-            <button @click="toggleGroups" role="switch" :aria-checked="notifSettings.groups"
-              class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0"
-              :class="notifSettings.groups ? 'bg-brand' : 'bg-surface-elevated border border-border'">
-              <span class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
-                :class="notifSettings.groups ? 'translate-x-4' : 'translate-x-0.5'" />
             </button>
           </div>
 

@@ -2,11 +2,12 @@
 /**
  * Permission prompt — the gate between websites and the user's identity.
  *
- * Follows Alby-style patterns adapted for non-Nostr users:
- * - Site identity card always first (who is asking)
- * - Clear permission checklist (what they get)
- * - Three-tier actions: primary, secondary button, tertiary text link
- * - Unlock shows requesting site context + password toggle
+ * Minimal, trust-first layout:
+ * - Site identity first (who is asking) + plain-language intent
+ * - One permission summary with a risk dot; specifics behind "View details"
+ * - Two clear actions (Allow / Not now); granular choices behind "More options"
+ * - Payments always show the amount up front and never auto-approve
+ * - Unlock mode shows the requesting site + password entry
  */
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +17,7 @@ import { truncateKey } from '../../lib/utils.js'
 import {
   ShieldCheck, ShieldPlus, Globe, Fingerprint, FileSignature, Lock, Unlock,
   Check, X, Clock, KeyRound, Eye, EyeOff, AlertTriangle, ShieldOff,
-  Ban, Loader2, Wallet,
+  Ban, Loader2, Wallet, Zap, ChevronDown,
 } from 'lucide-vue-next'
 
 useTheme()
@@ -50,10 +51,11 @@ const PAYMENT_METHODS = ['weblnSendPayment', 'weblnKeysend']
 const rememberBudget = ref(false)
 const budgetAmount = ref('')
 
-// Favicon state
+// Favicon + disclosure state
 const faviconFailed = ref(false)
 const eventData = ref(null)
 const showEventData = ref(false)
+const showMore = ref(false)
 const siteTitle = ref('')
 const siteFavicon = ref('')
 
@@ -311,6 +313,10 @@ const accountModeBadge = computed(() => {
   return 'Extension'
 })
 
+// signEvent disclosure — only show the event toggle when there is event data
+const isSignEvent = computed(() => method.value === 'signEvent' && !!eventData.value)
+const isHttpAuth = computed(() => isSignEvent.value && eventData.value?.kind === 27235)
+
 // Unlock origin display
 const unlockOriginDisplay = computed(() => {
   if (!origin.value) return ''
@@ -411,26 +417,26 @@ async function submitUnlock() {
     </div>
 
     <!-- ════════════════════════════════════════════════════ -->
-    <!-- UNLOCK MODE                                        -->
+    <!-- UNLOCK MODE                                          -->
     <!-- ════════════════════════════════════════════════════ -->
     <template v-else-if="mode === 'unlock'">
-      <div class="flex-1 flex flex-col p-5 overflow-y-auto animate-fade-in-up">
+      <div class="flex-1 flex flex-col px-6 pt-6 pb-6 overflow-y-auto animate-fade-in-up">
 
         <!-- Lock icon + title -->
-        <div class="text-center space-y-3 pt-3 pb-4">
+        <div class="text-center space-y-3 pt-2 pb-5">
           <div class="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center mx-auto">
             <Lock class="w-7 h-7 text-brand" />
           </div>
           <div>
-            <h1 class="text-base font-extrabold">{{ t('prompt.lockedTitle') }}</h1>
-            <p class="text-[11px] text-text-muted mt-1 leading-relaxed">{{ t('prompt.lockedDesc') }}</p>
+            <h1 class="text-lg font-extrabold">{{ t('prompt.lockedTitle') }}</h1>
+            <p class="text-xs text-text-muted mt-1 leading-relaxed">{{ t('prompt.lockedDesc') }}</p>
           </div>
         </div>
 
         <!-- Requesting site context -->
         <div v-if="unlockOriginDisplay"
-          class="flex items-center gap-2.5 px-3 py-2 rounded-3xl bg-surface-card border border-border shadow-sm mb-4">
-          <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
+          class="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-surface-card border border-border mb-4">
+          <div class="w-9 h-9 rounded-xl bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
             <img
               v-if="unlockOriginFavicon && !unlockFaviconFailed"
               :src="unlockOriginFavicon"
@@ -438,16 +444,16 @@ async function submitUnlock() {
               class="w-5 h-5"
               alt=""
             />
-            <Globe v-else class="w-3.5 h-3.5 text-text-muted" />
+            <Globe v-else class="w-4 h-4 text-text-muted" />
           </div>
           <div class="min-w-0 flex-1">
-            <span class="text-[9px] text-text-muted font-medium uppercase tracking-wider">{{ t('prompt.lockedRequestedBy') }}</span>
-            <div class="text-[11px] font-semibold truncate">{{ unlockOriginDisplay }}</div>
+            <span class="text-[10px] text-text-muted font-medium uppercase tracking-wide">{{ t('prompt.lockedRequestedBy') }}</span>
+            <div class="text-xs font-semibold truncate">{{ unlockOriginDisplay }}</div>
           </div>
         </div>
 
         <!-- Password input with visibility toggle -->
-        <div class="space-y-1.5 mb-4">
+        <div class="space-y-2 mb-4">
           <div class="relative">
             <input
               v-model="unlockPassword"
@@ -455,7 +461,7 @@ async function submitUnlock() {
               :placeholder="t('lock.enterPassword')"
               autofocus
               @keydown.enter="submitUnlock"
-              class="w-full pl-4 pr-16 py-3 text-sm rounded-xl bg-surface-card border text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-brand/30 transition-all"
+              class="w-full pl-4 pr-14 py-3 text-sm rounded-xl bg-surface-card border text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-brand/30 transition-all"
               :class="unlockError ? 'border-error focus:border-error' : 'border-border focus:border-brand'"
             />
             <button
@@ -463,28 +469,26 @@ async function submitUnlock() {
               type="button"
               tabindex="-1"
               :aria-label="showPassword ? t('prompt.hidePassword') : t('prompt.showPassword')"
-              class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-elevated transition-all duration-200"
+              class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-elevated transition-all"
             >
-              <Eye v-if="!showPassword" class="w-3.5 h-3.5" />
-              <EyeOff v-else class="w-3.5 h-3.5" />
-              <span class="text-[9px] font-medium">{{ showPassword ? t('prompt.hidePassword') : t('prompt.showPassword') }}</span>
+              <Eye v-if="!showPassword" class="w-4 h-4" />
+              <EyeOff v-else class="w-4 h-4" />
             </button>
           </div>
-          <p v-if="unlockError" class="flex items-center gap-1 text-[11px] text-error font-medium px-1">
-            <AlertTriangle class="w-3 h-3 shrink-0" />
+          <p v-if="unlockError" class="flex items-center gap-1.5 text-[11px] text-error font-medium px-1">
+            <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
             {{ unlockError }}
           </p>
         </div>
 
-        <!-- Spacer -->
         <div class="flex-1 min-h-2" />
 
         <!-- Actions -->
-        <div class="space-y-2">
+        <div class="space-y-2.5">
           <button
             @click="submitUnlock"
             :disabled="!unlockPassword || unlockBusy"
-            class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all duration-200 btn-primary"
+            class="w-full flex items-center justify-center gap-2 py-3.5 text-sm rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all btn-primary"
           >
             <Loader2 v-if="unlockBusy" class="w-4 h-4 animate-spin" />
             <KeyRound v-else class="w-4 h-4" />
@@ -493,7 +497,7 @@ async function submitUnlock() {
           <button
             @click="closeWindow"
             :disabled="unlockBusy"
-            class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all duration-200"
+            class="w-full py-3 text-[13px] rounded-2xl text-text-muted font-semibold hover:bg-surface-card disabled:opacity-50 transition-all"
           >
             {{ t('common.cancel') }}
           </button>
@@ -503,14 +507,14 @@ async function submitUnlock() {
     </template>
 
     <!-- ════════════════════════════════════════════════════ -->
-    <!-- PERMISSION MODE                                    -->
+    <!-- PERMISSION MODE                                      -->
     <!-- ════════════════════════════════════════════════════ -->
     <template v-else>
-      <div class="flex-1 flex flex-col p-5 space-y-3 overflow-y-auto animate-fade-in-up">
+      <div class="flex-1 flex flex-col px-6 pt-5 pb-6 overflow-y-auto animate-fade-in-up">
 
-        <!-- ── Site identity card (Alby PublisherCard pattern) ── -->
-        <div class="flex items-center gap-3 stagger-1 animate-fade-in-up">
-          <div class="w-11 h-11 rounded-2xl border border-border flex items-center justify-center shrink-0 overflow-hidden"
+        <!-- ── Site identity ── -->
+        <div class="flex items-center gap-3.5">
+          <div class="w-12 h-12 rounded-2xl border border-border flex items-center justify-center shrink-0 overflow-hidden"
             :class="faviconFailed ? 'bg-brand text-surface-base' : 'bg-surface-elevated'">
             <img
               v-if="faviconUrl && !faviconFailed"
@@ -519,102 +523,96 @@ async function submitUnlock() {
               class="w-7 h-7"
               alt=""
             />
-            <span v-else class="text-sm font-bold">{{ hostInitial }}</span>
+            <span v-else class="text-base font-bold">{{ hostInitial }}</span>
           </div>
           <div class="min-w-0 flex-1">
-            <div v-if="siteTitle" class="text-sm font-extrabold truncate">{{ siteTitle }}</div>
-            <div class="text-[11px] font-semibold truncate" :class="siteTitle ? 'text-text-secondary' : 'text-sm font-extrabold'">{{ displayHost }}</div>
-            <div class="text-[10px] text-text-muted mt-0.5 truncate font-mono">{{ fullOrigin }}</div>
-            <div class="text-[11px] text-text-secondary mt-0.5 font-medium">{{ t('prompt.wantsAccess') }}</div>
+            <div class="text-[15px] font-extrabold truncate leading-tight">{{ siteTitle || displayHost }}</div>
+            <div class="text-xs text-text-secondary mt-0.5">{{ t('prompt.wantsAccess') }}</div>
           </div>
         </div>
+
+        <!-- Full origin (trust verification) -->
+        <div class="mt-2 text-[10px] text-text-muted font-mono truncate">{{ fullOrigin }}</div>
 
         <!-- HTTP warning -->
         <div v-if="isHttp"
-          class="flex items-center gap-2 px-3 py-2 rounded-lg bg-warning/8 border border-warning/20 stagger-2 animate-fade-in-up">
+          class="mt-2.5 flex items-center gap-2 px-3 py-2 rounded-xl bg-warning/8 border border-warning/20">
           <AlertTriangle class="w-3.5 h-3.5 text-warning shrink-0" />
-          <span class="text-[10px] text-warning font-medium">{{ t('prompt.httpWarning') }}</span>
+          <span class="text-[11px] text-warning font-medium">{{ t('prompt.httpWarning') }}</span>
         </div>
 
-        <!-- ── What the site wants ── -->
-        <div class="bg-surface-card rounded-3xl border border-border shadow-sm overflow-hidden stagger-2 animate-fade-in-up">
-          <!-- Permission header -->
-          <div class="px-4 py-3 flex items-start gap-3">
-            <div class="w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0 mt-0.5"
-              :class="riskBadge.class">
-              <component :is="permInfo.icon" class="w-[18px] h-[18px]" />
+        <!-- ── Permission summary ── -->
+        <div class="mt-5 rounded-2xl border border-border bg-surface-card overflow-hidden">
+          <div class="flex items-start gap-3 px-4 py-3.5">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" :class="riskBadge.class">
+              <component :is="permInfo.icon" class="w-5 h-5" />
             </div>
             <div class="min-w-0 flex-1">
-              <span class="text-[13px] font-extrabold leading-snug">{{ permInfo.label }}</span>
+              <div class="text-sm font-bold leading-snug">{{ permInfo.label }}</div>
               <p class="text-[11px] text-text-muted mt-1 leading-relaxed">{{ permInfo.what }}</p>
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2">
+                <span class="inline-flex items-center gap-1 text-[10px] font-semibold" :class="riskBadge.class.split(' ')[0]">
+                  <span class="w-1.5 h-1.5 rounded-full" :class="riskBadge.dot" />
+                  {{ permInfo.riskLabel }}
+                </span>
+                <span v-if="kindLabel"
+                  class="inline-flex items-center text-[9px] font-medium px-2 py-0.5 rounded-full bg-surface-elevated text-text-muted border border-border">
+                  {{ kindLabel }}
+                </span>
+              </div>
             </div>
-          </div>
-
-          <!-- Tags: risk + kind -->
-          <div class="px-4 pb-3 flex flex-wrap items-center gap-1.5">
-            <span class="inline-flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded-full border"
-              :class="riskBadge.class">
-              <span class="w-1 h-1 rounded-full" :class="riskBadge.dot" />
-              {{ permInfo.riskLabel }}
-            </span>
-            <span v-if="kindLabel"
-              class="inline-flex items-center text-[9px] font-medium px-2 py-0.5 rounded-full bg-surface-elevated text-text-muted border border-border">
-              {{ kindLabel }}
-            </span>
           </div>
 
           <!-- Payment amount (weblnSendPayment / weblnKeysend) -->
           <div v-if="isPayment" class="px-4 py-3 border-t border-border bg-surface-elevated/40">
             <div class="flex items-center justify-between">
-              <span class="text-[11px] text-text-muted font-medium">{{ t('prompt.payAmount') }}</span>
+              <span class="text-xs text-text-muted font-medium">{{ t('prompt.payAmount') }}</span>
               <div class="text-right">
-                <span class="text-base font-extrabold text-error">{{ paymentAmount ? paymentAmount.toLocaleString() + ' sats' : t('prompt.payAmountUnknown') }}</span>
-                <span v-if="paymentAmount && toFiat(paymentAmount)" class="block text-[10px] text-text-muted">≈ {{ toFiat(paymentAmount) }}</span>
+                <span class="text-lg font-extrabold">{{ paymentAmount ? paymentAmount.toLocaleString() + ' sats' : t('prompt.payAmountUnknown') }}</span>
+                <span v-if="paymentAmount && toFiat(paymentAmount)" class="block text-[11px] text-text-muted">≈ {{ toFiat(paymentAmount) }}</span>
               </div>
             </div>
-            <div v-if="paymentBudget" class="flex items-center justify-between mt-1.5 pt-1.5 border-t border-border/50">
-              <span class="text-[10px] text-text-muted">{{ t('prompt.budgetRemaining') }}</span>
+            <div v-if="paymentBudget" class="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+              <span class="text-[11px] text-text-muted">{{ t('prompt.budgetRemaining') }}</span>
               <span class="text-[11px] font-semibold" :class="paymentAmount && paymentBudget.remaining >= paymentAmount ? 'text-success' : 'text-warning'">
                 {{ paymentBudget.remaining.toLocaleString() }} / {{ paymentBudget.budget.toLocaleString() }} sats
               </span>
             </div>
           </div>
 
-          <!-- Detail footer -->
-          <div v-if="permInfo.detail" class="px-4 py-2.5 border-t border-border bg-surface-elevated/40">
-            <p class="text-[10px] text-text-muted leading-relaxed">{{ permInfo.detail }}</p>
-          </div>
-
-          <!-- NIP-98 HTTP Auth display (kind 27235) -->
-          <div v-if="eventData && method === 'signEvent' && eventData.kind === 27235" class="border-t border-border px-4 py-3 space-y-1.5">
-            <p class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">{{ t('prompt.httpAuth') }}</p>
-            <div class="bg-surface-base rounded-lg p-2.5 border border-border space-y-1">
-              <div class="flex items-center gap-2">
-                <span class="text-[9px] font-bold uppercase text-brand bg-brand/10 px-1.5 py-0.5 rounded">
-                  {{ eventData.tags?.find(t => t[0] === 'method')?.[1] || 'GET' }}
-                </span>
-                <span class="text-[10px] text-text-secondary font-mono truncate">
-                  {{ eventData.tags?.find(t => t[0] === 'u')?.[1] || '' }}
-                </span>
-              </div>
+          <!-- NIP-98 HTTP Auth — show target up front (security-relevant) -->
+          <div v-if="isHttpAuth" class="px-4 py-3 border-t border-border space-y-1.5">
+            <p class="text-[10px] text-text-muted font-semibold uppercase tracking-wide">{{ t('prompt.httpAuth') }}</p>
+            <div class="bg-surface-base rounded-lg p-2.5 border border-border flex items-center gap-2">
+              <span class="text-[9px] font-bold uppercase text-brand bg-brand/10 px-1.5 py-0.5 rounded shrink-0">
+                {{ eventData.tags?.find(tag => tag[0] === 'method')?.[1] || 'GET' }}
+              </span>
+              <span class="text-[10px] text-text-secondary font-mono truncate">
+                {{ eventData.tags?.find(tag => tag[0] === 'u')?.[1] || '' }}
+              </span>
             </div>
           </div>
 
-          <!-- Raw event data (signEvent only, non-HTTP-auth) -->
-          <div v-else-if="eventData && method === 'signEvent'" class="border-t border-border">
+          <!-- signEvent (non-HTTP-auth): raw event behind a toggle -->
+          <template v-else-if="isSignEvent">
             <button @click="showEventData = !showEventData"
-              class="w-full flex items-center gap-2 px-4 py-2 text-[10px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
-              <FileSignature class="w-3 h-3 shrink-0" />
-              {{ showEventData ? t('prompt.hideEvent') : t('prompt.viewEvent') }}
+              class="w-full flex items-center justify-between px-4 py-2.5 border-t border-border text-[11px] text-text-muted hover:text-text-secondary transition-all font-medium">
+              <span>{{ showEventData ? t('prompt.hideEvent') : t('prompt.viewEvent') }}</span>
+              <ChevronDown class="w-3.5 h-3.5 transition-transform" :class="showEventData ? 'rotate-180' : ''" />
             </button>
             <div v-if="showEventData" class="px-4 pb-3">
-              <pre class="text-[9px] leading-relaxed font-mono bg-surface-base rounded-lg p-3 max-h-[160px] overflow-auto border border-border text-text-secondary whitespace-pre-wrap break-all">{{ JSON.stringify(eventData, null, 2) }}</pre>
+              <pre class="text-[10px] leading-relaxed font-mono bg-surface-base rounded-lg p-3 max-h-[160px] overflow-auto border border-border text-text-secondary whitespace-pre-wrap break-all">{{ JSON.stringify(eventData, null, 2) }}</pre>
             </div>
+          </template>
+
+          <!-- Detail footer (non-event permissions) -->
+          <div v-else-if="permInfo.detail" class="px-4 py-2.5 border-t border-border bg-surface-elevated/40">
+            <p class="text-[10px] text-text-muted leading-relaxed">{{ permInfo.detail }}</p>
           </div>
         </div>
 
         <!-- ── Account identity ── -->
-        <div class="flex items-center gap-3 px-3 py-2.5 rounded-3xl bg-surface-card border border-border shadow-sm stagger-3 animate-fade-in-up">
+        <div class="mt-4 flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-surface-card border border-border">
           <div class="w-8 h-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
             :class="profilePicture ? '' : 'bg-brand text-surface-base'">
             <img v-if="profilePicture" :src="profilePicture" alt="" class="w-full h-full object-cover" />
@@ -623,197 +621,150 @@ async function submitUnlock() {
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-1.5">
               <span class="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
-              <span class="text-[11px] font-semibold truncate">{{ accountName || t('prompt.yourAccount') }}</span>
+              <span class="text-xs font-semibold truncate">{{ accountName || t('prompt.yourAccount') }}</span>
             </div>
-            <div v-if="accountNpub" class="text-[9px] text-text-muted font-mono mt-0.5 truncate">
-              {{ truncateKey(accountNpub, 12, 6) }}
+            <div v-if="accountNpub" class="text-[10px] text-text-muted font-mono mt-0.5 truncate">
+              {{ truncateKey(accountNpub, 10, 6) }}
             </div>
           </div>
-          <span class="text-[8px] px-1.5 py-0.5 rounded bg-surface-elevated text-text-muted font-semibold uppercase tracking-wider shrink-0">
+          <span class="text-[9px] px-2 py-0.5 rounded-md bg-surface-elevated text-text-muted font-semibold uppercase tracking-wide shrink-0">
             {{ accountModeBadge }}
           </span>
         </div>
 
-        <!-- Spacer -->
-        <div class="flex-1 min-h-1" />
+        <!-- Spacer pushes actions to the bottom -->
+        <div class="flex-1 min-h-5" />
 
         <!-- ════════════════════════════════════════════════ -->
-        <!-- FIRST VISIT — Permission checklist              -->
+        <!-- ACTIONS                                          -->
         <!-- ════════════════════════════════════════════════ -->
-        <div v-if="firstVisit" class="space-y-2 stagger-4 animate-fade-in-up">
+        <div class="space-y-2.5 stagger-4 animate-fade-in-up">
 
-          <!-- Connect button with permission checklist -->
-          <button
-            @click="respond('allow_all')"
-            :disabled="!!deciding"
-            class="w-full p-3.5 rounded-2xl bg-brand/8 border border-brand/20 hover:bg-brand/12 disabled:opacity-50 transition-all duration-200 text-left"
-          >
-            <div class="flex items-center gap-2 mb-2.5">
-              <ShieldPlus v-if="deciding !== 'allow_all'" class="w-4 h-4 text-brand shrink-0" />
-              <Loader2 v-else class="w-4 h-4 text-brand animate-spin shrink-0" />
-              <span class="text-[13px] font-extrabold text-brand">{{ t('prompt.allowAll') }}</span>
-              <span class="text-[7px] px-1.5 py-0.5 rounded-full bg-brand/15 text-brand font-bold uppercase tracking-wider ml-auto">{{ t('prompt.allowAllRecommended') }}</span>
-            </div>
-
-            <div class="text-[10px] text-text-muted mb-2 font-medium">{{ t('prompt.allowAllDesc') }}</div>
-
-            <!-- Permission checklist -->
-            <div class="space-y-1.5 pl-0.5">
-              <div class="flex items-center gap-2">
-                <Check class="w-3 h-3 text-success shrink-0" />
-                <span class="text-[10px] text-text-secondary">{{ t('prompt.allowAllCheck1') }}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <Check class="w-3 h-3 text-success shrink-0" />
-                <span class="text-[10px] text-text-secondary">{{ t('prompt.allowAllCheck2') }}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <Check class="w-3 h-3 text-success shrink-0" />
-                <span class="text-[10px] text-text-secondary">{{ t('prompt.allowAllCheck3') }}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <Check class="w-3 h-3 text-success shrink-0" />
-                <span class="text-[10px] text-text-secondary">{{ t('prompt.allowAllCheck4') }}</span>
-              </div>
-              <!-- Explicit payment exclusion -->
-              <div class="flex items-center gap-2 mt-1 pt-1 border-t border-border/50">
-                <ShieldCheck class="w-3 h-3 text-info shrink-0" />
-                <span class="text-[10px] text-info font-medium">{{ t('prompt.allowAllExclude') }}</span>
-              </div>
-            </div>
-          </button>
-
-          <!-- Decide per request -->
-          <button
-            @click="firstVisit = false"
-            :disabled="!!deciding"
-            class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all duration-200"
-          >
-            <ShieldCheck class="w-4 h-4 text-text-muted" />
-            {{ t('prompt.decideSeparately') }}
-          </button>
-
-          <!-- Block all (tertiary text link) -->
-          <button
-            @click="respond('deny_all')"
-            :disabled="!!deciding"
-            class="w-full flex items-center justify-center gap-1.5 py-2 text-[10px] text-text-muted hover:text-error transition-all duration-200 font-medium"
-          >
-            <Ban class="w-3 h-3" />
-            {{ t('prompt.blockSite') }}
-          </button>
-        </div>
-
-        <!-- ════════════════════════════════════════════════ -->
-        <!-- STANDARD — Per-request allow/deny               -->
-        <!-- ════════════════════════════════════════════════ -->
-        <template v-else>
-          <div class="space-y-2 stagger-4 animate-fade-in-up">
-
-            <!-- ── Payment prompt: budget checkbox + allow_once / deny ── -->
-            <template v-if="isPayment">
-
-              <!-- Budget checkbox (Alby BudgetControl pattern) -->
-              <div v-if="!paymentBudget" class="rounded-2xl border border-border bg-surface-card overflow-hidden transition-all duration-200">
-                <label class="flex items-center gap-3 px-3.5 py-2.5 cursor-pointer select-none hover:bg-surface-elevated/50 transition-colors">
+          <!-- ── Payment: budget opt-in + confirm / deny ── -->
+          <template v-if="isPayment">
+            <div v-if="!paymentBudget" class="rounded-2xl border border-border bg-surface-card overflow-hidden">
+              <label class="flex items-center gap-3 px-3.5 py-2.5 cursor-pointer select-none hover:bg-surface-elevated/50 transition-colors">
+                <input
+                  v-model="rememberBudget"
+                  type="checkbox"
+                  class="w-4 h-4 rounded border-border accent-[var(--brand-primary)]"
+                />
+                <div class="min-w-0 flex items-center gap-1.5">
+                  <Wallet class="w-3.5 h-3.5 text-text-muted shrink-0" />
+                  <span class="text-[11px] font-semibold text-text-secondary">{{ t('prompt.rememberBudget') }}</span>
+                </div>
+              </label>
+              <div v-if="rememberBudget" class="px-3.5 pb-3 pt-0.5 border-t border-border/50 animate-fade-in">
+                <div class="flex items-center gap-2">
                   <input
-                    v-model="rememberBudget"
-                    type="checkbox"
-                    class="w-4 h-4 rounded border-border text-brand focus:ring-brand/30 accent-[var(--brand-primary)]"
+                    v-model="budgetAmount"
+                    type="number"
+                    min="1"
+                    class="flex-1 bg-surface-elevated border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-brand transition-colors tabular-nums"
                   />
-                  <div class="min-w-0">
-                    <div class="flex items-center gap-1.5">
-                      <Wallet class="w-3.5 h-3.5 text-text-muted shrink-0" />
-                      <span class="text-[11px] font-semibold text-text-secondary">{{ t('prompt.rememberBudget') }}</span>
-                    </div>
-                    <p class="text-[9px] text-text-muted mt-0.5 leading-relaxed pl-5">{{ t('prompt.rememberBudgetDesc') }}</p>
-                  </div>
-                </label>
-                <!-- Budget amount input (revealed on check) -->
-                <div v-if="rememberBudget" class="px-3.5 pb-3 pt-0.5 border-t border-border/50 animate-fade-in">
-                  <div class="flex items-center gap-2">
-                    <input
-                      v-model="budgetAmount"
-                      type="number"
-                      min="1"
-                      class="flex-1 bg-surface-elevated border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-brand transition-colors tabular-nums"
-                    />
-                    <span class="text-[10px] text-text-muted font-semibold shrink-0">sats</span>
-                  </div>
-                  <div class="flex items-center justify-between mt-1 px-0.5">
-                    <p class="text-[9px] text-text-muted">{{ t('prompt.rememberBudgetHint') }}</p>
-                    <span v-if="budgetAmountFiat" class="text-[9px] text-text-muted tabular-nums">≈ {{ budgetAmountFiat }}</span>
-                  </div>
+                  <span class="text-[11px] text-text-muted font-semibold shrink-0">sats</span>
+                </div>
+                <div class="flex items-center justify-between mt-1 px-0.5">
+                  <p class="text-[10px] text-text-muted">{{ t('prompt.rememberBudgetHint') }}</p>
+                  <span v-if="budgetAmountFiat" class="text-[10px] text-text-muted tabular-nums shrink-0 ml-2">≈ {{ budgetAmountFiat }}</span>
                 </div>
               </div>
+            </div>
 
-              <button
-                @click="respond('allow_once')"
-                :disabled="!!deciding"
-                class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all duration-200 btn-primary"
-              >
-                <Wallet v-if="deciding !== 'allow_once'" class="w-4 h-4" />
-                <Loader2 v-else class="w-4 h-4 animate-spin" />
-                {{ t('prompt.confirmPayment') }}
+            <button
+              @click="respond('allow_once')"
+              :disabled="!!deciding"
+              class="w-full flex items-center justify-center gap-2 py-3.5 text-sm rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all btn-primary"
+            >
+              <Loader2 v-if="deciding === 'allow_once'" class="w-4 h-4 animate-spin" />
+              <Zap v-else class="w-4 h-4" />
+              {{ t('prompt.confirmPayment') }}
+            </button>
+            <button
+              @click="respond('deny_once')"
+              :disabled="!!deciding"
+              class="w-full py-3 text-[13px] rounded-2xl text-text-muted font-semibold hover:bg-surface-card disabled:opacity-50 transition-all"
+            >
+              {{ t('prompt.deny') }}
+            </button>
+          </template>
+
+          <!-- ── First visit: connect-all / not now / more ── -->
+          <template v-else-if="firstVisit">
+            <button
+              @click="respond('allow_all')"
+              :disabled="!!deciding"
+              class="w-full flex items-center justify-center gap-2 py-3.5 text-sm rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all btn-primary"
+            >
+              <Loader2 v-if="deciding === 'allow_all'" class="w-4 h-4 animate-spin" />
+              <ShieldPlus v-else class="w-4 h-4" />
+              {{ t('prompt.allowAll') }}
+            </button>
+            <p class="text-center text-[10px] text-text-muted px-2 leading-relaxed">{{ t('prompt.allowAllExclude') }}</p>
+            <button
+              @click="respond('deny_once')"
+              :disabled="!!deciding"
+              class="w-full py-3 text-[13px] rounded-2xl text-text-muted font-semibold hover:bg-surface-card disabled:opacity-50 transition-all"
+            >
+              {{ t('prompt.notNow') }}
+            </button>
+
+            <button @click="showMore = !showMore"
+              class="w-full flex items-center justify-center gap-1 py-1.5 text-[11px] text-text-muted hover:text-text-secondary transition-all font-medium">
+              {{ t('common.more') }}
+              <ChevronDown class="w-3 h-3 transition-transform" :class="showMore ? 'rotate-180' : ''" />
+            </button>
+            <div v-if="showMore" class="flex items-center justify-center gap-2 animate-fade-in">
+              <button @click="respond('allow_always')" :disabled="!!deciding"
+                class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-success hover:bg-success/8 transition-all font-medium disabled:opacity-50">
+                <Check class="w-3.5 h-3.5" /> {{ t('prompt.allowAlways') }}
               </button>
-
-              <button
-                @click="respond('deny_once')"
-                :disabled="!!deciding"
-                class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all duration-200"
-              >
-                <X v-if="deciding !== 'deny_once'" class="w-4 h-4" />
-                <Loader2 v-else class="w-4 h-4 animate-spin" />
-                {{ t('prompt.deny') }}
+              <span class="text-border text-[10px]">|</span>
+              <button @click="respond('deny_all')" :disabled="!!deciding"
+                class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-error hover:bg-error/8 transition-all font-medium disabled:opacity-50">
+                <Ban class="w-3.5 h-3.5" /> {{ t('prompt.blockSite') }}
               </button>
-            </template>
+            </div>
+          </template>
 
-            <!-- ── Standard permission prompt ── -->
-            <template v-else>
-              <button
-                @click="respond('allow_always')"
-                :disabled="!!deciding"
-                class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all duration-200 btn-primary"
-              >
-                <Check v-if="deciding !== 'allow_always'" class="w-4 h-4" />
-                <Loader2 v-else class="w-4 h-4 animate-spin" />
-                {{ t('prompt.allowAlways') }}
+          <!-- ── Standard: allow / not now / more ── -->
+          <template v-else>
+            <button
+              @click="respond('allow_always')"
+              :disabled="!!deciding"
+              class="w-full flex items-center justify-center gap-2 py-3.5 text-sm rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all btn-primary"
+            >
+              <Loader2 v-if="deciding === 'allow_always'" class="w-4 h-4 animate-spin" />
+              <Check v-else class="w-4 h-4" />
+              {{ t('prompt.allow') }}
+            </button>
+            <button
+              @click="respond('deny_once')"
+              :disabled="!!deciding"
+              class="w-full py-3 text-[13px] rounded-2xl text-text-muted font-semibold hover:bg-surface-card disabled:opacity-50 transition-all"
+            >
+              {{ t('prompt.notNow') }}
+            </button>
+
+            <button @click="showMore = !showMore"
+              class="w-full flex items-center justify-center gap-1 py-1.5 text-[11px] text-text-muted hover:text-text-secondary transition-all font-medium">
+              {{ t('common.more') }}
+              <ChevronDown class="w-3 h-3 transition-transform" :class="showMore ? 'rotate-180' : ''" />
+            </button>
+            <div v-if="showMore" class="flex items-center justify-center gap-2 animate-fade-in">
+              <button @click="respond('allow_once')" :disabled="!!deciding"
+                class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-success hover:bg-success/8 transition-all font-medium disabled:opacity-50">
+                <Clock class="w-3.5 h-3.5" /> {{ t('prompt.allowOnce') }}
               </button>
-
-              <button
-                @click="respond('deny_once')"
-                :disabled="!!deciding"
-                class="w-full flex items-center justify-center gap-2 py-3 text-[13px] rounded-2xl bg-surface-card border border-border text-text-secondary font-semibold hover:bg-surface-elevated disabled:opacity-50 transition-all duration-200"
-              >
-                <X v-if="deciding !== 'deny_once'" class="w-4 h-4" />
-                <Loader2 v-else class="w-4 h-4 animate-spin" />
-                {{ t('prompt.notNow') }}
+              <span class="text-border text-[10px]">|</span>
+              <button @click="respond('deny_always')" :disabled="!!deciding"
+                class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-error hover:bg-error/8 transition-all font-medium disabled:opacity-50">
+                <ShieldOff class="w-3.5 h-3.5" /> {{ t('prompt.denyAlways') }}
               </button>
+            </div>
+          </template>
 
-              <!-- Granular options row -->
-              <div class="flex items-center justify-center gap-3 pt-1">
-                <button
-                  @click="respond('allow_once')"
-                  :disabled="!!deciding"
-                  class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-success hover:bg-success/8 transition-all duration-200 font-medium disabled:opacity-50"
-                >
-                  <Clock class="w-3.5 h-3.5" />
-                  {{ t('prompt.allowOnce') }}
-                </button>
-                <span class="text-border text-[10px]">|</span>
-                <button
-                  @click="respond('deny_always')"
-                  :disabled="!!deciding"
-                  class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-error hover:bg-error/8 transition-all duration-200 font-medium disabled:opacity-50"
-                >
-                  <ShieldOff class="w-3.5 h-3.5" />
-                  {{ t('prompt.denyAlways') }}
-                </button>
-              </div>
-            </template>
-
-          </div>
-        </template>
+        </div>
 
       </div>
     </template>
