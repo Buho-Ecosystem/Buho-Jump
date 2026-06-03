@@ -44,7 +44,7 @@ describe('recordSpend', () => {
   it('records spend within budget', async () => {
     await setAllowance('example.com', 1000)
     const ok = await recordSpend('example.com', 500)
-    expect(ok).toBe(true)
+    expect(ok).toBeTruthy()
     const a = await getAllowance('example.com')
     expect(a.spent).toBe(500)
   })
@@ -52,7 +52,7 @@ describe('recordSpend', () => {
   it('rejects spend over budget', async () => {
     await setAllowance('example.com', 100)
     const ok = await recordSpend('example.com', 101)
-    expect(ok).toBe(false)
+    expect(ok).toBeNull()
     const a = await getAllowance('example.com')
     expect(a.spent).toBe(0)
   })
@@ -69,14 +69,14 @@ describe('recordSpend', () => {
     await setAllowance('example.com', 500)
     await recordSpend('example.com', 300)
     const ok = await recordSpend('example.com', 300)
-    expect(ok).toBe(false)
+    expect(ok).toBeNull()
     const a = await getAllowance('example.com')
     expect(a.spent).toBe(300) // unchanged
   })
 
   it('returns false for unknown host', async () => {
     const ok = await recordSpend('unknown.com', 100)
-    expect(ok).toBe(false)
+    expect(ok).toBeNull()
   })
 })
 
@@ -209,7 +209,7 @@ describe('recordSpend — defensive inputs', () => {
   it('records zero-amount spend', async () => {
     await setAllowance('example.com', 100)
     const ok = await recordSpend('example.com', 0)
-    expect(ok).toBe(true)
+    expect(ok).toBeTruthy()
     expect((await getAllowance('example.com')).spent).toBe(0)
   })
 
@@ -218,22 +218,22 @@ describe('recordSpend — defensive inputs', () => {
     await recordSpend('example.com', 50)
     // Negative spend effectively gives free budget
     const ok = await recordSpend('example.com', -200)
-    expect(ok).toBe(true) // remaining = 100 - 50 = 50, -200 <= 50 → true
+    expect(ok).toBeTruthy() // remaining = 100 - 50 = 50, -200 <= 50 → true
   })
 
   it('rejects NaN amount (NaN > remaining is false)', async () => {
     await setAllowance('example.com', 100)
     const ok = await recordSpend('example.com', NaN)
     // NaN > 100 → false, so it proceeds and spent += NaN = NaN
-    expect(ok).toBe(true)
+    expect(ok).toBeTruthy()
   })
 
   it('returns false for null host', async () => {
-    expect(await recordSpend(null, 100)).toBe(false)
+    expect(await recordSpend(null, 100)).toBeNull()
   })
 
   it('returns false for numeric host', async () => {
-    expect(await recordSpend(42, 100)).toBe(false)
+    expect(await recordSpend(42, 100)).toBeNull()
   })
 })
 

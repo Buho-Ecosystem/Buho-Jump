@@ -8,6 +8,8 @@ import {
 
 // All wallet operations require a password for encryption
 const PW = 'test-password-123'
+// Valid NWC URI: 64-char hex pubkey host + secret + wss relay (passes addWallet validation)
+const NWC_URI = 'nostr+walletconnect://' + 'a'.repeat(64) + '?relay=wss://relay.test&secret=' + 'b'.repeat(64)
 
 beforeEach(() => {
   resetStorage()
@@ -16,7 +18,7 @@ beforeEach(() => {
 describe('wallet storage — multi-type', () => {
   describe('addWallet (NWC)', () => {
     it('creates an NWC wallet and sets it active', async () => {
-      const id = await addWallet('nostr+walletconnect://relay?secret=abc', 'My NWC', PW)
+      const id = await addWallet(NWC_URI, 'My NWC', PW)
       expect(id).toBeTruthy()
       const active = await getActiveWallet(PW)
       expect(active.type).toBe('nwc')
@@ -61,7 +63,7 @@ describe('wallet storage — multi-type', () => {
 
   describe('multi-wallet management', () => {
     it('supports all three wallet types coexisting', async () => {
-      await addWallet('nostr+walletconnect://r?s=1', 'NWC', PW)
+      await addWallet(NWC_URI, 'NWC', PW)
       await addCashuWallet('Cashu', ['https://mint.com'], PW)
       await addLnbitsWallet('https://lb.com', 'key', 'w1', 'LNbits', PW)
 
@@ -72,7 +74,7 @@ describe('wallet storage — multi-type', () => {
     })
 
     it('last added wallet becomes active', async () => {
-      await addWallet('nostr+walletconnect://r?s=1', 'First', PW)
+      await addWallet(NWC_URI, 'First', PW)
       await addLnbitsWallet('https://lb.com', 'key', 'w1', 'Second', PW)
       const active = await getActiveWallet(PW)
       expect(active.name).toBe('Second')
@@ -80,7 +82,7 @@ describe('wallet storage — multi-type', () => {
     })
 
     it('switching between types works', async () => {
-      const nwcId = await addWallet('nostr+walletconnect://r?s=1', 'NWC', PW)
+      const nwcId = await addWallet(NWC_URI, 'NWC', PW)
       await addLnbitsWallet('https://lb.com', 'key', 'w1', 'LNbits', PW)
 
       await setActiveWallet(nwcId, PW)
@@ -91,7 +93,7 @@ describe('wallet storage — multi-type', () => {
 
   describe('hasActiveWallet', () => {
     it('returns true for NWC wallet', async () => {
-      await addWallet('nostr+walletconnect://r?s=1', 'W', PW)
+      await addWallet(NWC_URI, 'W', PW)
       expect(await hasActiveWallet(PW)).toBe(true)
     })
 
@@ -112,7 +114,7 @@ describe('wallet storage — multi-type', () => {
 
   describe('removeWallet', () => {
     it('activates next wallet after removal', async () => {
-      const first = await addWallet('nostr+walletconnect://r?s=1', 'First', PW)
+      const first = await addWallet(NWC_URI, 'First', PW)
       await addLnbitsWallet('https://lb.com', 'key', 'w1', 'Second', PW)
 
       // Second is active, remove it
