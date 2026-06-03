@@ -83,7 +83,7 @@ import { getPool, setAuthHandler } from '../lib/relayPool.js'
 import { connectBunker, createNostrConnectURI, awaitNostrConnect, parseConnectionURI } from '../lib/nip46-bridge.js'
 import { openPromptWindow } from '../lib/browser/capabilities.js'
 import { buildNutbitsDeepLink, getCallbackUrl, rotateCallbackToken } from '../lib/nutbits.js'
-import { notifyDm, notifyPayment, notifyGroup, notifyBudgetSpend, setupNotificationClickHandler } from '../lib/notifications.js'
+import { notifyDm, notifyPayment, notifyBudgetSpend, setupNotificationClickHandler } from '../lib/notifications.js'
 import { startNotificationPoller } from '../lib/notificationPoller.js'
 import { saveSession, getSession, clearSession } from '../lib/session.js'
 import { performAccountSwitch } from '../lib/accountSwitch.js'
@@ -201,8 +201,9 @@ async function requestPermission(host, method, kind, eventData, meta) {
       `/prompt.html?requestId=${requestId}&host=${encodeURIComponent(host)}&method=${encodeURIComponent(method)}&kind=${kind ?? ''}&firstVisit=${firstVisit}&siteTitle=${encodeURIComponent(siteTitle)}&siteFavicon=${encodeURIComponent(siteFavicon)}`
     )
 
-    // Dynamic sizing: taller for complex prompts
-    const promptHeight = firstVisit ? 720 : (method === 'signEvent' || method === 'weblnSendPayment') ? 640 : 520
+    // Dynamic sizing: taller for prompts that reveal extra context (event data, payment + budget)
+    const isTallPrompt = method === 'signEvent' || PAYMENT_METHODS.includes(method)
+    const promptHeight = isTallPrompt ? 600 : firstVisit ? 560 : 520
     openPromptWindow(url, { width: 420, height: promptHeight }).then((win) => {
       requestCoordinator.attachWindowClose(requestId, win, false)
     })
@@ -705,8 +706,9 @@ async function handleWeblnKeysend(params, sender) {
 
 async function walletKeysend(destination, amountSats, customRecords) {
   const wType = await getActiveWalletType()
-  if (wType === 'cashu') {
-    throw new Error('Keysend is not supported with Cashu wallets')
+  if (wType !== 'nwc') {
+    // Cashu and LNbits backends don't support spontaneous keysend payments.
+    throw new Error('Keysend is only supported with NWC wallets')
   }
   const nwc = await ensureNWC()
   // Convert WebLN customRecords (string keys → int, string values) to NWC tlv_records
@@ -1862,11 +1864,6 @@ export default defineBackground(() => {
           case 'NOTIFY_DM': {
             const { senderName, preview, messageId } = params?.[0] || {}
             await notifyDm(senderName, preview, messageId)
-            return { result: { ok: true } }
-          }
-          case 'NOTIFY_GROUP': {
-            const { groupName, senderName, preview, messageId } = params?.[0] || {}
-            await notifyGroup(groupName, senderName, preview, messageId)
             return { result: { ok: true } }
           }
           case 'NOTIFY_PAYMENT': {

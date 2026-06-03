@@ -41,8 +41,7 @@ describe('usePopupState', () => {
     state.showNotificationSettings.value = true
     state.selectedSite.value = 'example.com'
     state.showSettings.value = true
-    state.chatView.value = 'group-thread'
-    state.chatGroupKey.value = 'grp'
+    state.chatView.value = 'thread'
 
     state.resetForAccountSwitch()
 
@@ -51,6 +50,5 @@ describe('usePopupState', () => {
     expect(state.selectedSite.value).toBeNull()
     expect(state.showSettings.value).toBe(false)
     expect(state.chatView.value).toBe('home')
-    expect(state.chatGroupKey.value).toBeNull()
   })
 })

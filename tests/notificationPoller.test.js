@@ -21,14 +21,13 @@ vi.mock('../lib/relays.js', () => ({
 }))
 vi.mock('../lib/notifications.js', () => ({
   notifyDm: vi.fn(),
-  notifyGroup: vi.fn(),
 }))
 vi.mock('../lib/logger.js', () => ({
   log: { warn: vi.fn(), debug: vi.fn(), info: vi.fn(), error: vi.fn() },
 }))
 
 import { startNotificationPoller } from '../lib/notificationPoller.js'
-import { notifyDm, notifyGroup } from '../lib/notifications.js'
+import { notifyDm } from '../lib/notifications.js'
 
 beforeEach(() => {
   resetStorage()
@@ -61,7 +60,6 @@ describe('startNotificationPoller', () => {
     await listener({ name: 'buho-notif-poll' })
     // No notifications should fire
     expect(notifyDm).not.toHaveBeenCalled()
-    expect(notifyGroup).not.toHaveBeenCalled()
   })
 
   it('ignores alarms with wrong name', async () => {

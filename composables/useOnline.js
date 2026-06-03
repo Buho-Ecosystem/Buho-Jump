@@ -4,7 +4,7 @@
  * Uses navigator.onLine + online/offline events. This covers the
  * device-level network state (WiFi off, airplane mode, etc.).
  * Relay-specific failures are handled separately by error refs
- * in useChat, useGroups, and useContacts.
+ * in useChat and useContacts.
  */
 
 import { ref, onMounted, onBeforeUnmount } from 'vue'

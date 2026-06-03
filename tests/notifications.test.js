@@ -13,7 +13,7 @@ import { resetStorage } from './setup.js'
 // and advance timers past the throttle window (3s) between tests.
 
 import {
-  notifyDm, notifyGroup, notifyPayment,
+  notifyDm, notifyPayment,
   getNotificationSettings, setNotificationSettings,
   setupNotificationClickHandler, _resetForTesting,
 } from '../lib/notifications.js'
@@ -34,7 +34,6 @@ describe('settings', () => {
   it('returns defaults when nothing stored', async () => {
     const s = await getNotificationSettings()
     expect(s.dms).toBe(true)
-    expect(s.groups).toBe(true)
     expect(s.payments).toBe(true)
     expect(s.dnd).toBe(false)
     expect(s.quietHours).toBe(false)
@@ -55,12 +54,6 @@ describe('category toggles', () => {
     expect(chrome.notifications.create).not.toHaveBeenCalled()
   })
 
-  it('notifyGroup respects groups: false', async () => {
-    await setNotificationSettings({ dms: true, groups: false, payments: true })
-    await notifyGroup('Test Group', 'Bob', 'hello', 'cat-grp-off')
-    expect(chrome.notifications.create).not.toHaveBeenCalled()
-  })
-
   it('notifyPayment respects payments: false', async () => {
     await setNotificationSettings({ dms: true, groups: true, payments: false })
     await notifyPayment(1000, 'cat-pay-off')
@@ -72,8 +65,6 @@ describe('DND silencing', () => {
   it('blocks all notifications when DND is on', async () => {
     await setNotificationSettings({ dms: true, groups: true, payments: true, dnd: true })
     await notifyDm('Alice', 'hello', 'dnd-1')
-    vitest.advanceTimersByTime(5000)
-    await notifyGroup('Group', 'Bob', 'hey', 'dnd-2')
     vitest.advanceTimersByTime(5000)
     await notifyPayment(500, 'dnd-3')
     expect(chrome.notifications.create).not.toHaveBeenCalled()
@@ -181,19 +172,6 @@ describe('notification format', () => {
         type: 'basic',
         title: 'Alice',
         message: 'Hey there!',
-      })
-    )
-  })
-
-  it('group notification includes sender in message', async () => {
-    vitest.advanceTimersByTime(5000)
-    await notifyGroup('Dev Chat', 'Bob', 'check this out', 'fmt-grp')
-    expect(chrome.notifications.create).toHaveBeenCalledWith(
-      'group-fmt-grp',
-      expect.objectContaining({
-        type: 'basic',
-        title: 'Dev Chat',
-        message: expect.stringContaining('Bob'),
       })
     )
   })
