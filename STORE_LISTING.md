@@ -1,18 +1,18 @@
-# Store Listing — Buho Jump
+# Store Listing - Buho Jump
 
 ## Short Description (132 chars max)
 Your Bitcoin Lightning wallet and companion for Nostr apps, social identity, encrypted messaging and instant payments.
 
 ## Detailed Description (Chrome Web Store + Firefox AMO)
 
-Buho Jump is your all-in-one Nostr companion for the browser. Manage your digital identity, send Bitcoin Lightning payments, and chat with end-to-end encryption — all from a single extension.
+Buho Jump is your all-in-one Nostr companion for the browser. Manage your digital identity, send Bitcoin Lightning payments, and chat with end-to-end encryption - all from a single extension.
 
 **Identity & Key Management**
 - Create or import Nostr accounts (nsec, mnemonic seed phrase)
 - Connect remote signers like Amber via NIP-46 (QR scan or paste)
-- NIP-07 provider — sign in to any Nostr web app seamlessly
+- NIP-07 provider - sign in to any Nostr web app seamlessly
 - Multiple accounts with easy switching
-- Per-site permission control — you decide who gets access
+- Per-site permission control - you decide who gets access
 
 **Lightning Wallet**
 - Three wallet types: NWC (Alby Hub, Coinos, Minibits), Cashu (ecash), and LNbits
@@ -21,11 +21,10 @@ Buho Jump is your all-in-one Nostr companion for the browser. Manage your digita
 - WebLN provider for in-browser payments
 - Budget controls and spending allowances per site
 - Fiat conversion with 19 currencies
-- Shop online with Bitcoin in South Africa — works with MoneyBadger-supported stores via SnapScan, Zapper, and Scan to Pay
+- Shop online with Bitcoin in South Africa - works with MoneyBadger-supported stores via SnapScan, Zapper, and Scan to Pay
 
 **Encrypted Messaging**
 - Private 1:1 chats with NIP-17 end-to-end encryption
-- Group chats: Private groups, relay communities (NIP-29), and open channels (NIP-28)
 - Contact search via follow list, NIP-05, or Nostr relay search
 - Zap friends directly from the chat
 
@@ -37,7 +36,7 @@ Buho Jump is your all-in-one Nostr companion for the browser. Manage your digita
 - Fully open source (AGPL-3.0 License)
 
 **Built with nostr-core**
-20 Nostr protocol implementations (NIP-02, 04, 05, 06, 07, 11, 17, 19, 24, 28, 29, 42, 44, 46, 47, 50, 51, 57, 59, 65) — all powered by nostr-core.
+20 Nostr protocol implementations (NIP-02, 04, 05, 06, 07, 11, 17, 19, 24, 28, 29, 42, 44, 46, 47, 50, 51, 57, 59, 65) - all powered by nostr-core.
 
 ---
 
@@ -57,7 +56,7 @@ nostr, bitcoin, lightning, wallet, nip-07, webln, encrypted messaging, privacy, 
 | `windows` (Chrome only) | Display permission approval prompts in a popup window when websites request access to your Nostr identity or Lightning wallet. |
 | `notifications` | Show browser notifications for incoming encrypted messages and Lightning payments. |
 | `alarms` | Power the optional auto-lock security timer that locks the extension after inactivity. |
-| Content script on all URLs | Inject the NIP-07 (window.nostr) and WebLN (window.webln) provider APIs so Nostr and Lightning web apps can interact with the extension. The content script only bridges messages — it does not read or modify page content. |
+| Content script on all URLs | Inject the NIP-07 (window.nostr) and WebLN (window.webln) provider APIs so Nostr and Lightning web apps can interact with the extension. The content script only bridges messages - it does not read or modify page content. |
 
 ## Privacy Declarations (Chrome Dashboard)
 
@@ -92,11 +91,10 @@ nostr, bitcoin, lightning, wallet, nip-07, webln, encrypted messaging, privacy, 
 
 ## Screenshots Needed (1280x800 px)
 
-1. **Lock screen** — clean password entry with Buho Jump branding
-2. **Identity card** — profile with NIP-05, pubkey, connected sites
-3. **Wallet home** — balance card with send/receive + recent transactions
-4. **Chat view** — conversation list with DMs and groups
-5. **Group chat** — group thread with multi-sender bubbles
+1. **Lock screen** - clean password entry with Buho Jump branding
+2. **Identity card** - profile with NIP-05, pubkey, connected sites
+3. **Wallet home** - balance card with send/receive + recent transactions
+4. **Chat view** - conversation list with DMs
 
 ## Promotional Tile (440x280 px)
 Buho Jump logo + tagline: "Your Nostr Identity & Lightning Wallet"

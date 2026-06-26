@@ -27,7 +27,7 @@ If you prefer email, reach out to the maintainers listed in the [README](README.
 | Wallet connections (NWC) | Encrypted at rest with the same method |
 | Direct messages | End-to-end encrypted (NIP-17 gift wraps with NIP-44) |
 | Session state | In-memory only (`chrome.storage.session`), cleared on browser close |
-| Master password | Never stored — only a verification hash is kept |
+| Master password | Never stored - only a verification hash is kept |
 
 ---
 
@@ -35,7 +35,7 @@ If you prefer email, reach out to the maintainers listed in the [README](README.
 
 - No analytics or telemetry
 - No browsing history
-- No data sent to our servers — we don't operate servers
+- No data sent to our servers - we don't operate servers
 - No remote code execution
 - No third-party trackers or ad networks
 
@@ -44,7 +44,7 @@ If you prefer email, reach out to the maintainers listed in the [README](README.
 ## Architecture boundaries
 
 - **Content script** bridges messages between web pages and the background service worker. It does not read or modify page content.
-- **Permission prompts** appear in a separate browser window — web pages cannot interact with or dismiss them.
+- **Permission prompts** appear in a separate browser window - web pages cannot interact with or dismiss them.
 - **Web pages** never receive your private key. Signing happens in the background service worker and only the signed result is returned.
 
 ---

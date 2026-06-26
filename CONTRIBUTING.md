@@ -1,6 +1,6 @@
 # Contributing to Buho Jump
 
-Thanks for your interest! You don't need to be a developer to contribute — some of the most valuable work happens outside of code.
+Thanks for your interest! You don't need to be a developer to contribute - some of the most valuable work happens outside of code.
 
 ---
 
@@ -30,7 +30,7 @@ Found something confusing in the docs? A missing step? A better way to explain s
 - Help answer questions from other users in issues or on Nostr
 
 ### Design and UX feedback
-If you spot something that looks off, feels clunky, or could be clearer — open an issue describing the experience. Screenshots or screen recordings are incredibly helpful.
+If you spot something that looks off, feels clunky, or could be clearer - open an issue describing the experience. Screenshots or screen recordings are incredibly helpful.
 
 ### Suggest features
 Have an idea? Open an issue and describe:
@@ -64,7 +64,7 @@ Then go to `chrome://extensions`, enable **Developer mode**, click **Load unpack
 ```bash
 npm run dev:firefox
 ```
-Then go to `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, and select any file in `.output/firefox-mv2`.
+Then go to `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, and select the `manifest.json` file in `.output/firefox-mv3`.
 
 > [!TIP]
 > Dev mode watches for changes and reloads automatically. Just save your file and the extension updates.
@@ -74,14 +74,14 @@ Then go to `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-o
 | Command | Output |
 |---------|--------|
 | `npm run build` | `.output/chrome-mv3` |
-| `npx wxt build --browser firefox` | `.output/firefox-mv2` |
+| `npm run build:firefox` | `.output/firefox-mv3` |
 
 ### Code style
 
 - **Vue 3** with `<script setup>` and Composition API
-- **Tailwind CSS v4** — use semantic token classes (`bg-surface-card`, `text-text-primary`), never hardcode colors
-- **i18n** — all user-facing strings go in `locales/en.json`, use `t('key')` in templates
-- Keep files focused — one component, one concern
+- **Tailwind CSS v4** - use semantic token classes (`bg-surface-card`, `text-text-primary`), never hardcode colors
+- **i18n** - all user-facing strings go in `locales/en.json`, use `t('key')` in templates
+- Keep files focused - one component, one concern
 - Simple and readable wins over clever abstractions
 
 ### Pull requests

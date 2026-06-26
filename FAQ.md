@@ -2,7 +2,7 @@
 
 ## What is Buho Jump?
 
-A browser extension that combines **Nostr identity**, **encrypted messaging**, and **Bitcoin Lightning payments** in one place. It works as a signer, chat client, and wallet — directly in your browser toolbar.
+A browser extension that combines **Nostr identity**, **encrypted messaging**, and **Bitcoin Lightning payments** in one place. It works as a signer, chat client, and wallet - directly in your browser toolbar.
 
 ---
 
@@ -12,7 +12,6 @@ A browser extension that combines **Nostr identity**, **encrypted messaging**, a
 - **Connect remote signers** like Amber (NIP-46)
 - **Send and receive Bitcoin** via Lightning
 - **Chat privately** with end-to-end encryption
-- **Join group chats** — private groups, relay communities, and open channels
 - **Manage multiple accounts** and wallets
 
 ---
@@ -33,7 +32,7 @@ You can add multiple wallets and switch between them.
 
 ## Can I shop online with Bitcoin?
 
-Yes — if you're in South Africa, Buho Jump works with [MoneyBadger-supported online stores](https://www.moneybadger.co.za/stores). At checkout, the extension detects payment QR codes from SnapScan, Zapper, and Scan to Pay, converts them to Lightning payments, and lets you pay in Bitcoin from your connected wallet.
+Yes - if you're in South Africa, Buho Jump works with [MoneyBadger-supported online stores](https://www.moneybadger.co.za/stores). At checkout, the extension detects payment QR codes from SnapScan, Zapper, and Scan to Pay, converts them to Lightning payments, and lets you pay in Bitcoin from your connected wallet.
 
 ---
 
@@ -41,7 +40,7 @@ Yes — if you're in South Africa, Buho Jump works with [MoneyBadger-supported o
 
 When a website requests a Lightning payment, Buho Jump asks for your approval. If you trust the site and don't want to be asked every time, you can set a **spending budget**.
 
-A budget lets the site withdraw funds automatically — up to the limit you set. Once the budget runs out, payments go back to requiring your approval.
+A budget lets the site withdraw funds automatically - up to the limit you set. Once the budget runs out, payments go back to requiring your approval.
 
 You can pause, adjust, or remove a budget at any time from the site detail view in the popup or the Connected Sites page in settings.
 
@@ -77,24 +76,14 @@ Yes. Import your existing `nsec` or hex private key, or switch to NIP-46 remote 
 
 ---
 
-## How does group chat work?
-
-Buho Jump supports three types of group messaging:
-
-- **Private groups** — invite-only, end-to-end encrypted
-- **Relay communities** (NIP-29) — moderated groups hosted on a relay
-- **Open channels** (NIP-28) — public chat rooms
-
----
-
 ## How do I report a bug?
 
 Open an [issue on GitHub](https://github.com/Buho-Ecosystem/Buho-Jump/issues) with what you expected, what happened, and your browser name/version.
 
 ## How do I report a security issue?
 
-See [SECURITY.md](SECURITY.md) — please don't open public issues for vulnerabilities.
+See [SECURITY.md](SECURITY.md) - please don't open public issues for vulnerabilities.
 
 ## How can I help?
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) — code, translations, and bug reports are all welcome.
+See [CONTRIBUTING.md](CONTRIBUTING.md) - code, translations, and bug reports are all welcome.

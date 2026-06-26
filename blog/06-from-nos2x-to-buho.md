@@ -10,7 +10,7 @@ Here's how to move to Buho Jump without losing anything.
 
 ### Step 1: Export your key from nos2x
 
-Open nos2x settings. Copy your nsec (starts with `nsec1`). If you only have the hex private key, that works too — Buho Jump accepts both formats.
+Open nos2x settings. Copy your nsec (starts with `nsec1`). If you only have the hex private key, that works too - Buho Jump accepts both formats.
 
 **Important:** Do this in a private window or make sure no one's watching your screen. This is your identity.
 
@@ -18,7 +18,7 @@ Open nos2x settings. Copy your nsec (starts with `nsec1`). If you only have the 
 
 Grab it from the Chrome Web Store (or Firefox Add-ons, or load it as an unpacked extension if you're that kind of person).
 
-On first launch, you'll set a master password. This encrypts everything in the extension. Pick something strong — there's no reset.
+On first launch, you'll set a master password. This encrypts everything in the extension. Pick something strong - there's no reset.
 
 ### Step 3: Import your key
 
@@ -28,7 +28,7 @@ Your pubkey is the same. Your identity is the same. Every Nostr client will see 
 
 ### Step 4: Disable nos2x
 
-Both extensions inject `window.nostr`. They'll conflict. Disable nos2x in `chrome://extensions` — don't uninstall it yet, just in case. Once you've confirmed everything works in Buho Jump, you can remove it.
+Both extensions inject `window.nostr`. They'll conflict. Disable nos2x in `chrome://extensions` - don't uninstall it yet, just in case. Once you've confirmed everything works in Buho Jump, you can remove it.
 
 ### What you gain
 
@@ -36,9 +36,9 @@ Here's the stuff you couldn't do before:
 
 **A wallet.** Connect any NWC wallet and pay Lightning invoices directly from the extension. Auto-approve small payments with per-site budgets.
 
-**Chat.** Send and receive encrypted DMs without leaving the extension. NIP-17 gift wraps for real privacy. Group messaging. Reactions. Replies.
+**Chat.** Send and receive encrypted DMs without leaving the extension. NIP-17 gift wraps for real privacy. Reactions. Replies.
 
-**Better permissions.** nos2x is allow/deny. Buho Jump is per-method — a site can read your pubkey but not sign events. Or sign kind 1 notes but not kind 4 DMs. You decide.
+**Better permissions.** nos2x is allow/deny. Buho Jump is per-method - a site can read your pubkey but not sign events. Or sign kind 1 notes but not kind 4 DMs. You decide.
 
 **Fiat conversion.** See your balance in your local currency. 19 currencies supported.
 
@@ -50,9 +50,9 @@ Here's the stuff you couldn't do before:
 
 ### What stays the same
 
-- `window.nostr` API — same interface, same NIP-07 spec
-- Your pubkey, npub, nprofile — all identical
-- Relay list — configure in Buho Jump's settings, or publish via NIP-65
+- `window.nostr` API - same interface, same NIP-07 spec
+- Your pubkey, npub, nprofile - all identical
+- Relay list - configure in Buho Jump's settings, or publish via NIP-65
 - Any Nostr client that worked with nos2x will work with Buho Jump
 
 ### The one thing to check

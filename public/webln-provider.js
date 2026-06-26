@@ -7,7 +7,10 @@
 ;(function () {
   var EVENT_REQ = 'webln-request'
   var RESPONSE_TYPE = 'webln-response'
-  var TIMEOUT_MS = 60000
+  // Generous: a locked request prompts the user to unlock AND then approve, two
+  // sequential interactions in separate windows. Too short and the page rejects
+  // mid-flow even though the extension is still waiting on the user.
+  var TIMEOUT_MS = 180000
 
   function send(method, params) {
     return new Promise(function (resolve, reject) {

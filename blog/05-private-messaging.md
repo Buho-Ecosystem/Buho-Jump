@@ -1,6 +1,6 @@
 # Private Messaging Without the BS
 
-## Encrypted DMs. Group chats. No phone number. No email. No account creation.
+## Encrypted DMs. No phone number. No email. No account creation.
 
 ---
 
@@ -18,15 +18,9 @@ the messages are encrypted end-to-end using NIP-17 gift wraps. in plain english:
 
 ### what it looks like
 
-telegram. literally telegram. message bubbles, timestamps inside bubbles, typing indicators, date pills, reply threads. we didn't reinvent UI — we took what works and put Nostr underneath it.
+telegram. literally telegram. message bubbles, timestamps inside bubbles, typing indicators, date pills, reply threads. we didn't reinvent UI - we took what works and put Nostr underneath it.
 
-you get:
-- 1:1 DMs (NIP-17 encrypted, with NIP-04 fallback)
-- private groups (each message gift-wrapped to every member)
-- relay communities (NIP-29 — relay-enforced access control)
-- open channels (NIP-28 — public, anyone can join)
-
-all in the extension. no separate app.
+you get 1:1 DMs, encrypted end-to-end with NIP-17 (with NIP-04 fallback for older clients). all in the extension. no separate app.
 
 ### the small things that matter
 
@@ -34,7 +28,7 @@ all in the extension. no separate app.
 
 **replies.** tap reply, see the quoted text, send your response. shows in the thread with the original message preview.
 
-**content warnings.** sending something sensitive? toggle the CW button, add a reason. recipients see "sensitive content — tap to reveal" instead of the raw message.
+**content warnings.** sending something sensitive? toggle the CW button, add a reason. recipients see "sensitive content - tap to reveal" instead of the raw message.
 
 **expiring messages.** set a timer (5 min, 1 hour, 24 hours). message disappears after it expires. not from the relay (can't control that) but from the UI. recipients won't see it after the time passes.
 
@@ -46,10 +40,10 @@ all in the extension. no separate app.
 
 people who want to message without creating an account anywhere. people who don't want their chat provider knowing who they talk to. people who are already on Nostr and want DMs in the same extension they use for signing and payments.
 
-it's not going to replace Signal for your group chat with 50 people. it's not trying to. but for quick encrypted conversations between people who value sovereignty over their identity — yeah, it works.
+it's not going to replace Signal. it's not trying to. but for quick encrypted conversations between people who value sovereignty over their identity - yeah, it works.
 
 no phone number. no email. no BS.
 
 ---
 
-*all messages encrypted with NIP-17 gift wraps. account-scoped storage — switch accounts, conversations stay separate. mute list synced with relays.*
+*all messages encrypted with NIP-17 gift wraps. account-scoped storage - switch accounts, conversations stay separate. mute list synced with relays.*

@@ -14,10 +14,10 @@ We built Buho Jump around one rule: **nothing happens without your say.**
 
 The first time a website asks for access, Buho Jump shows you exactly what it wants:
 
-- **See your public identity** — read-only, can't post or spend
-- **Sign posts** — can publish on your behalf
-- **Encrypt or read messages** — access to your DMs
-- **Connect your wallet** — can check balance and create invoices
+- **See your public identity** - read-only, can't post or spend
+- **Sign posts** - can publish on your behalf
+- **Encrypt or read messages** - access to your DMs
+- **Connect your wallet** - can check balance and create invoices
 
 You can approve everything at once, decide per request, or block the site entirely. Your call.
 
@@ -27,7 +27,7 @@ Even if you've connected a site, payments get their own prompt every time. You s
 
 No silent charges. No surprises.
 
-### Spending budgets — for sites you trust
+### Spending budgets - for sites you trust
 
 Some sites are different. You tip on Nostr clients. You pay for articles. You zap friends. Getting a prompt every single time is friction.
 
@@ -48,7 +48,7 @@ Sites with the most activity float to the top. You always know where your sats a
 
 - We don't auto-approve payments without a budget you explicitly set
 - We don't store permissions for a site you've blocked
-- We don't send your private key to anyone — ever
+- We don't send your private key to anyone - ever
 - We don't phone home, track you, or run analytics
 
 ### The boring truth

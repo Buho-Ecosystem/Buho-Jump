@@ -10,7 +10,7 @@ Buho Jump is an open-source browser extension for Nostr identity, Lightning paym
 
 - Everything is stored **locally on your device**
 - Sensitive data is **encrypted at rest**
-- We don't operate servers — your data never touches us
+- We don't operate servers - your data never touches us
 - No analytics, no telemetry, no tracking
 
 ---
@@ -45,11 +45,11 @@ When you use Buho Jump, data is sent **directly** from your browser to services 
 
 ## Encryption
 
-- **Private keys** — AES-256-GCM, derived from your master password via PBKDF2 (100,000 iterations)
-- **Wallet connections** — same method
-- **Direct messages** — end-to-end encrypted (NIP-17 gift wraps with NIP-44 encryption)
-- **Session data** — in-memory only (`chrome.storage.session`), cleared on browser close
-- **Master password** — never stored, only a verification hash is kept
+- **Private keys** - AES-256-GCM, derived from your master password via PBKDF2 (100,000 iterations)
+- **Wallet connections** - same method
+- **Direct messages** - end-to-end encrypted (NIP-17 gift wraps with NIP-44 encryption)
+- **Session data** - in-memory only (`chrome.storage.session`), cleared on browser close
+- **Master password** - never stored, only a verification hash is kept
 
 ---
 

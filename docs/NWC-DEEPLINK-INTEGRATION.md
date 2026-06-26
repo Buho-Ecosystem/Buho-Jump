@@ -1,4 +1,4 @@
-# NWC Deep Link Integration — NUTbits
+# NWC Deep Link Integration - NUTbits
 
 One-click wallet connection between Buho Jump and NUTbits via deep link redirect.
 
@@ -47,11 +47,11 @@ Buho Jump popup          NUTbits API (/connect)         Background.js
 
 Chrome blocks web pages from redirecting to `chrome-extension://` URLs. When the NUTbits page tries `window.location.href = 'chrome-extension://...'`, Chrome mangles it to `chrome-extension://invalid/` and the NWC value is lost.
 
-**Solution:** We use a dummy HTTP callback URL (`http://127.0.0.1:19816/buho-nwc-callback`). Nothing listens there, but `chrome.tabs.onUpdated` fires with the full URL — including the `?value=` parameter — before the page fails to load. Background intercepts it and navigates to the real extension confirmation page.
+**Solution:** We use a dummy HTTP callback URL (`http://127.0.0.1:19816/buho-nwc-callback`). Nothing listens there, but `chrome.tabs.onUpdated` fires with the full URL - including the `?value=` parameter - before the page fails to load. Background intercepts it and navigates to the real extension confirmation page.
 
 ## Dedicated Connections
 
-NUTbits creates all deep link connections as **dedicated** — they have their own isolated balance (starts at 0 sats). The user must fund the connection through NUTbits (`POST /api/v1/connections/:pubkey/fund`).
+NUTbits creates all deep link connections as **dedicated** - they have their own isolated balance (starts at 0 sats). The user must fund the connection through NUTbits (`POST /api/v1/connections/:pubkey/fund`).
 
 - `get_balance` returns the dedicated balance, not the global wallet
 - `pay_invoice` deducts from the dedicated balance
@@ -74,9 +74,9 @@ NUTbits creates all deep link connections as **dedicated** — they have their o
 {nutbitsApiUrl}/connect?appname=Buho+Jump&appicon={extensionIconUrl}&callback={callbackUrl}
 ```
 
-- **appname** — matched against NUTbits app registry for pre-configured permissions/budgets
-- **appicon** — `chrome.runtime.getURL('logo/icon-256x256.png')`
-- **callback** — dummy HTTP URL intercepted by `tabs.onUpdated`
+- **appname** - matched against NUTbits app registry for pre-configured permissions/budgets
+- **appicon** - `chrome.runtime.getURL('logo/icon-256x256.png')`
+- **callback** - dummy HTTP URL intercepted by `tabs.onUpdated`
 
 ## Configuration
 

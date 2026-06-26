@@ -849,6 +849,25 @@ export default defineBackground(() => {
     if (changeInfo.url || changeInfo.status === 'complete') updateBadgeForTab(tabId)
   })
 
+  // ── Prompt keepalive ports ──
+  // Each open prompt window holds a Port named `prompt:<requestId>`. While the
+  // port is connected it keeps the service worker (Chrome) / event page
+  // (Firefox) alive, so the in-memory requestCoordinator pending map and the
+  // handler awaiting the user's decision survive the unlock + approval flow.
+  // When the window closes, the port disconnects and we resolve the pending
+  // request with a deny/false fallback (idempotent with attachWindowClose).
+  // Registered synchronously so a connect that respawns the worker is caught.
+  chrome.runtime.onConnect.addListener((port) => {
+    if (!port.name?.startsWith('prompt:')) return
+    const requestId = port.name.slice('prompt:'.length)
+    port.onMessage.addListener(() => {}) // no-op; page pings reset the idle timer
+    port.onDisconnect.addListener(() => {
+      if (requestCoordinator.has(requestId)) {
+        requestCoordinator.resolve(requestId, false).catch(() => {})
+      }
+    })
+  })
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const { type, params } = message
 
@@ -1875,13 +1894,18 @@ export default defineBackground(() => {
           // ── Unlock prompt response ──
           case 'UNLOCK_RESPONSE': {
             const { requestId: unlockReqId, password } = params?.[0] || {}
-            if (!requestCoordinator.has(unlockReqId)) return { error: 'Unknown request' }
             try {
               const valid = await verifyPassword(password)
               if (!valid) return { error: 'WRONG_PASSWORD' }
               _cachedPassword = password
               await saveSession({ password, unlockedAt: Date.now() })
               rejectedOrigins.clear()
+              // Resolve the waiting request if its coordinator entry survived. If
+              // the worker was recycled between opening the prompt and now, the
+              // entry is gone and resolve() is a harmless no-op, but the unlock
+              // itself persisted (chrome.storage.session), so the dApp's retry
+              // succeeds without re-prompting. (No early `has()` reject: a correct
+              // password must never be silently dropped.)
               await requestCoordinator.resolve(unlockReqId, true)
               return { result: { ok: true } }
             } catch (err) {
@@ -1892,8 +1916,9 @@ export default defineBackground(() => {
           // ── Permission prompt response ──
           case 'PERMISSION_RESPONSE': {
             const { requestId, decision, host, method, kind, setBudget } = params?.[0] || {}
-            if (!requestCoordinator.has(requestId)) return { error: 'Unknown request' }
-            // Clean up stored event data
+            // Persist the user's decision below even if the original request's
+            // coordinator entry did not survive a worker restart, so a dApp retry
+            // is auto-answered. resolve() is a no-op when the entry is gone.
             await requestCoordinator.clearEventData(requestId)
             const activeId = await getActiveAccountId()
 
