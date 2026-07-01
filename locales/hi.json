@@ -514,6 +514,7 @@
     "merchantNotSupported": "{name} QR कोड अभी सपोर्टेड नहीं हैं। फ़िलहाल सिर्फ़ EMVCo रिटेल QR कोड (Pick n Pay, Checkers, Woolworths) काम करते हैं।",
     "merchantInsufficientBalance": "इस पेमेंट के लिए आपके वॉलेट में पर्याप्त sats नहीं हैं। बैलेंस बढ़ाएँ और फिर कोशिश करें।",
     "amountTooLow": "राशि शून्य से ज़्यादा होनी चाहिए",
+    "amountRange": "{min} और {max} sats के बीच",
     "insufficientBalance": "इस पेमेंट के लिए पर्याप्त sats नहीं हैं। आपका बैलेंस {balance} sats है।",
     "paymentFailed": "पेमेंट पूरा नहीं हो सका। अपना वॉलेट बैलेंस और इंटरनेट कनेक्शन जाँचें।",
     "addressResolveFailed": "यह पता रिज़ॉल्व नहीं हो सका। सही है कि नहीं जाँचें और फिर कोशिश करें।",

@@ -514,6 +514,7 @@
     "merchantNotSupported": "QR-коды {name} пока не поддерживаются. В настоящее время работают только розничные QR-коды EMVCo (Pick n Pay, Checkers, Woolworths).",
     "merchantInsufficientBalance": "Недостаточный баланс для этого платежа",
     "amountTooLow": "Amount must be greater than zero",
+    "amountRange": "Between {min} and {max} sats",
     "insufficientBalance": "Not enough sats for this payment. Your balance is {balance} sats.",
     "paymentFailed": "Payment could not be completed. Check your wallet balance and internet connection.",
     "addressResolveFailed": "Could not resolve this address. Check it's correct and try again.",

@@ -514,6 +514,7 @@
     "merchantNotSupported": "QR โค้ดของ {name} ยังไม่รองรับ ขณะนี้รองรับเฉพาะ QR โค้ดหน้าร้าน EMVCo (Pick n Pay, Checkers, Woolworths) เท่านั้น",
     "merchantInsufficientBalance": "sats ในกระเป๋าเงินของคุณไม่เพียงพอสำหรับการชำระเงินนี้ เติมเงินแล้วลองอีกครั้ง",
     "amountTooLow": "จำนวนต้องมากกว่าศูนย์",
+    "amountRange": "ระหว่าง {min} ถึง {max} sats",
     "insufficientBalance": "sats ไม่เพียงพอสำหรับการชำระเงินนี้ ยอดเงินของคุณคือ {balance} sats",
     "paymentFailed": "ไม่สามารถชำระเงินได้ ตรวจสอบยอดเงินและการเชื่อมต่ออินเทอร์เน็ต",
     "addressResolveFailed": "ไม่สามารถค้นหาที่อยู่นี้ได้ ตรวจสอบความถูกต้องแล้วลองอีกครั้ง",

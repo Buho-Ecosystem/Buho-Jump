@@ -1249,9 +1249,11 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               @back="showWalletConnect = false"
             />
 
-            <!-- Not connected — show empty state -->
+            <!-- No wallet configured — show empty state. A configured wallet
+                 that is temporarily unreachable keeps its home screen (the
+                 status dot shows "reconnecting") instead of appearing gone. -->
             <NoWalletHome
-              v-else-if="!walletStatus.connected"
+              v-else-if="!walletStatus.connected && !walletStatus.activeWallet"
               @connect-wallet="showWalletConnect = true"
             />
 

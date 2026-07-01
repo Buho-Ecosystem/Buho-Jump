@@ -20,7 +20,7 @@ import { getAvatarColor } from '../../lib/avatarColor.js'
 const { t } = useI18n()
 import { formatSats, detectPaymentInput } from '../../lib/utils.js'
 import { parseZARFromMetadata, getMerchantInitials } from '../../lib/merchantQR.js'
-import { fetchInvoice, lnurl as lnurlCore, parseSuccessAction, decryptAesSuccessAction } from 'nostr-core'
+import { fetchInvoice, decodeBolt11, lnurl as lnurlCore, parseSuccessAction, decryptAesSuccessAction } from 'nostr-core'
 import { fetchLnurlPayParams, fetchLnurlPayInvoice, fetchLnurlPayInvoiceMsat, executeLnurlPay, verifyLnurlPayment } from '../../lib/lnurl.js'
 import QrScanner from '../QrScanner.vue'
 import ErrorBanner from '../ErrorBanner.vue'
@@ -91,6 +91,23 @@ const detected = computed(() => {
 const isMerchant = computed(() => detected.value?.type === 'merchant')
 const isMerchantUnsupported = computed(() => detected.value?.type === 'merchant-unsupported')
 
+// ── Pasted invoice decoding ──
+// Decode BOLT11 invoices on paste so the embedded amount is shown before
+// the user confirms — never ask them to approve a payment blind.
+const invoiceDetails = computed(() => {
+  if (detected.value?.type !== 'invoice') return null
+  try {
+    return decodeBolt11(detected.value.value)
+  } catch {
+    return null // Undecodable invoice — the wallet will reject it on pay
+  }
+})
+
+const invoiceAmountSats = computed(() => {
+  const sats = invoiceDetails.value?.amountSat
+  return sats ? Math.round(sats) : 0 // 0 = amountless invoice
+})
+
 const isNostrIdentity = computed(() => detected.value?.type === 'nostr-identity')
 
 const detectedLabel = computed(() => {
@@ -135,10 +152,11 @@ const needsAmount = computed(() => {
   return detected.value.type === 'lnaddress' || detected.value.type === 'lnurl'
 })
 
-// Effective sats amount (from whichever input mode is active)
+// Effective sats amount: pasted invoices carry their own amount; everything
+// else comes from the amount input (fiat mode writes sats via its watcher).
 const effectiveSats = computed(() => {
-  if (inputMode.value === 'sats') return parseInt(amountSats.value) || 0
-  return parseInt(amountSats.value) || 0 // Set by fiat→sats watcher
+  if (detected.value?.type === 'invoice') return invoiceAmountSats.value
+  return parseInt(amountSats.value) || 0
 })
 
 // Conversion display for the inactive denomination
@@ -162,6 +180,10 @@ const amountError = computed(() => {
   if (sats <= 0) return t('wallet.amountTooLow')
   if (status.value?.balance != null && sats > status.value.balance) {
     return t('wallet.insufficientBalance', { balance: formatSats(status.value.balance) })
+  }
+  const p = lnurlPayParams.value
+  if (p && (sats < p.minSendable || sats > p.maxSendable)) {
+    return t('wallet.amountRange', { min: formatSats(p.minSendable), max: formatSats(p.maxSendable) })
   }
   return ''
 })
@@ -252,6 +274,7 @@ function stopCountdown() {
 onBeforeUnmount(() => {
   stopCountdown()
   clearTimeout(fiatDebounce)
+  clearTimeout(lnurlFetchTimer)
 })
 
 // ── Nostr identity resolution ──
@@ -288,6 +311,50 @@ watch(() => detected.value?.type, async (type) => {
   } finally {
     nostrResolving.value = false
   }
+})
+
+// ── LNURL-pay parameter prefetch ──
+// Fetch pay parameters as soon as an LNURL is pasted so fixed amounts
+// (minSendable === maxSendable, e.g. point-of-sale invoices) are prefilled
+// and shown instead of asking the user to guess. Best-effort: on failure we
+// fall back to manual entry and proceed() revalidates against the service.
+const lnurlPayParams = ref(null)
+let lnurlFetchTimer = null
+let lnurlFetchSeq = 0
+
+const lnurlFixedAmount = computed(() =>
+  !!lnurlPayParams.value
+  && lnurlPayParams.value.minSendable === lnurlPayParams.value.maxSendable
+)
+
+const lnurlRangeHint = computed(() => {
+  const p = lnurlPayParams.value
+  if (!p || p.minSendable === p.maxSendable) return ''
+  return t('wallet.amountRange', { min: formatSats(p.minSendable), max: formatSats(p.maxSendable) })
+})
+
+watch(() => {
+  const det = detected.value
+  if (det?.type !== 'lnurl') return null
+  if (det.lnurlType && det.lnurlType !== 'pay') return null // withdraw / auth
+  return det.value
+}, (value) => {
+  clearTimeout(lnurlFetchTimer)
+  lnurlPayParams.value = null
+  const seq = ++lnurlFetchSeq
+  if (!value) return
+  lnurlFetchTimer = setTimeout(async () => {
+    try {
+      const params = await fetchLnurlPayParams(value)
+      if (seq !== lnurlFetchSeq) return // Input changed while fetching
+      if (params.tag && params.tag !== 'payRequest') return
+      lnurlPayParams.value = params
+      if (params.minSendable === params.maxSendable && !amountSats.value) {
+        inputMode.value = 'sats'
+        amountSats.value = String(params.minSendable)
+      }
+    } catch { /* fall back to manual amount entry */ }
+  }, 400)
 })
 
 async function resolveMerchantPayment() {
@@ -655,6 +722,16 @@ function reset() {
         </div>
       </div>
 
+      <!-- Decoded invoice amount (pasted BOLT11 carries its own amount) -->
+      <div v-if="detected?.type === 'invoice' && invoiceAmountSats" class="bg-surface-card rounded-2xl border border-border p-4 text-center animate-fade-in-up">
+        <div class="flex items-baseline justify-center gap-1.5">
+          <span class="text-3xl font-extrabold tracking-tight tabular-nums">{{ formatSats(invoiceAmountSats) }}</span>
+          <span class="text-sm font-medium text-text-muted">{{ t('wallet.sats') }}</span>
+        </div>
+        <p v-if="toFiat(invoiceAmountSats)" class="text-[11px] text-brand mt-1 font-medium">≈ {{ toFiat(invoiceAmountSats) }}</p>
+        <p v-if="invoiceDetails?.description" class="text-[11px] text-text-muted mt-1 truncate">{{ invoiceDetails.description }}</p>
+      </div>
+
       <!-- Amount input card (only when needed) -->
       <div v-if="needsAmount" class="bg-surface-card rounded-2xl border border-border p-4 space-y-3">
         <div class="flex items-center justify-between">
@@ -662,6 +739,7 @@ function reset() {
             {{ inputMode === 'sats' ? t('wallet.amountSats') : t('wallet.amountFiat', { currency: currency.toUpperCase() }) }}
           </label>
           <button
+            v-if="!lnurlFixedAmount"
             @click="toggleInputMode"
             class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium"
           >
@@ -678,6 +756,7 @@ function reset() {
             type="number"
             min="1"
             placeholder="0"
+            :readonly="lnurlFixedAmount"
             class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
           <input
@@ -693,7 +772,7 @@ function reset() {
         </div>
 
         <SatButtons
-          v-if="inputMode === 'sats'"
+          v-if="inputMode === 'sats' && !lnurlFixedAmount"
           v-model="amountSats"
           :max="status?.balance || Infinity"
         />
@@ -703,6 +782,9 @@ function reset() {
         </p>
         <p v-else-if="amountError" class="text-[10px] text-error text-center">
           {{ amountError }}
+        </p>
+        <p v-else-if="lnurlRangeHint" class="text-[10px] text-text-muted text-center">
+          {{ lnurlRangeHint }}
         </p>
       </div>
 
@@ -909,6 +991,9 @@ function reset() {
           <div v-else class="text-xs text-text-muted">{{ t('wallet.amountInInvoice') }}</div>
           <p v-if="effectiveSats && toFiat(effectiveSats)" class="text-[11px] text-brand mt-1 font-medium">
             ≈ {{ toFiat(effectiveSats) }}
+          </p>
+          <p v-if="invoiceDetails?.description" class="text-[11px] text-text-muted mt-1 truncate">
+            {{ invoiceDetails.description }}
           </p>
         </div>
 

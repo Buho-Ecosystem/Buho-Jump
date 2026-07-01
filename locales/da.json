@@ -514,6 +514,7 @@
     "merchantNotSupported": "{name} QR-koder understøttes endnu ikke. Kun EMVCo detail-QR-koder (Pick n Pay, Checkers, Woolworths) fungerer i øjeblikket.",
     "merchantInsufficientBalance": "Utilstrækkelig saldo til denne betaling",
     "amountTooLow": "Amount must be greater than zero",
+    "amountRange": "Between {min} and {max} sats",
     "insufficientBalance": "Not enough sats for this payment. Your balance is {balance} sats.",
     "paymentFailed": "Payment could not be completed. Check your wallet balance and internet connection.",
     "addressResolveFailed": "Could not resolve this address. Check it's correct and try again.",

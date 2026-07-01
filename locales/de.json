@@ -514,6 +514,7 @@
     "merchantNotSupported": "{name} QR-Codes werden noch nicht unterstützt. Derzeit funktionieren nur EMVCo-Einzelhandels-QR-Codes (Pick n Pay, Checkers, Woolworths).",
     "merchantInsufficientBalance": "Unzureichendes Guthaben für diese Zahlung",
     "amountTooLow": "Betrag muss größer als null sein",
+    "amountRange": "Zwischen {min} und {max} Sats",
     "insufficientBalance": "Nicht genug Sats für diese Zahlung. Dein Guthaben beträgt {balance} Sats.",
     "paymentFailed": "Zahlung konnte nicht abgeschlossen werden. Prüfe dein Wallet-Guthaben und deine Internetverbindung.",
     "addressResolveFailed": "Diese Adresse konnte nicht aufgelöst werden. Prüfe sie und versuche es erneut.",

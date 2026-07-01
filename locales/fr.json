@@ -514,6 +514,7 @@
     "merchantNotSupported": "Les codes QR {name} ne sont pas encore pris en charge. Seuls les codes QR de détail EMVCo (Pick n Pay, Checkers, Woolworths) fonctionnent actuellement.",
     "merchantInsufficientBalance": "Solde insuffisant pour ce paiement",
     "amountTooLow": "Le montant doit être supérieur à zéro",
+    "amountRange": "Entre {min} et {max} sats",
     "insufficientBalance": "Pas assez de sats pour ce paiement. Votre solde est de {balance} sats.",
     "paymentFailed": "Le paiement n’a pas pu être effectué. Vérifiez le solde de votre portefeuille et votre connexion Internet.",
     "addressResolveFailed": "Impossible de résoudre cette adresse. Vérifiez-la et réessayez.",

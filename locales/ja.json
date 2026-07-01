@@ -514,6 +514,7 @@
     "merchantNotSupported": "{name} のQRコードはまだサポートされていません。現在、EMVCoリテールQRコード（Pick n Pay、Checkers、Woolworths）のみ対応しています。",
     "merchantInsufficientBalance": "この支払いに対して残高が不足しています",
     "amountTooLow": "Amount must be greater than zero",
+    "amountRange": "Between {min} and {max} sats",
     "insufficientBalance": "Not enough sats for this payment. Your balance is {balance} sats.",
     "paymentFailed": "Payment could not be completed. Check your wallet balance and internet connection.",
     "addressResolveFailed": "Could not resolve this address. Check it's correct and try again.",

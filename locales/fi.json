@@ -514,6 +514,7 @@
     "merchantNotSupported": "{name} QR-koodeja ei vielä tueta. Tällä hetkellä vain EMVCo-vähittäiskaupan QR-koodit (Pick n Pay, Checkers, Woolworths) toimivat.",
     "merchantInsufficientBalance": "Riittämätön saldo tälle maksulle",
     "amountTooLow": "Amount must be greater than zero",
+    "amountRange": "Between {min} and {max} sats",
     "insufficientBalance": "Not enough sats for this payment. Your balance is {balance} sats.",
     "paymentFailed": "Payment could not be completed. Check your wallet balance and internet connection.",
     "addressResolveFailed": "Could not resolve this address. Check it's correct and try again.",

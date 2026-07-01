@@ -505,8 +505,7 @@ async function walletMakeInvoice(amountSats, description) {
     const q = await createMintQuote(mintUrl, amountSats)
     return { invoice: q.request, quoteId: q.quote, expiry: q.expiry }
   }
-  const nwc = await ensureNWC()
-  return await nwc.makeInvoice({ amount: amountSats * 1000, description: description || '' })
+  return await withNwcRetry(nwc => nwc.makeInvoice({ amount: amountSats * 1000, description: description || '' }))
 }
 
 async function walletGetBalance() {
@@ -514,8 +513,8 @@ async function walletGetBalance() {
   if (!wallet) return 0
   if (wallet.type === 'cashu') return await getCashuBalance(wallet.id, _cachedPassword)
   if (wallet.type === 'lnbits') return await lnbitsGetBalance(wallet.apiUrl, wallet.adminKey)
-  const nwc = await ensureNWC()
-  return Math.floor((await nwc.getBalance()).balance / 1000)
+  const bal = await withNwcRetry(nwc => nwc.getBalance())
+  return Math.floor(bal.balance / 1000)
 }
 
 // ── NWC / WebLN Handlers ─────────────────────────────────────────
@@ -533,16 +532,23 @@ async function ensureNWC() {
 
 /**
  * Check if an error looks like a transient connection failure.
+ * Covers relay socket errors, NWC publish/reply timeouts, and the
+ * "no relay accepted the event" publish failure from nostr-core.
  */
 function isConnectionError(err) {
   const msg = err?.message?.toLowerCase() || ''
   return msg.includes('closed') || msg.includes('disconnect')
     || msg.includes('timeout') || msg.includes('not connected')
+    || msg.includes('no relay accepted')
 }
 
 /**
  * Execute an NWC operation with automatic reconnect on connection failure.
  * Retries once with a 1s backoff on transient errors.
+ *
+ * Every NWC call must go through this wrapper: the client's `connected` flag
+ * can go stale on a half-open socket (laptop sleep, network switch), in which
+ * case the operation times out and only a teardown + fresh connect recovers.
  */
 async function withNwcRetry(operation) {
   try {
@@ -554,8 +560,14 @@ async function withNwcRetry(operation) {
     log.info('wallet', 'NWC_RETRY', { err: err?.message })
     teardownNwc()
     await new Promise(r => setTimeout(r, 1000))
-    const nwc = await ensureNWC()
-    return await operation(nwc)
+    try {
+      const nwc = await ensureNWC()
+      return await operation(nwc)
+    } catch (retryErr) {
+      // Don't leave a half-dead client behind for the next call to trust
+      if (isConnectionError(retryErr)) teardownNwc()
+      throw retryErr
+    }
   }
 }
 
@@ -571,27 +583,24 @@ function subscribeNwcNotifications() {
     nwcNotifUnsub = null
   }
   const client = nwcClient // Capture reference to detect stale callbacks
-  try {
-    client.on('payment_received', (notification) => {
-      if (client !== nwcClient) return // Stale subscription — ignore
-      const amountSats = notification?.amount ? Math.floor(notification.amount / 1000) : 0
-      const hash = notification?.payment_hash || ''
-      if (amountSats > 0) {
-        notifyPayment(amountSats, hash)
-      }
-    })
-    client.on('payment_sent', () => {
-      // Could notify on outgoing payments too — currently a no-op
-    })
-    nwcNotifUnsub = () => {
-      try {
-        client.off('payment_received')
-        client.off('payment_sent')
-      } catch { /* cleanup best-effort */ }
+  // subscribeNotifications re-subscribes on relay close (unlike client.on),
+  // so the subscription survives relay reconnects within a worker lifetime.
+  client.subscribeNotifications((event) => {
+    if (client !== nwcClient) return // Stale subscription — ignore
+    const payment = event.notification
+    const amountSats = payment?.amount ? Math.floor(payment.amount / 1000) : 0
+    const hash = payment?.payment_hash || ''
+    if (amountSats > 0) {
+      notifyPayment(amountSats, hash)
     }
-  } catch (err) {
-    log.info('wallet', 'NOTIF_SUB_UNSUPPORTED', { err: err?.message })
-  }
+  }, ['payment_received'])
+    .then((unsub) => {
+      if (client !== nwcClient) { try { unsub() } catch { /* best-effort */ } return }
+      nwcNotifUnsub = unsub
+    })
+    .catch((err) => {
+      log.info('wallet', 'NOTIF_SUB_UNSUPPORTED', { err: err?.message })
+    })
 }
 
 async function handleWeblnEnable(sender) {
@@ -620,8 +629,8 @@ async function handleWeblnGetInfo(sender) {
       const w = await getActiveWallet(_cachedPassword)
       return { result: { alias: w?.name || 'LNbits', methods: ['pay_invoice', 'make_invoice', 'get_balance', 'list_transactions'] } }
     }
-    const nwc = await ensureNWC()
-    return { result: await nwc.getInfo() }
+    const info = await withNwcRetry(nwc => nwc.getInfo())
+    return { result: info }
   } catch (err) { return { error: classifyError(err) } }
 }
 
@@ -710,7 +719,6 @@ async function walletKeysend(destination, amountSats, customRecords) {
     // Cashu and LNbits backends don't support spontaneous keysend payments.
     throw new Error('Keysend is only supported with NWC wallets')
   }
-  const nwc = await ensureNWC()
   // Convert WebLN customRecords (string keys → int, string values) to NWC tlv_records
   const tlvRecords = customRecords
     ? Object.entries(customRecords).map(([k, v]) => ({
@@ -718,11 +726,11 @@ async function walletKeysend(destination, amountSats, customRecords) {
         value: v,
       }))
     : undefined
-  return await nwc.payKeysend({
+  return await withNwcRetry(nwc => nwc.payKeysend({
     pubkey: destination,
     amount: amountSats * 1000, // sats → msats
     tlv_records: tlvRecords,
-  })
+  }))
 }
 
 // ── Public routes — callable from content scripts (web pages) ────
@@ -992,8 +1000,19 @@ export default defineBackground(() => {
           }
 
           // ── Connection status ──
-          case 'GET_NWC_STATUS':
-            return { result: { connected: !!nwcClient?.connected } }
+          case 'GET_NWC_STATUS': {
+            // Actively verify instead of reading the in-memory flag: the
+            // client dies with every service-worker restart, so a missing
+            // client means "not dialed yet", not "disconnected".
+            try {
+              const wType = await getActiveWalletType()
+              if (wType !== 'nwc') return { result: { connected: !!wType } }
+              await ensureNWC()
+              return { result: { connected: true } }
+            } catch {
+              return { result: { connected: false } }
+            }
+          }
 
           // ── NIP-46 status ──
           case 'GET_NIP46_STATUS': {
@@ -1298,35 +1317,31 @@ export default defineBackground(() => {
           }
           case 'GET_WALLET_STATUS': {
             const wallet = await getActiveWallet(_cachedPassword)
+            const activeWallet = wallet
+              ? { id: wallet.id, name: wallet.name, type: wallet.type || 'nwc' }
+              : null
             try {
               if (wallet?.type === 'cashu') {
                 const balance = await getCashuBalance(wallet.id, _cachedPassword)
-                return { result: {
-                  connected: true,
-                  balance,
-                  activeWallet: { id: wallet.id, name: wallet.name, type: 'cashu' },
-                } }
+                return { result: { connected: true, balance, activeWallet } }
               }
               if (wallet?.type === 'lnbits') {
                 if (!lnbitsWsHandle) connectLnbitsWs(wallet) // Reconnect WS if needed
                 const balance = await lnbitsGetBalance(wallet.apiUrl, wallet.adminKey)
-                return { result: {
-                  connected: true,
-                  balance,
-                  activeWallet: { id: wallet.id, name: wallet.name, type: 'lnbits' },
-                } }
+                return { result: { connected: true, balance, activeWallet } }
               }
               if (wallet?.connectionUri) {
-                const nwc = await ensureNWC()
-                const bal = await nwc.getBalance()
+                const bal = await withNwcRetry(nwc => nwc.getBalance())
                 return { result: {
                   connected: true,
                   balance: Math.floor(bal.balance / 1000),
-                  activeWallet: { id: wallet.id, name: wallet.name, type: 'nwc' },
+                  activeWallet,
                 } }
               }
             } catch (err) { log.debug('wallet', 'STATUS_CHECK_FAILED', { err: err?.message }) }
-            return { result: { connected: false, balance: null, activeWallet: null } }
+            // Keep the wallet identity on transient failures so the UI shows a
+            // reconnecting state instead of the "no wallet" empty screen.
+            return { result: { connected: false, balance: null, activeWallet } }
           }
           case 'GET_WALLETS': {
             const summaries = await getWalletSummaries(_cachedPassword)
@@ -1360,8 +1375,7 @@ export default defineBackground(() => {
               const w = await getActiveWallet(_cachedPassword)
               return { result: { alias: w.name, methods: ['pay_invoice', 'make_invoice', 'get_balance', 'list_transactions'] } }
             }
-            const nwc = await ensureNWC()
-            const info = await nwc.getInfo()
+            const info = await withNwcRetry(nwc => nwc.getInfo())
             return { result: info }
           }
           case 'WALLET_GET_BALANCE': {
@@ -1371,8 +1385,7 @@ export default defineBackground(() => {
           case 'WALLET_GET_BUDGET': {
             const wType = await getActiveWalletType()
             if (wType === 'cashu' || wType === 'lnbits') return { result: null }
-            const nwc = await ensureNWC()
-            const budget = await nwc.getBudget()
+            const budget = await withNwcRetry(nwc => nwc.getBudget())
             return { result: budget }
           }
           case 'WALLET_PAY_INVOICE': {
@@ -1396,8 +1409,7 @@ export default defineBackground(() => {
               const w = await getActiveWallet(_cachedPassword)
               return { result: await lnbitsCheckPayment(w.apiUrl, w.adminKey, lookupParams.payment_hash) }
             }
-            const nwc = await ensureNWC()
-            const inv = await nwc.lookupInvoice(lookupParams)
+            const inv = await withNwcRetry(nwc => nwc.lookupInvoice(lookupParams))
             return { result: inv }
           }
           case 'WALLET_LIST_TRANSACTIONS': {
@@ -1424,24 +1436,21 @@ export default defineBackground(() => {
               }))
               return { result: { transactions: txs } }
             }
-            const nwc = await ensureNWC()
-            const txs = await nwc.listTransactions(txParams || {})
+            const txs = await withNwcRetry(nwc => nwc.listTransactions(txParams || {}))
             return { result: txs }
           }
           case 'WALLET_PAY_KEYSEND': {
             const [keysendParams] = params || []
             const wType = await getActiveWalletType()
             if (wType !== 'nwc') return { error: 'NOT_SUPPORTED' }
-            const nwc = await ensureNWC()
-            const ksResult = await nwc.payKeysend(keysendParams)
+            const ksResult = await withNwcRetry(nwc => nwc.payKeysend(keysendParams))
             return { result: ksResult }
           }
           case 'WALLET_SIGN_MESSAGE': {
             const [msg] = params || []
             const wType = await getActiveWalletType()
             if (wType !== 'nwc') return { error: 'NOT_SUPPORTED' }
-            const nwc = await ensureNWC()
-            const sigResult = await nwc.signMessage(msg)
+            const sigResult = await withNwcRetry(nwc => nwc.signMessage(msg))
             return { result: sigResult }
           }
 
