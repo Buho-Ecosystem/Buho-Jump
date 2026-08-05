@@ -69,6 +69,9 @@ jobs:
           path: .output/*.zip
           retention-days: 30
           if-no-files-found: error
+          # .output is a dot-directory, so its contents count as hidden and
+          # would be skipped without this.
+          include-hidden-files: true
 
       - name: Publish GitHub Release
         if: steps.meta.outputs.release == 'true'
