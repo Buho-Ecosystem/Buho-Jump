@@ -15,6 +15,8 @@ import { useRelayHealth } from '../../composables/useRelayHealth.js'
 import { useMessaging } from '../../composables/useMessaging.js'
 import { nip19 } from 'nostr-core'
 import { formatSats } from '../../lib/utils.js'
+import { fetchLnurlPayParams, resolveLnurlServiceUrl } from '../../lib/lnurl.js'
+import { hasOriginAccess, requestOriginAccess } from '../../lib/browser/hostPermissions.js'
 import ChatBubble from './ChatBubble.vue'
 import ErrorBanner from '../ErrorBanner.vue'
 import { searchEmojis } from '../../lib/emojiData.js'
@@ -81,6 +83,7 @@ const showZapPicker = ref(false)
 const zapAmounts = [21, 100, 500, 1000, 5000]
 const customZapAmount = ref('')
 const zapping = ref(false)
+const zapPayParams = ref(null)
 
 // Emoji autocomplete state
 const emojiSuggestions = ref([])
@@ -236,20 +239,34 @@ async function handleZap(amount) {
   if (!sats || sats <= 0 || !Number.isFinite(sats)) return
 
   zapping.value = true
-  const zapId = addZapMessage(props.pubkey, sats)
-  scrollToBottom()
+  let zapId = null
   try {
+    if (!zapPayParams.value) {
+      const serviceUrl = resolveLnurlServiceUrl(lightningAddress.value)
+      if (!(await requestOriginAccess(serviceUrl))) throw new Error(t('wallet.serverAccessDenied'))
+      zapPayParams.value = await fetchLnurlPayParams(lightningAddress.value)
+      if (!(await hasOriginAccess(zapPayParams.value.callback))) {
+        toast.info(t('chat.zapCallbackReady'))
+        return
+      }
+    }
+    if (!(await requestOriginAccess(zapPayParams.value.callback))) {
+      throw new Error(t('wallet.serverAccessDenied'))
+    }
+    zapId = addZapMessage(props.pubkey, sats)
+    scrollToBottom()
     await sendZap({
       recipientPubkey: props.pubkey,
       amountSats: sats,
       lightningAddress: lightningAddress.value,
+      payRequest: zapPayParams.value._raw,
     })
     updateZapStatus(props.pubkey, zapId, 'sent')
     showZapPicker.value = false
     customZapAmount.value = ''
     toast.success(t('chat.zapSent', { amount: formatSats(sats) }))
   } catch (err) {
-    updateZapStatus(props.pubkey, zapId, 'failed')
+    if (zapId) updateZapStatus(props.pubkey, zapId, 'failed')
     toast.error(err.message || t('chat.zapFailed'))
   } finally {
     zapping.value = false

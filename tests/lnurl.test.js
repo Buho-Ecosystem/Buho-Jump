@@ -4,13 +4,16 @@
  * Network-dependent functions mock nostr-core's fetchPayRequest / requestInvoice.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { lnurl as lnurlCore } from 'nostr-core'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { lnurl as lnurlCore, decodeBolt11 } from 'nostr-core'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 
 vi.mock('nostr-core', async () => {
   const actual = await vi.importActual('nostr-core')
   return {
     ...actual,
+    decodeBolt11: vi.fn(),
     lnurl: {
       ...actual.lnurl,
       fetchPayRequest: vi.fn(),
@@ -21,8 +24,19 @@ vi.mock('nostr-core', async () => {
 
 import {
   decodeLnurl, encodeLnurl, isLnurl,
-  fetchLnurlPayParams, fetchLnurlPayInvoice, executeLnurlPay,
+  fetchLnurlPayParams, fetchLnurlPayInvoice, executeLnurlPay, resolveLnurlServiceUrl,
 } from '../lib/lnurl.js'
+
+const EMPTY_METADATA_HASH = bytesToHex(sha256(utf8ToBytes('[]')))
+
+function mockInvoice(amountMsat, overrides = {}) {
+  decodeBolt11.mockReturnValue({
+    amountMsat,
+    descriptionHash: EMPTY_METADATA_HASH,
+    isExpired: false,
+    ...overrides,
+  })
+}
 
 // ── Primitives (real nostr-core bech32) ─────────────────────────
 
@@ -52,6 +66,19 @@ describe('isLnurl', () => {
   })
 })
 
+describe('resolveLnurlServiceUrl', () => {
+  it('resolves a Lightning Address to its exact HTTPS service', () => {
+    expect(resolveLnurlServiceUrl('alice@example.com'))
+      .toBe('https://example.com/.well-known/lnurlp/alice')
+  })
+
+  it('resolves an encoded LNURL and rejects insecure public services', () => {
+    const encoded = encodeLnurl('https://service.example.com/pay')
+    expect(resolveLnurlServiceUrl(encoded)).toBe('https://service.example.com/pay')
+    expect(() => resolveLnurlServiceUrl('http://service.example.com/pay')).toThrow()
+  })
+})
+
 // ── fetchLnurlPayParams (mock network) ──────────────────────────
 
 describe('fetchLnurlPayParams', () => {
@@ -69,7 +96,7 @@ describe('fetchLnurlPayParams', () => {
       tag: 'payRequest',
     })
 
-    const params = await fetchLnurlPayParams('test@example.com')
+    const params = await fetchLnurlPayParams('lnurlp://example.com/pay')
     expect(params.minSendable).toBe(1)        // ceil(1000 / 1000) = 1
     expect(params.maxSendable).toBe(100000)    // floor(100000000 / 1000) = 100000
     expect(params.callback).toBe('https://example.com/cb')
@@ -105,6 +132,41 @@ describe('fetchLnurlPayParams', () => {
   })
 })
 
+describe('Lightning Address currency extension', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('preserves LUD-21 currency data from the address endpoint', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        tag: 'payRequest', callback: 'https://pay.example/cb',
+        minSendable: 1000, maxSendable: 1000000, metadata: '[]',
+        currency: { code: 'KES', symbol: 'KSh', decimals: 0, multiplier: 5000 },
+      }),
+    }))
+    const params = await fetchLnurlPayParams('254712345678@pay.example')
+    expect(params.currency).toEqual({
+      code: 'KES', symbol: 'KSh', decimals: 0,
+      minSendable: 0, maxSendable: 0, multiplier: 5000,
+    })
+  })
+
+  it('requests an exact local-currency payout invoice', async () => {
+    mockInvoice(50_000)
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ pr: 'lnbc1payout', verify: 'https://pay.example/verify' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await fetchLnurlPayInvoice({
+      callback: 'https://pay.example/cb', commentAllowed: 0,
+      _raw: { callback: 'https://pay.example/cb' },
+    }, 50, null, { code: 'KES', amount: 100 })
+    expect(fetchMock.mock.calls[0][0]).toContain('amount=100&currency=KES')
+    expect(result.verify).toBe('https://pay.example/verify')
+  })
+})
+
 // ── fetchLnurlPayInvoice ────────────────────────────────────────
 
 describe('fetchLnurlPayInvoice', () => {
@@ -113,6 +175,7 @@ describe('fetchLnurlPayInvoice', () => {
   })
 
   it('returns invoice and successAction', async () => {
+    mockInvoice(100_000)
     lnurlCore.requestInvoice.mockResolvedValue({
       pr: 'lnbc100u1p0test',
       successAction: { tag: 'message', message: 'Thanks!' },
@@ -129,17 +192,21 @@ describe('fetchLnurlPayInvoice', () => {
   })
 
   it('passes comment option when provided', async () => {
+    mockInvoice(50_000)
     lnurlCore.requestInvoice.mockResolvedValue({ pr: 'lnbc1', successAction: null })
 
-    await fetchLnurlPayInvoice({ _raw: {} }, 50, 'a comment')
+    const raw = { callback: 'https://example.com/cb' }
+    await fetchLnurlPayInvoice({ callback: raw.callback, _raw: raw }, 50, 'a comment')
 
-    expect(lnurlCore.requestInvoice).toHaveBeenCalledWith({}, 50000, { comment: 'a comment' })
+    expect(lnurlCore.requestInvoice).toHaveBeenCalledWith(raw, 50000, { comment: 'a comment' })
   })
 
   it('returns null successAction when not present', async () => {
+    mockInvoice(10_000)
     lnurlCore.requestInvoice.mockResolvedValue({ pr: 'lnbc1' })
 
-    const result = await fetchLnurlPayInvoice({ _raw: {} }, 10)
+    const raw = { callback: 'https://example.com/cb' }
+    const result = await fetchLnurlPayInvoice({ callback: raw.callback, _raw: raw }, 10)
     expect(result.successAction).toBeNull()
     expect(result.verify).toBeNull()
   })
@@ -161,7 +228,7 @@ describe('executeLnurlPay', () => {
       tag: 'payRequest',
     })
 
-    await expect(executeLnurlPay('addr@test.com', 5)).rejects.toThrow('Minimum amount is 10 sats')
+    await expect(executeLnurlPay('lnurlp://test.com/pay', 5)).rejects.toThrow('Minimum amount is 10 sats')
   })
 
   it('rejects amount above maxSendable', async () => {
@@ -173,10 +240,11 @@ describe('executeLnurlPay', () => {
       tag: 'payRequest',
     })
 
-    await expect(executeLnurlPay('addr@test.com', 200)).rejects.toThrow('Maximum amount is 100 sats')
+    await expect(executeLnurlPay('lnurlp://test.com/pay', 200)).rejects.toThrow('Maximum amount is 100 sats')
   })
 
   it('succeeds within min/max range', async () => {
+    mockInvoice(50_000)
     lnurlCore.fetchPayRequest.mockResolvedValue({
       callback: 'https://example.com/cb',
       minSendable: 1000,
@@ -189,11 +257,12 @@ describe('executeLnurlPay', () => {
       successAction: null,
     })
 
-    const result = await executeLnurlPay('addr@test.com', 50)
+    const result = await executeLnurlPay('lnurlp://test.com/pay', 50)
     expect(result.invoice).toBe('lnbc50u1p0valid')
   })
 
   it('accepts exact minSendable boundary', async () => {
+    mockInvoice(10_000)
     lnurlCore.fetchPayRequest.mockResolvedValue({
       callback: 'https://example.com/cb',
       minSendable: 10000, // 10 sats
@@ -203,11 +272,12 @@ describe('executeLnurlPay', () => {
     })
     lnurlCore.requestInvoice.mockResolvedValue({ pr: 'lnbc10u1', successAction: null })
 
-    const result = await executeLnurlPay('addr@test.com', 10) // exactly min
+    const result = await executeLnurlPay('lnurlp://test.com/pay', 10) // exactly min
     expect(result.invoice).toBe('lnbc10u1')
   })
 
   it('accepts exact maxSendable boundary', async () => {
+    mockInvoice(100_000)
     lnurlCore.fetchPayRequest.mockResolvedValue({
       callback: 'https://example.com/cb',
       minSendable: 1000,
@@ -217,13 +287,13 @@ describe('executeLnurlPay', () => {
     })
     lnurlCore.requestInvoice.mockResolvedValue({ pr: 'lnbc100u1', successAction: null })
 
-    const result = await executeLnurlPay('addr@test.com', 100) // exactly max
+    const result = await executeLnurlPay('lnurlp://test.com/pay', 100) // exactly max
     expect(result.invoice).toBe('lnbc100u1')
   })
 
   it('propagates fetchPayRequest errors', async () => {
     lnurlCore.fetchPayRequest.mockRejectedValue(new Error('Network failed'))
-    await expect(executeLnurlPay('addr@test.com', 50)).rejects.toThrow('Network failed')
+    await expect(executeLnurlPay('lnurlp://test.com/pay', 50)).rejects.toThrow('Network failed')
   })
 })
 
@@ -232,27 +302,49 @@ describe('executeLnurlPay', () => {
 describe('fetchLnurlPayParams — boundary conditions', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('handles zero minSendable', async () => {
+  it('rejects a zero minimum', async () => {
     lnurlCore.fetchPayRequest.mockResolvedValue({
-      callback: 'cb', minSendable: 0, maxSendable: 1000, metadata: '[]', tag: 'payRequest',
+      callback: 'https://example.com/cb', minSendable: 0, maxSendable: 1000, metadata: '[]', tag: 'payRequest',
     })
-    const params = await fetchLnurlPayParams('test')
-    expect(params.minSendable).toBe(0)
+    await expect(fetchLnurlPayParams('test')).rejects.toThrow('amount range')
   })
 
   it('handles missing commentAllowed', async () => {
     lnurlCore.fetchPayRequest.mockResolvedValue({
-      callback: 'cb', minSendable: 1000, maxSendable: 100000, metadata: '[]', tag: 'payRequest',
+      callback: 'https://example.com/cb', minSendable: 1000, maxSendable: 100000, metadata: '[]', tag: 'payRequest',
     })
     const params = await fetchLnurlPayParams('test')
     expect(params.commentAllowed).toBe(0) // default
   })
 
-  it('handles missing metadata', async () => {
+  it('rejects missing metadata', async () => {
     lnurlCore.fetchPayRequest.mockResolvedValue({
-      callback: 'cb', minSendable: 1000, maxSendable: 100000, tag: 'payRequest',
+      callback: 'https://example.com/cb', minSendable: 1000, maxSendable: 100000, tag: 'payRequest',
     })
-    const params = await fetchLnurlPayParams('test')
-    expect(params.metadata).toBe('[]') // default
+    await expect(fetchLnurlPayParams('test')).rejects.toThrow('metadata')
+  })
+})
+
+describe('LNURL invoice binding', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('rejects an invoice for more than the user approved', async () => {
+    mockInvoice(101_000)
+    lnurlCore.requestInvoice.mockResolvedValue({ pr: 'lnbc-tampered' })
+    await expect(fetchLnurlPayInvoice({
+      callback: 'https://example.com/cb',
+      metadata: '[]',
+      _raw: { callback: 'https://example.com/cb', metadata: '[]' },
+    }, 100)).rejects.toThrow('does not match the approved amount')
+  })
+
+  it('rejects an invoice that does not commit to LNURL metadata', async () => {
+    mockInvoice(100_000, { descriptionHash: '00'.repeat(32) })
+    lnurlCore.requestInvoice.mockResolvedValue({ pr: 'lnbc-wrong-description' })
+    await expect(fetchLnurlPayInvoice({
+      callback: 'https://example.com/cb',
+      metadata: '[["text/plain","Coffee"]]',
+      _raw: { callback: 'https://example.com/cb', metadata: '[["text/plain","Coffee"]]' },
+    }, 100)).rejects.toThrow('metadata does not match')
   })
 })

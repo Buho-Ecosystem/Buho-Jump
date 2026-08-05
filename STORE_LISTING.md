@@ -8,15 +8,22 @@ Your Bitcoin Lightning wallet and companion for Nostr apps, social identity, enc
 Buho Jump is your all-in-one Nostr companion for the browser. Manage your digital identity, send Bitcoin Lightning payments, and chat with end-to-end encryption - all from a single extension.
 
 **Identity & Key Management**
-- Create or import Nostr accounts (nsec, mnemonic seed phrase)
+- Create a recoverable BIP-39 identity and derive Nostr accounts through NIP-06
+- Restore used NIP-06 account paths from the same recovery words
+- Lightning Login with private per-website LUD-05 keys and user-approved LUD-04 signatures
+- Import standalone Nostr keys with a clear explanation that seed-only features are unavailable
 - Connect remote signers like Amber via NIP-46 (QR scan or paste)
 - NIP-07 provider - sign in to any Nostr web app seamlessly
 - Multiple accounts with easy switching
-- Per-site permission control - you decide who gets access
+- Beginner-friendly permission prompts with visit-only defaults and optional technical details
+- Request-storm protection combines repeated permission questions without grouping payments
 
 **Lightning Wallet**
 - Three wallet types: NWC (Alby Hub, Coinos, Minibits), Cashu (ecash), and LNbits
 - Send and receive Bitcoin payments instantly
+- Create and pay Cashu payment requests (NUT-18)
+- Animated QR codes for large ecash tokens
+- Restore your mint list from your recovery words (NUT-27)
 - Multiple wallets with one-click switching
 - WebLN provider for in-browser payments
 - Budget controls and spending allowances per site
@@ -30,13 +37,13 @@ Buho Jump is your all-in-one Nostr companion for the browser. Manage your digita
 
 **Security First**
 - All keys encrypted at rest with AES-256-GCM
-- Master password with PBKDF2 key derivation (100k iterations)
+- Master password with PBKDF2-SHA256 key derivation (600,000 iterations)
 - Session unlocked during browser session, locks on close
 - No analytics, no telemetry, no tracking
 - Fully open source (AGPL-3.0 License)
 
 **Built with nostr-core**
-20 Nostr protocol implementations (NIP-02, 04, 05, 06, 07, 11, 17, 19, 24, 28, 29, 42, 44, 46, 47, 50, 51, 57, 59, 65) - all powered by nostr-core.
+Identity, signing, relay, private messaging, wallet, and safety protocols are powered by nostr-core. This includes NIP-47 wallet connections and NIP-60 encrypted Cashu wallet backups.
 
 ---
 
@@ -56,6 +63,10 @@ nostr, bitcoin, lightning, wallet, nip-07, webln, encrypted messaging, privacy, 
 | `windows` (Chrome only) | Display permission approval prompts in a popup window when websites request access to your Nostr identity or Lightning wallet. |
 | `notifications` | Show browser notifications for incoming encrypted messages and Lightning payments. |
 | `alarms` | Power the optional auto-lock security timer that locks the extension after inactivity. |
+| `https://mint.minibits.cash/*` | Connect the built-in eCash wallet to its default mint. Other mint origins are not granted at installation. |
+| `https://guardrail.branta.pro/*` | Perform optional strict-privacy merchant verification. The setting can be disabled and verification never blocks a payment. |
+| `https://api.coingecko.com/*` | Load the public Bitcoin exchange rate for the fiat currency selected in Jump. No wallet or identity data is included. |
+| Optional HTTPS website access | Requested for an exact confirmed origin when the user uses Lightning Login, a custom mint, LNbits, a Lightning Address, LNURL, or another user-selected payment service. It is not granted at installation. |
 | Content script on all URLs | Inject the NIP-07 (window.nostr) and WebLN (window.webln) provider APIs so Nostr and Lightning web apps can interact with the extension. The content script only bridges messages - it does not read or modify page content. |
 
 ## Privacy Declarations (Chrome Dashboard)
@@ -64,10 +75,10 @@ nostr, bitcoin, lightning, wallet, nip-07, webln, encrypted messaging, privacy, 
 
 | Data type | Collected? | Sent externally? |
 |---|---|---|
-| Authentication info | Yes (Nostr keys, stored locally encrypted) | Only signed events to user-configured relays |
+| Authentication info | Yes (Nostr keys and recovery words, stored locally encrypted) | Signed Nostr events to user-configured relays and user-approved LUD-04 responses to the displayed website |
 | Financial and payment info | Yes (NWC wallet connection, stored locally encrypted) | Payment requests to user's wallet provider |
 | Personal communications | Yes (encrypted chat messages, stored locally) | Encrypted messages sent to user-configured relays |
-| Website activity | No | No |
+| Website activity | Yes (approved Nostr sites and Lightning Login domains, stored locally) | Only the signed login response to the website the user approves |
 | Location | No | No |
 | Health info | No | No |
 | Web browsing history | No | No |

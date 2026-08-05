@@ -14,11 +14,7 @@ export function useAccounts() {
   const activeAccount = computed(() => accounts.value.find((a) => a.isActive) || null)
 
   async function load() {
-    try {
-      accounts.value = await send('GET_ACCOUNTS') || []
-    } catch {
-      // Don't throw — a failed refresh shouldn't block account creation flows
-    }
+    accounts.value = await send('GET_ACCOUNTS') || []
   }
 
   async function create(name) {
@@ -39,8 +35,12 @@ export function useAccounts() {
     return result
   }
 
-  async function importMnemonic(name, mnemonic) {
-    const result = await send('IMPORT_FROM_MNEMONIC', name || undefined, mnemonic)
+  async function discoverMnemonic(mnemonic) {
+    return send('DISCOVER_MNEMONIC_IDENTITIES', mnemonic)
+  }
+
+  async function importMnemonic(name, mnemonic, accountIndex = 0) {
+    const result = await send('IMPORT_FROM_MNEMONIC', name || undefined, mnemonic, accountIndex)
     await load()
     return result
   }
@@ -99,6 +99,7 @@ export function useAccounts() {
     create,
     createWithMnemonic,
     importKey,
+    discoverMnemonic,
     importMnemonic,
     createRemote,
     connectRemote,

@@ -2,36 +2,42 @@
 /**
  * NWC Deep Link Confirmation Page
  *
- * Background.js intercepts the NUTbits redirect, stores the wallet, then
- * navigates this tab to nwc-callback.html?success=1 or ?error=<code>.
- * This page simply renders the appropriate confirmation state.
+ * This web-accessible extension page receives the one-time NUTbits redirect,
+ * immediately scrubs the wallet secret from the address bar, and hands it to
+ * the trusted background worker. No localhost process or third-party callback
+ * server sees the NWC connection string.
  */
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CheckCircle, AlertTriangle } from 'lucide-vue-next'
+import { CheckCircle, AlertTriangle, Loader2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
-const phase = ref('success') // success | error
+const phase = ref('connecting') // connecting | success | error
 const errorMsg = ref('')
 
-onMounted(() => {
+onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
-
-  if (params.has('success')) {
-    phase.value = 'success'
-    setTimeout(() => window.close(), 3000)
+  const value = params.get('value')
+  const token = params.get('token')
+  history.replaceState(null, '', window.location.pathname)
+  if (!value || !token) {
+    phase.value = 'error'
+    errorMsg.value = t(!value ? 'nutbits.callbackNoValue' : 'nutbits.callbackConnectFailed')
     return
   }
-
-  phase.value = 'error'
-  const err = params.get('error')
-  const errorMap = {
-    no_value: 'nutbits.callbackNoValue',
-    invalid: 'nutbits.callbackInvalid',
-    connect_failed: 'nutbits.callbackConnectFailed',
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'NUTBITS_CALLBACK',
+      params: [{ value, token }],
+    })
+    if (response?.error) throw new Error(response.error)
+    phase.value = 'success'
+    setTimeout(() => window.close(), 3000)
+  } catch {
+    phase.value = 'error'
+    errorMsg.value = t('nutbits.callbackConnectFailed')
   }
-  errorMsg.value = t(errorMap[err] || 'nutbits.callbackConnectFailed')
 })
 
 function closeTab() {
@@ -43,8 +49,14 @@ function closeTab() {
   <div class="min-h-screen bg-surface-base flex items-center justify-center p-6">
     <div class="w-full max-w-sm text-center space-y-6 animate-fade-in">
 
+      <template v-if="phase === 'connecting'">
+        <img src="/logo/logo.svg" alt="Buho Jump" class="w-14 h-14 mx-auto" />
+        <Loader2 class="w-8 h-8 text-brand animate-spin mx-auto" />
+        <p class="text-sm text-text-muted">{{ t('common.working') }}</p>
+      </template>
+
       <!-- Success -->
-      <template v-if="phase === 'success'">
+      <template v-else-if="phase === 'success'">
         <div class="flex items-center justify-center gap-5">
           <img src="/logo/logo.svg" alt="Buho Jump" class="w-14 h-14" />
           <div class="flex items-center gap-1.5">

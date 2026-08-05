@@ -10,7 +10,7 @@ import { formatSats, formatTimestamp, msatsToSats } from '../../lib/utils.js'
 
 const { t } = useI18n()
 const { toFiat } = useFiat()
-import { ArrowUpRight, ArrowDownLeft, Clock, AlertCircle } from 'lucide-vue-next'
+import { ArrowUpRight, ArrowDownLeft, Clock, AlertCircle, Smartphone, BadgeCheck, Store } from 'lucide-vue-next'
 
 const props = defineProps({
   tx: { type: Object, required: true },
@@ -19,13 +19,21 @@ const props = defineProps({
 defineEmits(['click'])
 
 const isIncoming = computed(() => props.tx.type === 'incoming')
+const metadata = computed(() => props.tx.metadata || {})
 
 const amount = computed(() => {
   const msats = props.tx.amount
   return msats != null ? msatsToSats(msats) : 0
 })
 
-const fiatAmount = computed(() => amount.value > 0 ? toFiat(amount.value) : null)
+const fiatAmount = computed(() => {
+  const snapshot = metadata.value.fiatSnapshot
+  if (snapshot) {
+    try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: snapshot.code }).format(snapshot.amount) }
+    catch { /* fall through to live rate */ }
+  }
+  return amount.value > 0 ? toFiat(amount.value) : null
+})
 
 const txState = computed(() => {
   // Use NWC state field as primary source of truth
@@ -42,6 +50,8 @@ const txState = computed(() => {
 const statusIcon = computed(() => {
   if (txState.value === 'pending') return Clock
   if (txState.value === 'expired' || txState.value === 'failed') return AlertCircle
+  if (metadata.value.payout || metadata.value.source === 'mobile') return Smartphone
+  if (metadata.value.source === 'merchant') return Store
   return isIncoming.value ? ArrowDownLeft : ArrowUpRight
 })
 
@@ -51,8 +61,7 @@ const statusColor = computed(() => {
   return isIncoming.value ? 'text-incoming bg-incoming/10' : 'text-outgoing bg-outgoing/10'
 })
 
-// Primary label: time + status
-const label = computed(() => {
+const timeLabel = computed(() => {
   const ts = props.tx.settled_at || props.tx.created_at
   if (txState.value === 'pending') return t('wallet.statusPending')
   if (txState.value === 'expired') return t('wallet.statusExpired')
@@ -60,9 +69,18 @@ const label = computed(() => {
   return ts ? formatTimestamp(ts) : (isIncoming.value ? t('wallet.statusReceived') : t('wallet.statusSent'))
 })
 
-// Secondary: description/memo in italic (like BuhoGO)
+const title = computed(() => {
+  return metadata.value.merchantVerification?.name
+    || metadata.value.recipientName
+    || props.tx.description
+    || props.tx.memo
+    || (isIncoming.value ? t('wallet.statusReceived') : t('wallet.statusSent'))
+})
+
 const subtitle = computed(() => {
-  return props.tx.description || props.tx.memo || ''
+  const description = props.tx.description || props.tx.memo || ''
+  if (description && description !== title.value) return `${timeLabel.value} · ${description}`
+  return timeLabel.value
 })
 </script>
 
@@ -72,18 +90,23 @@ const subtitle = computed(() => {
     class="w-full flex items-center gap-3 px-3 py-2.5 rounded-3xl hover:bg-surface-card transition-all duration-200 text-left group"
     :class="txState === 'pending' ? 'animate-tx-pending' : ''"
   >
-    <!-- Direction icon -->
+    <!-- Counterparty identity or direction icon -->
     <div
       class="w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0 transition-opacity"
       :class="[statusColor, txState === 'pending' ? 'animate-pulse' : '']"
     >
-      <component :is="statusIcon" class="w-4 h-4" />
+      <img v-if="metadata.merchantVerification?.logoUrl" :src="metadata.merchantVerification.logoUrl" alt="" class="w-full h-full object-contain rounded-[10px] bg-white p-1" />
+      <span v-else-if="metadata.payout || metadata.source === 'mobile'" class="text-base">📱</span>
+      <component v-else :is="statusIcon" class="w-4 h-4" />
     </div>
 
-    <!-- Label + description -->
+    <!-- Counterparty + status/time -->
     <div class="flex-1 min-w-0">
-      <div class="text-xs font-medium truncate">{{ label }}</div>
-      <div v-if="subtitle" class="text-[10px] text-text-muted italic truncate">{{ subtitle }}</div>
+      <div class="flex items-center gap-1 min-w-0">
+        <div class="text-xs font-semibold truncate">{{ title }}</div>
+        <BadgeCheck v-if="metadata.merchantVerification" class="w-3 h-3 text-success shrink-0" />
+      </div>
+      <div class="text-[10px] text-text-muted truncate">{{ subtitle }}</div>
     </div>
 
     <!-- Amount + fiat badge pill -->
@@ -95,7 +118,13 @@ const subtitle = computed(() => {
         {{ isIncoming ? '+' : '-' }}{{ formatSats(amount) }}
       </div>
       <span
-        v-if="fiatAmount"
+        v-if="metadata.payout"
+        class="text-[8px] font-semibold px-1.5 py-px rounded-full bg-info/10 text-info"
+      >
+        {{ metadata.payout.amount }} {{ metadata.payout.code }}
+      </span>
+      <span
+        v-else-if="fiatAmount"
         class="text-[8px] font-medium px-1.5 py-px rounded-full"
         :class="isIncoming ? 'bg-incoming/10 text-incoming' : 'bg-outgoing/10 text-outgoing'"
       >

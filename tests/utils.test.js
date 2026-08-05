@@ -215,6 +215,18 @@ describe('formatFullDate', () => {
 // ── detectPaymentInput ──────────────────────────────────────────
 
 describe('detectPaymentInput', () => {
+  it('detects supported mobile-money phone numbers before numeric retail payloads', () => {
+    const result = detectPaymentInput('+254 712 345 678')
+    expect(result.type).toBe('mobile-payment')
+    expect(result.value).toBe('254712345678@bitcoin.co.ke')
+  })
+
+  it('marks known payout-provider Lightning Addresses with mobile context', () => {
+    const result = detectPaymentInput('260978123456@bitzed.xyz')
+    expect(result.type).toBe('lnaddress')
+    expect(result.mobile.country.code).toBe('ZM')
+  })
+
   it('detects lightning invoices (lnbc)', () => {
     expect(detectPaymentInput('lnbc10u1p0abcdef').type).toBe('invoice')
   })

@@ -7,7 +7,7 @@ import { resetStorage, getStore } from './setup.js'
 import {
   getWalletStore, getWalletSummaries, getActiveWallet,
   addWallet, removeWallet, setActiveWallet, renameWallet,
-  reEncryptWallets, clearAllWallets,
+  reEncryptWallets, clearAllWallets, addCashuWallet, setCashuWalletPrivkey,
 } from '../lib/wallet.js'
 
 const PW = 'wallet-test-pw-123'
@@ -140,14 +140,36 @@ describe('clearAllWallets', () => {
   })
 })
 
+describe('Cashu wallet recovery state', () => {
+  it('can restore the stable NIP-60 wallet private key', async () => {
+    const originalKey = 'ab'.repeat(32)
+    const walletId = await addCashuWallet(
+      'eCash', ['https://mint.example.com/'], PW, 'account-id', originalKey,
+    )
+    expect((await getActiveWallet(PW)).cashuPrivkey).toBe(originalKey)
+
+    const restoredKey = 'cd'.repeat(32)
+    await setCashuWalletPrivkey(walletId, restoredKey, PW)
+    expect((await getActiveWallet(PW)).cashuPrivkey).toBe(restoredKey)
+  })
+
+  it('rejects malformed restored Cashu wallet keys', async () => {
+    await expect(addCashuWallet(
+      'eCash', ['https://mint.example.com'], PW, null, 'not-a-key',
+    )).rejects.toThrow('Invalid Cashu wallet private key')
+    await expect(addCashuWallet(
+      'eCash', ['https://mint.example.com'], PW, null, '00'.repeat(32),
+    )).rejects.toThrow('Invalid Cashu wallet private key')
+  })
+})
+
 describe('reEncryptWallets', () => {
   it('re-encrypts with new password', async () => {
     await addWallet(NWC_URI_1, 'A', PW)
     const NEW_PW = 'new-password-456'
     await reEncryptWallets(PW, NEW_PW)
     // Old password should fail
-    const withOld = await getWalletStore(PW)
-    expect(withOld.wallets).toHaveLength(0)
+    await expect(getWalletStore(PW)).rejects.toMatchObject({ code: 'VAULT_INTEGRITY' })
     // New password should work
     const withNew = await getWalletStore(NEW_PW)
     expect(withNew.wallets).toHaveLength(1)
@@ -156,11 +178,15 @@ describe('reEncryptWallets', () => {
 })
 
 describe('edge cases', () => {
-  it('wrong password returns empty store (not throws)', async () => {
+  it('fails closed with the wrong password', async () => {
     await addWallet(NWC_URI_1, 'A', PW)
-    const store = await getWalletStore('wrong-password')
-    expect(store.wallets).toHaveLength(0)
-    expect(store.activeWalletId).toBeNull()
+    await expect(getWalletStore('wrong-password')).rejects.toMatchObject({ code: 'VAULT_INTEGRITY' })
+  })
+
+  it('fails closed when encrypted wallet data is corrupted', async () => {
+    await addWallet(NWC_URI_1, 'A', PW)
+    getStore().walletConfigs.encrypted += 'corruption'
+    await expect(getWalletStore(PW)).rejects.toMatchObject({ code: 'VAULT_INTEGRITY' })
   })
 
   it('remove active wallet auto-activates remaining wallet', async () => {

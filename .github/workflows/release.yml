@@ -1,0 +1,103 @@
+name: Release
+
+# Every push to main is built and validated. A GitHub Release is cut only when
+# the version in package.json has no release yet, so bumping that version is
+# what publishes. Pushes that leave the version alone still get their packages
+# as workflow artifacts.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  # Pinned so AMO reviewers can reproduce the exact package we upload.
+  NODE_VERSION: '24'
+
+jobs:
+  release:
+    name: Build and release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build store packages
+        run: npm run zip:all
+
+      - name: Validate the Firefox package for AMO
+        run: npx --yes web-ext lint --source-dir .output/firefox-mv3
+
+      - name: Resolve version
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::v$version is already released. Bump the version in package.json to publish a new one."
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload packages as workflow artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: buho-jump-${{ steps.meta.outputs.version }}-${{ github.sha }}
+          path: .output/*.zip
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: steps.meta.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          notes_file="$(mktemp)"
+          cat > "$notes_file" <<'NOTES'
+          ### Store packages
+
+          - **Firefox** - upload `*-firefox.zip` to addons.mozilla.org, and `*-sources.zip` in the source code field (required, the build is bundled)
+          - **Chrome** - upload `*-chrome.zip` to the Chrome Web Store
+          - **Edge** - upload `*-edge.zip` to Microsoft Edge Add-ons
+
+          Built on Node 24 with `npm ci && npm run zip:all`. See
+          [docs/FIREFOX_RELEASE.md](docs/FIREFOX_RELEASE.md) for the AMO submission steps.
+
+          NOTES
+
+          # A hyphen in the version (1.1.0-beta.1) marks it as a prerelease.
+          flags=()
+          case "$VERSION" in
+            *-*) flags+=(--prerelease) ;;
+          esac
+
+          gh release create "v$VERSION" .output/*.zip \
+            --title "Buho Jump v$VERSION" \
+            --notes-file "$notes_file" \
+            --generate-notes \
+            --target "$GITHUB_SHA" \
+            "${flags[@]}"

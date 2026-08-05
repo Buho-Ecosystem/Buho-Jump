@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { resetStorage, getStore } from './setup.js'
 import {
-  getAccounts, getActiveAccount, getActiveAccountId, setActiveAccount,
+  getAccounts, getActiveAccount, getActiveAccountForClient, getActiveAccountId, setActiveAccount,
   createLocalAccount, createAccountWithMnemonic, importAccount,
   importFromMnemonic, createNip46Account, updateAccount,
   removeAccount, getAccountSummaries, reEncryptAccounts,
@@ -37,10 +37,15 @@ describe('encrypted storage', () => {
     expect(accounts[created.id].name).toBe('Alice')
   })
 
-  it('returns empty object with wrong password', async () => {
+  it('fails closed with the wrong password', async () => {
     await createLocalAccount(PW, 'Alice')
-    const accounts = await getAccounts('wrong-password')
-    expect(Object.keys(accounts)).toHaveLength(0)
+    await expect(getAccounts('wrong-password')).rejects.toMatchObject({ code: 'VAULT_INTEGRITY' })
+  })
+
+  it('fails closed when encrypted account data is corrupted', async () => {
+    await createLocalAccount(PW, 'Alice')
+    getStore().accounts.encrypted += 'corruption'
+    await expect(getAccounts(PW)).rejects.toMatchObject({ code: 'VAULT_INTEGRITY' })
   })
 
   it('returns empty object with no password', async () => {
@@ -96,6 +101,12 @@ describe('createAccountWithMnemonic', () => {
     expect(account.mnemonic).toBeDefined()
     expect(account.mnemonic.split(' ')).toHaveLength(12)
     expect(account.secretHex).toBeDefined()
+    expect(account.identitySeed).toBeUndefined()
+    const stored = Object.values(await getAccounts(PW))[0]
+    expect(stored.identitySeed.type).toBe('bip39')
+    expect(stored.identitySeed.mnemonic).toBe(account.mnemonic)
+    expect(stored.identitySeed.backupConfirmed).toBe(false)
+    expect((await getActiveAccountForClient(PW)).identitySeed).toBeUndefined()
   })
 })
 
@@ -135,6 +146,30 @@ describe('importFromMnemonic', () => {
     const recovered = await importFromMnemonic(PW, 'Recovered', original.mnemonic)
     expect(recovered.pubkey).toBe(original.pubkey)
     expect(recovered.secretHex).toBe(original.secretHex)
+    expect(recovered.keyOrigin).toEqual({
+      type: 'nip06',
+      accountIndex: 0,
+      path: "m/44'/1237'/0'/0/0",
+    })
+    expect((await getAccounts(PW))[recovered.id].identitySeed.backupConfirmed).toBe(true)
+  })
+
+  it('imports another NIP-06 account path from the same phrase', async () => {
+    const original = await createAccountWithMnemonic(PW, 'Original')
+    const sibling = await importFromMnemonic(PW, 'Sibling', original.mnemonic, 1)
+
+    expect(sibling.pubkey).not.toBe(original.pubkey)
+    expect(sibling.keyOrigin.accountIndex).toBe(1)
+    expect(sibling.keyOrigin.path).toBe("m/44'/1237'/1'/0/0")
+    expect(Object.keys(await getAccounts(PW))).toHaveLength(2)
+  })
+
+  it('does not duplicate an already recovered path', async () => {
+    const original = await createAccountWithMnemonic(PW, 'Original')
+    const duplicate = await importFromMnemonic(PW, 'Duplicate', original.mnemonic, 0)
+
+    expect(duplicate.id).toBe(original.id)
+    expect(Object.keys(await getAccounts(PW))).toHaveLength(1)
   })
 
   it('rejects invalid mnemonic', async () => {
@@ -199,7 +234,22 @@ describe('getAccountSummaries', () => {
       expect(s.npub).toMatch(/^npub1/)
       expect(s.secretHex).toBeUndefined()
       expect(s.nip46ClientSecretHex).toBeUndefined()
+      expect(s.identitySeed).toBeUndefined()
     }
+  })
+
+  it('reports seed-only identity capabilities accurately', async () => {
+    const seedBacked = await createAccountWithMnemonic(PW, 'Seed identity')
+    const rawKey = await createLocalAccount(PW, 'Raw key')
+    const remote = await createNip46Account(PW, 'Remote')
+    const summaries = await getAccountSummaries(PW)
+
+    expect(summaries.find((item) => item.id === seedBacked.id).capabilities.lightningLogin)
+      .toEqual({ supported: true, reason: null })
+    expect(summaries.find((item) => item.id === rawKey.id).capabilities.lightningLogin)
+      .toEqual({ supported: false, reason: 'recovery_words_required' })
+    expect(summaries.find((item) => item.id === remote.id).capabilities.lightningLogin)
+      .toEqual({ supported: false, reason: 'remote_signer' })
   })
 })
 
@@ -209,8 +259,7 @@ describe('reEncryptAccounts', () => {
     await reEncryptAccounts(PW, 'new-password')
 
     // Old password should fail
-    const withOld = await getAccounts(PW)
-    expect(Object.keys(withOld)).toHaveLength(0)
+    await expect(getAccounts(PW)).rejects.toMatchObject({ code: 'VAULT_INTEGRITY' })
 
     // New password should work
     const withNew = await getAccounts('new-password')
@@ -240,9 +289,7 @@ describe('multiple accounts', () => {
 describe('edge cases', () => {
   it('re-encrypt with wrong old password — no data loss', async () => {
     await createLocalAccount(PW, 'Alice')
-    // Should fail or be no-op with wrong password
-    const withWrong = await getAccounts('wrong-pw')
-    expect(Object.keys(withWrong)).toHaveLength(0)
+    await expect(getAccounts('wrong-pw')).rejects.toMatchObject({ code: 'VAULT_INTEGRITY' })
     // Original password should still work
     const accounts = await getAccounts(PW)
     expect(Object.values(accounts)[0].name).toBe('Alice')
@@ -318,10 +365,9 @@ describe('getAccounts — password edge cases', () => {
     expect(Object.keys(accounts)).toHaveLength(0)
   })
 
-  it('numeric password returns empty', async () => {
+  it('numeric password cannot decrypt an existing vault', async () => {
     await createLocalAccount(PW, 'Alice')
-    const accounts = await getAccounts(12345)
-    expect(Object.keys(accounts)).toHaveLength(0)
+    await expect(getAccounts(12345)).rejects.toMatchObject({ code: 'VAULT_INTEGRITY' })
   })
 })
 

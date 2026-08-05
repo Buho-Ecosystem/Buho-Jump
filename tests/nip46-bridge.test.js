@@ -100,4 +100,10 @@ describe('parseConnectionURI', () => {
     const parsed = parseConnectionURI(uri)
     expect(parsed.remotePubkey).toBe(pubkey)
   })
+
+  it('rejects malformed signer keys and insecure relays', () => {
+    expect(() => parseConnectionURI('bunker://short?relay=wss://relay.test')).toThrow('public key')
+    expect(() => parseConnectionURI(`bunker://${'b'.repeat(64)}?relay=ws://relay.test`)).toThrow('WSS')
+    expect(() => parseConnectionURI(`bunker://${'b'.repeat(64)}?relay=wss://user:pass@relay.test`)).toThrow('WSS')
+  })
 })

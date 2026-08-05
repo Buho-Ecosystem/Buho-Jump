@@ -16,7 +16,7 @@ import QrScanner from './QrScanner.vue'
 const emit = defineEmits(['complete', 'cancel'])
 const { t } = useI18n()
 
-const { create, createWithMnemonic, importKey, importMnemonic, createRemote, connectRemote, startNostrConnect, cancelNostrConnect, loadNip46Status, nip46Status: nip46GlobalStatus, publishProfile, fetchProfile, load: loadAccounts, remove: removeAccount } = useAccounts()
+const { create, createWithMnemonic, importKey, discoverMnemonic, importMnemonic, createRemote, connectRemote, startNostrConnect, cancelNostrConnect, loadNip46Status, nip46Status: nip46GlobalStatus, publishProfile, fetchProfile, load: loadAccounts, remove: removeAccount } = useAccounts()
 const { send: sendMsg } = useMessaging()
 
 // ── Wizard state ──
@@ -33,12 +33,19 @@ const bunkerUri = ref('')
 const showNsec = ref(false)
 const copied = ref(false)
 const showScanner = ref(false)
-const backupConfirmed = ref(false)
+const backupStage = ref('show') // show | verify
+const backupChallenge = ref(null)
+const backupAnswers = ref([])
 const downloadedKey = ref(false)
 
 // ── Mnemonic state ──
 const mnemonicWords = ref('')
 const mnemonicDisplay = ref([]) // 12 words for backup display
+const recoveryCandidates = ref([])
+const selectedRecoveryIndex = ref(null)
+const showAllRecoveryCandidates = ref(false)
+const recoveryNetworkChecked = ref(true)
+const manualRecoveryIndex = ref('')
 
 // ── NIP-46 connection state ──
 const nip46Status = ref('')
@@ -49,11 +56,25 @@ const nostrConnectQr = ref('')
 const nostrConnectAccountId = ref(null)
 let nostrConnectPollTimer = null
 let nostrConnectStarted = false
+let nostrConnectCompleted = false
+let nostrConnectCleanupPromise = null
 const nostrConnectCountdown = ref(0)
 let nostrConnectCountdownTimer = null
 
 // Auto-generate QR when user selects "Show QR" on step 2
-watch(nip46Method, async (method) => {
+async function cleanupNostrConnectAccount() {
+  if (nostrConnectCleanupPromise) return nostrConnectCleanupPromise
+  nostrConnectCleanupPromise = (async () => {
+    await cancelNostrConnect().catch(() => {})
+    const accountId = nostrConnectAccountId.value
+    nostrConnectAccountId.value = null
+    if (accountId && !nostrConnectCompleted) await removeAccount(accountId).catch(() => {})
+  })().finally(() => { nostrConnectCleanupPromise = null })
+  return nostrConnectCleanupPromise
+}
+
+watch(nip46Method, async (method, previous) => {
+  if (previous === 'nostrconnect' && method !== 'nostrconnect') await cleanupNostrConnectAccount()
   if (method !== 'nostrconnect' || step.value !== 2 || nostrConnectStarted) return
   nostrConnectStarted = true
   try {
@@ -63,7 +84,12 @@ watch(nip46Method, async (method) => {
 
     nip46Status.value = 'waiting'
     const result = await startNostrConnect(account.id)
-    if (result?.error) { nip46Status.value = ''; nostrConnectStarted = false; return }
+    if (result?.error) {
+      nip46Status.value = ''
+      nostrConnectStarted = false
+      await cleanupNostrConnectAccount()
+      return
+    }
 
     nostrConnectUri.value = result.uri
     const QRCode = (await import('qrcode')).default
@@ -88,13 +114,23 @@ watch(nip46Method, async (method) => {
         nostrConnectPollTimer = null
         if (nostrConnectCountdownTimer) { clearInterval(nostrConnectCountdownTimer); nostrConnectCountdownTimer = null }
         await loadAccounts()
+        nostrConnectCompleted = true
         nip46Status.value = 'done'
         step.value = 3
+      } else if (nip46GlobalStatus.value.error) {
+        clearInterval(nostrConnectPollTimer)
+        nostrConnectPollTimer = null
+        error.value = nip46GlobalStatus.value.error
+        nip46Status.value = ''
+        nostrConnectStarted = false
+        await cleanupNostrConnectAccount()
       }
     }, 1500)
-  } catch {
+  } catch (err) {
     nip46Status.value = ''
     nostrConnectStarted = false
+    error.value = err?.message || t('common.error')
+    await cleanupNostrConnectAccount()
   }
 })
 
@@ -107,8 +143,8 @@ const primaryModes = computed(() => [
   {
     id: 'new',
     icon: Sparkles,
-    title: t('wizard.modeNewTitle'),
-    desc: t('wizard.modeNewDesc'),
+    title: t('wizard.modeNewIdentityTitle'),
+    desc: t('wizard.modeNewIdentityDesc'),
     recommended: true,
   },
   {
@@ -154,11 +190,26 @@ const importKeyError = computed(() => {
   return t('wizard.invalidKeyFormat')
 })
 
+const manualRecoveryError = computed(() => {
+  if (manualRecoveryIndex.value === '') return ''
+  const value = Number(manualRecoveryIndex.value)
+  if (Number.isInteger(value) && value >= 0 && value <= 2147483647) return ''
+  return t('wizard.recoveryAccountNumberError')
+})
+
+const visibleRecoveryCandidates = computed(() => {
+  if (showAllRecoveryCandidates.value) return recoveryCandidates.value
+  const used = recoveryCandidates.value.filter((candidate) => candidate.used)
+  return used.length > 0 ? used : recoveryCandidates.value.slice(0, 1)
+})
+
 const canProceedStep2 = computed(() => {
   if (mode.value === 'new') return displayName.value.trim().length > 0
   if (mode.value === 'recover') {
     const words = mnemonicWords.value.trim()
-    return words.split(/\s+/).filter(Boolean).length >= 12 && nip06.validateMnemonic(words.toLowerCase())
+    return words.split(/\s+/).filter(Boolean).length >= 12
+      && nip06.validateMnemonic(words.toLowerCase())
+      && !manualRecoveryError.value
   }
   if (mode.value === 'import') return isValidKeyInput(importNsec.value.trim())
   if (mode.value === 'nip46') return nip46Method.value === 'nostrconnect' || bunkerUri.value.trim().length > 0
@@ -168,14 +219,14 @@ const canProceedStep2 = computed(() => {
 const totalSteps = computed(() => {
   if (mode.value === 'nip46') return 3
   if (mode.value === 'import') return 3
-  if (mode.value === 'recover') return 4
+  if (mode.value === 'recover') return 5
   return 5 // new: choose → name → backup → profile → done
 })
 
 const stepLabels = computed(() => {
   if (mode.value === 'nip46') return [t('wizard.stepSetup'), t('wizard.stepConnect'), t('wizard.stepDone')]
   if (mode.value === 'import') return [t('wizard.stepSetup'), t('wizard.stepImport'), t('wizard.stepDone')]
-  if (mode.value === 'recover') return [t('wizard.stepSetup'), t('wizard.stepRecover'), t('wizard.stepProfile'), t('wizard.stepDone')]
+  if (mode.value === 'recover') return [t('wizard.stepSetup'), t('wizard.stepRecover'), t('wizard.stepIdentity'), t('wizard.stepProfile'), t('wizard.stepDone')]
   return [t('wizard.stepSetup'), t('wizard.stepName'), t('wizard.stepBackup'), t('wizard.stepProfile'), t('wizard.stepDone')]
 })
 
@@ -187,10 +238,11 @@ function selectMode(m) {
   error.value = ''
 }
 
-function goBack() {
+async function goBack() {
   error.value = ''
   if (nostrConnectPollTimer) { clearInterval(nostrConnectPollTimer); nostrConnectPollTimer = null }
-  cancelNostrConnect()
+  if (nostrConnectAccountId.value && !nostrConnectCompleted) await cleanupNostrConnectAccount()
+  else cancelNostrConnect().catch(() => {})
   if (step.value === 2) {
     step.value = 1
     mode.value = null
@@ -202,11 +254,57 @@ function goBack() {
     // Backup step — allow going back to name input
     step.value = 2
   } else if (step.value === 3 && mode.value === 'recover') {
-    // Profile step — allow going back to input
+    recoveryCandidates.value = []
+    selectedRecoveryIndex.value = null
+    showAllRecoveryCandidates.value = false
     step.value = 2
   } else if (step.value === 4 && mode.value === 'new') {
     // Profile step — allow going back to backup
     step.value = 3
+  }
+}
+
+async function completeMnemonicRecovery(candidate) {
+  const accountIndex = candidate?.accountIndex ?? 0
+  const profile = candidate?.profile || null
+  const suggestedName = profile?.display_name || profile?.name || ''
+  const account = await importMnemonic(
+    displayName.value.trim() || suggestedName || undefined,
+    mnemonicWords.value,
+    accountIndex
+  )
+  if (!account) throw new Error('Recovery failed')
+
+  createdAccount.value = account
+  mnemonicWords.value = ''
+  recoveryCandidates.value = []
+  if (profile) {
+    displayName.value = profile.display_name || profile.name || displayName.value
+    aboutMe.value = profile.about || ''
+  } else if (account.pubkey) {
+    const existing = await fetchProfile(account.pubkey).catch(() => null)
+    if (existing) {
+      displayName.value = existing.display_name || existing.name || displayName.value
+      aboutMe.value = existing.about || ''
+    }
+  }
+  step.value = 4
+}
+
+async function handleRecoverySelection() {
+  const candidate = recoveryCandidates.value.find(
+    (item) => item.accountIndex === selectedRecoveryIndex.value
+  )
+  if (!candidate) return
+
+  loading.value = true
+  error.value = ''
+  try {
+    await completeMnemonicRecovery(candidate)
+  } catch (err) {
+    error.value = err.message || 'Recovery failed'
+  } finally {
+    loading.value = false
   }
 }
 
@@ -216,25 +314,38 @@ async function handleStep2() {
 
   try {
     if (mode.value === 'new') {
-      const account = await createWithMnemonic(displayName.value.trim())
+      // Brief staged pause turns key creation into a felt moment and gives
+      // the "save these words" screen more weight when it appears.
+      const [account] = await Promise.all([
+        createWithMnemonic(displayName.value.trim()),
+        new Promise(resolve => setTimeout(resolve, 750)),
+      ])
       if (!account) throw new Error('Account creation returned no data')
       createdAccount.value = account
       mnemonicDisplay.value = account.mnemonic.split(' ')
+      backupStage.value = 'show'
+      backupChallenge.value = null
+      backupAnswers.value = []
       step.value = 3
     } else if (mode.value === 'recover') {
-      const account = await importMnemonic(displayName.value.trim() || undefined, mnemonicWords.value.trim())
-      if (!account) throw new Error('Recovery failed')
-      createdAccount.value = account
-      step.value = 3
-      if (account.pubkey) {
-        fetchProfile(account.pubkey)
-          .then((existing) => {
-            if (existing) {
-              displayName.value = existing.display_name || existing.name || displayName.value
-              aboutMe.value = existing.about || ''
-            }
-          })
-          .catch(() => {})
+      if (manualRecoveryIndex.value !== '') {
+        await completeMnemonicRecovery({ accountIndex: Number(manualRecoveryIndex.value) })
+      } else {
+        const discovery = await discoverMnemonic(mnemonicWords.value)
+        const candidates = discovery?.candidates || []
+        if (candidates.length === 0) throw new Error('Recovery scan returned no identities')
+
+        const used = candidates.filter((candidate) => candidate.used)
+        recoveryNetworkChecked.value = discovery.networkChecked !== false
+
+        if (discovery.networkChecked !== false && used.length <= 1) {
+          await completeMnemonicRecovery(used[0] || candidates[0])
+        } else {
+          recoveryCandidates.value = candidates
+          selectedRecoveryIndex.value = (used[0] || candidates[0]).accountIndex
+          showAllRecoveryCandidates.value = false
+          step.value = 3
+        }
       }
     } else if (mode.value === 'import') {
       const account = await importKey(undefined, importNsec.value.trim())
@@ -317,7 +428,7 @@ async function handlePublishProfile() {
       ...(aboutMe.value.trim() && { about: aboutMe.value.trim() }),
     }
     publishResult.value = await publishProfile(profileData)
-    step.value = mode.value === 'recover' ? 4 : 5
+    step.value = 5
   } catch (err) {
     error.value = err.message || 'Failed to publish profile'
   } finally {
@@ -326,7 +437,7 @@ async function handlePublishProfile() {
 }
 
 function skipPublish() {
-  step.value = mode.value === 'recover' ? 4 : 5
+  step.value = 5
 }
 
 function finish() {
@@ -350,6 +461,7 @@ function finish() {
       })
       .catch(() => { /* best effort */ })
   }
+  nostrConnectCompleted = true
   emit('complete')
 }
 
@@ -358,6 +470,41 @@ function copyMnemonic() {
   navigator.clipboard.writeText(createdAccount.value.mnemonic)
   copied.value = true
   setTimeout(() => (copied.value = false), 2500)
+}
+
+async function startIdentityBackupVerification() {
+  if (!createdAccount.value?.id || loading.value) return
+  loading.value = true
+  error.value = ''
+  try {
+    backupChallenge.value = await sendMsg('BEGIN_IDENTITY_BACKUP_VERIFICATION', createdAccount.value.id)
+    backupAnswers.value = Array(backupChallenge.value?.indices?.length || 1).fill('')
+    showNsec.value = false
+    backupStage.value = 'verify'
+  } catch (err) {
+    error.value = err.message || t('common.error')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function confirmIdentityBackup() {
+  if (!backupChallenge.value?.token || !createdAccount.value?.id || loading.value) return
+  loading.value = true
+  error.value = ''
+  try {
+    await sendMsg(
+      'CONFIRM_IDENTITY_BACKUP',
+      createdAccount.value.id,
+      backupChallenge.value.token,
+      backupAnswers.value,
+    )
+    step.value = 4
+  } catch (err) {
+    error.value = t('wizard.backupVerificationFailed')
+  } finally {
+    loading.value = false
+  }
 }
 
 // Clean up timers on unmount to prevent memory leaks
@@ -370,7 +517,10 @@ onBeforeUnmount(() => {
     clearInterval(nostrConnectPollTimer)
     nostrConnectPollTimer = null
   }
-  cancelNostrConnect()
+  if (nostrConnectAccountId.value && !nostrConnectCompleted) cleanupNostrConnectAccount()
+  else cancelNostrConnect().catch(() => {})
+  mnemonicWords.value = ''
+  recoveryCandidates.value = []
 })
 </script>
 
@@ -587,6 +737,28 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
+      <div v-if="mode === 'recover' && manualRecoveryIndex === ''"
+        class="flex items-start gap-2.5 p-3 rounded-3xl bg-brand/5 border border-brand/15">
+        <Info class="w-4 h-4 text-brand shrink-0 mt-0.5" />
+        <p class="text-[10px] text-text-muted leading-relaxed">
+          {{ t('wizard.recoveryScanPrivacy') }}
+        </p>
+      </div>
+
+      <details v-if="mode === 'recover'" class="group rounded-2xl border border-border bg-surface-card overflow-hidden">
+        <summary class="cursor-pointer list-none flex items-center justify-between gap-3 px-3.5 py-3 text-[10px] font-semibold text-text-secondary">
+          <span>{{ t('wizard.recoverySpecificAccount') }}</span>
+          <ArrowRight class="w-3.5 h-3.5 text-text-muted transition-transform group-open:rotate-90" />
+        </summary>
+        <div class="px-3.5 pb-3.5 space-y-2 border-t border-border pt-3">
+          <p class="text-[10px] text-text-muted leading-relaxed">{{ t('wizard.recoverySpecificAccountHint') }}</p>
+          <input v-model="manualRecoveryIndex" type="number" min="0" max="2147483647" step="1"
+            :placeholder="t('wizard.recoveryAccountNumberPlaceholder')"
+            class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted/50" />
+          <p v-if="manualRecoveryError" class="text-[10px] text-warning">{{ manualRecoveryError }}</p>
+        </div>
+      </details>
+
       <!-- ── NIP-46: Connection method toggle ── -->
       <div v-if="mode === 'nip46' && !loading && nip46Status !== 'waiting'" class="space-y-3">
         <!-- Method toggle -->
@@ -725,9 +897,12 @@ onBeforeUnmount(() => {
       <!-- Action button -->
       <button v-if="!(mode === 'nip46' && loading) && !(mode === 'nip46' && nip46Method === 'nostrconnect' && (nostrConnectQr || nip46Status === 'creating' || nip46Status === 'waiting'))" @click="handleStep2" :disabled="!canProceedStep2 || loading"
         class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all font-bold btn-primary flex items-center justify-center gap-2">
-        <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
+        <template v-if="loading">
+          <Loader2 class="w-4 h-4 animate-spin" />
+          <span v-if="mode === 'new'">{{ t('wizard.creatingKey') }}</span>
+        </template>
         <template v-else>
-          {{ mode === 'new' ? t('wizard.createAccount') : mode === 'recover' ? t('wizard.recoverAccountBtn') : mode === 'import' ? t('wizard.importAccountBtn') : t('wizard.connect') }}
+          {{ mode === 'new' ? t('wizard.createIdentity') : mode === 'recover' ? (manualRecoveryIndex === '' ? t('wizard.findIdentities') : t('wizard.recoverAccountBtn')) : mode === 'import' ? t('wizard.importAccountBtn') : t('wizard.connect') }}
           <ArrowRight class="w-4 h-4" />
         </template>
       </button>
@@ -743,14 +918,14 @@ onBeforeUnmount(() => {
         <div class="w-11 h-11 rounded-2xl bg-warning/10 flex items-center justify-center mx-auto">
           <ShieldAlert class="w-5 h-5 text-warning" />
         </div>
-        <h2 class="text-[15px] font-extrabold tracking-tight">{{ t('wizard.backupTitle') }}</h2>
+        <h2 class="text-[15px] font-extrabold tracking-tight">{{ backupStage === 'verify' ? t('wizard.verifyBackup') : t('wizard.backupTitle') }}</h2>
         <p class="text-[11px] text-text-muted leading-relaxed max-w-[280px] mx-auto">
-          {{ t('wizard.backupDesc') }}
+          {{ backupStage === 'verify' ? t('wizard.backupVerifyDesc') : t('wizard.backupDesc') }}
         </p>
       </div>
 
       <!-- Recovery words card -->
-      <div class="bg-surface-card rounded-3xl border border-warning/25 overflow-hidden shadow-sm">
+      <div v-if="backupStage === 'show'" class="bg-surface-card rounded-3xl border border-warning/25 overflow-hidden shadow-sm">
 
         <!-- Warning banner -->
         <div class="bg-warning/8 px-4 py-2.5 flex items-center gap-2 border-b border-warning/15">
@@ -761,12 +936,14 @@ onBeforeUnmount(() => {
         <!-- 12-word grid -->
         <div class="p-4 space-y-3">
           <div class="relative">
+            <!-- Real words enter the page only after reveal, so nothing
+                 sensitive sits in the DOM behind the blur. -->
             <div class="grid grid-cols-3 gap-2"
               :class="showNsec ? '' : 'blur-[8px] select-none pointer-events-none'">
               <div v-for="(word, i) in mnemonicDisplay" :key="i"
                 class="flex items-center gap-1.5 bg-surface-base rounded-lg px-2.5 py-2 border border-border">
                 <span class="text-[10px] text-text-muted font-mono w-4 text-right">{{ i + 1 }}</span>
-                <span class="text-[12px] font-medium text-text-secondary select-all">{{ word }}</span>
+                <span class="text-[12px] font-medium text-text-secondary select-all">{{ showNsec ? word : '••••' }}</span>
               </div>
             </div>
             <!-- Reveal overlay -->
@@ -790,38 +967,106 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- Confirmation checkbox -->
-      <label class="flex items-start gap-3 p-3 rounded-3xl cursor-pointer transition-all duration-200"
-        :class="backupConfirmed ? 'bg-success/5 border border-success/20' : 'bg-surface-card border border-border hover:border-brand/20'">
-        <input type="checkbox" v-model="backupConfirmed"
-          class="mt-0.5 w-4 h-4 rounded border-border text-brand focus:ring-brand/20 accent-[var(--brand-primary)]" />
-        <div>
-          <span class="text-[11px] font-semibold" :class="backupConfirmed ? 'text-success' : 'text-text-primary'">
-            {{ t('wizard.backupConfirm') }}
-          </span>
-          <p class="text-[10px] text-text-muted mt-0.5 leading-relaxed">
-            {{ t('wizard.backupConfirmHint') }}
-          </p>
+      <div v-else class="bg-surface-card rounded-3xl border border-border p-4 space-y-3">
+        <div class="grid grid-cols-3 gap-2">
+          <label v-for="(wordIndex, index) in backupChallenge?.indices || []" :key="wordIndex" class="space-y-1">
+            <span class="text-[10px] font-semibold text-text-muted">{{ t('wizard.wordNumber', { number: wordIndex + 1 }) }}</span>
+            <input v-model="backupAnswers[index]" autocomplete="off" autocapitalize="none" spellcheck="false"
+              class="w-full bg-surface-base border border-border rounded-xl px-2.5 py-2 text-sm outline-none focus:border-brand" />
+          </label>
         </div>
-      </label>
+        <button @click="backupStage = 'show'; error = ''" class="text-[10px] text-brand font-semibold">{{ t('wizard.showAgain') }}</button>
+      </div>
 
       <!-- Continue button -->
-      <button @click="step = 4" :disabled="!backupConfirmed"
+      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-[11px] text-error">
+        <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
+        <span>{{ error }}</span>
+      </div>
+
+      <button v-if="backupStage === 'show'" @click="startIdentityBackupVerification" :disabled="loading"
         class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold btn-primary flex items-center justify-center gap-2">
-        {{ t('common.continue') }}
+        <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
+        {{ t('wizard.verifyBackup') }}
+        <ArrowRight class="w-4 h-4" />
+      </button>
+      <button v-else @click="confirmIdentityBackup" :disabled="backupAnswers.some(answer => !answer.trim()) || loading"
+        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold btn-primary flex items-center justify-center gap-2">
+        <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
+        {{ t('wizard.confirmBackup') }}
         <ArrowRight class="w-4 h-4" />
       </button>
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
-    <!-- Step 3 (recover): Profile editing            -->
+    <!-- Step 3 (recover): Choose a derived identity -->
     <!-- ═══════════════════════════════════════════ -->
     <div v-if="step === 3 && mode === 'recover'" class="space-y-4 animate-fade-in-up">
 
-      <!-- Back button -->
       <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
         <ArrowLeft class="w-3.5 h-3.5" /> {{ t('common.back') }}
       </button>
+
+      <div class="text-center space-y-1.5">
+        <div class="w-11 h-11 rounded-2xl bg-brand/10 flex items-center justify-center mx-auto mb-2">
+          <UserRound class="w-5 h-5 text-brand" />
+        </div>
+        <h2 class="text-[15px] font-extrabold tracking-tight">{{ t('wizard.chooseRecoveredIdentity') }}</h2>
+        <p class="text-[11px] text-text-muted leading-relaxed max-w-[280px] mx-auto">
+          {{ recoveryNetworkChecked ? t('wizard.multipleIdentitiesFound') : t('wizard.recoveryScanUnavailable') }}
+        </p>
+      </div>
+
+      <div class="space-y-2 max-h-[310px] overflow-y-auto pr-0.5">
+        <label v-for="candidate in visibleRecoveryCandidates" :key="candidate.accountIndex"
+          class="flex items-center gap-3 p-3 rounded-3xl border cursor-pointer transition-all"
+          :class="selectedRecoveryIndex === candidate.accountIndex ? 'border-brand bg-brand/5' : 'border-border bg-surface-card hover:border-brand/25'">
+          <input v-model="selectedRecoveryIndex" type="radio" :value="candidate.accountIndex" class="sr-only" />
+          <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm"
+            :class="selectedRecoveryIndex === candidate.accountIndex ? 'bg-brand text-surface-base' : 'bg-surface-elevated text-text-secondary'">
+            {{ (candidate.profile?.display_name || candidate.profile?.name || String(candidate.accountIndex + 1))[0].toUpperCase() }}
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-[12px] truncate">
+                {{ candidate.profile?.display_name || candidate.profile?.name || t('wizard.derivedIdentity', { number: candidate.accountIndex + 1 }) }}
+              </span>
+              <span v-if="candidate.used" class="text-[8px] font-bold uppercase tracking-wide text-success bg-success/10 rounded-full px-1.5 py-0.5 shrink-0">
+                {{ t('wizard.activityFound') }}
+              </span>
+            </div>
+            <div class="text-[9px] text-text-muted font-mono truncate mt-0.5">{{ truncateKey(candidate.npub, 13, 5) }}</div>
+            <div class="text-[8px] text-text-muted/70 font-mono truncate mt-0.5">{{ candidate.path }}</div>
+          </div>
+          <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
+            :class="selectedRecoveryIndex === candidate.accountIndex ? 'border-brand' : 'border-border'">
+            <div v-if="selectedRecoveryIndex === candidate.accountIndex" class="w-2 h-2 rounded-full bg-brand" />
+          </div>
+        </label>
+      </div>
+
+      <button v-if="!showAllRecoveryCandidates && recoveryCandidates.length > visibleRecoveryCandidates.length"
+        @click="showAllRecoveryCandidates = true"
+        class="w-full text-[10px] text-text-muted hover:text-brand py-1 font-semibold transition-colors">
+        {{ t('wizard.showAllDerivedIdentities', { count: recoveryCandidates.length }) }}
+      </button>
+
+      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-[11px] text-error">
+        <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
+        <span>{{ error }}</span>
+      </div>
+
+      <button @click="handleRecoverySelection" :disabled="loading || selectedRecoveryIndex === null"
+        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-40 transition-all font-bold btn-primary flex items-center justify-center gap-2">
+        <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
+        <span>{{ loading ? t('wizard.recoveringIdentity') : t('wizard.importSelectedIdentity') }}</span>
+      </button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- Step 4 (recover): Profile editing          -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div v-if="step === 4 && mode === 'recover'" class="space-y-4 animate-fade-in-up">
 
       <div class="text-center space-y-1.5">
         <h2 class="text-[15px] font-extrabold tracking-tight">{{ t('wizard.profileTitle') }}</h2>
@@ -830,7 +1075,6 @@ onBeforeUnmount(() => {
         </p>
       </div>
 
-      <!-- Profile preview card -->
       <div class="bg-surface-card rounded-3xl p-4 border border-border shadow-sm">
         <div class="flex items-center gap-3">
           <div class="w-12 h-12 rounded-full bg-brand flex items-center justify-center text-surface-base font-bold text-lg shrink-0">
@@ -1005,7 +1249,7 @@ onBeforeUnmount(() => {
     <!-- ═══════════════════════════════════════════ -->
     <!-- Final step: Done                          -->
     <!-- ═══════════════════════════════════════════ -->
-    <div v-if="(step === 5 && mode === 'new') || (step === 3 && mode === 'import') || (step === 4 && mode === 'recover')" class="space-y-4 animate-fade-in-up">
+    <div v-if="(step === 5 && mode === 'new') || (step === 3 && mode === 'import') || (step === 5 && mode === 'recover')" class="space-y-4 animate-fade-in-up">
       <div class="text-center space-y-2 pt-4">
         <div class="w-14 h-14 rounded-full bg-success/12 flex items-center justify-center mx-auto">
           <Check class="w-7 h-7 text-success" />

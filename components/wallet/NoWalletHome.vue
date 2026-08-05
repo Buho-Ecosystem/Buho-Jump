@@ -13,10 +13,7 @@ const { t } = useI18n()
 <template>
   <div class="flex flex-col items-center text-center animate-fade-in-up pt-4">
 
-    <!-- NWC logo -->
-    <div class="w-16 h-16 rounded-2xl bg-brand/10 flex items-center justify-center mb-4">
-      <img src="/nwc/nwc-logo.svg" alt="NWC" class="w-10 h-10" />
-    </div>
+    <img src="/Onboarding%20wizard/storyset-ewallet-bro.svg" alt="" class="w-40 h-28 object-contain mb-2" />
 
     <!-- Heading -->
     <h2 class="text-[15px] font-extrabold leading-tight mb-1.5">

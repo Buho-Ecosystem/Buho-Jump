@@ -3,7 +3,8 @@
  * Reusable empty state card with icon, message, and optional action.
  */
 defineProps({
-  icon: { type: [Object, Function], required: true },
+  icon: { type: [Object, Function], default: null },
+  illustration: { type: String, default: '' },
   title: { type: String, required: true },
   description: { type: String, default: '' },
   actionLabel: { type: String, default: '' },
@@ -14,7 +15,8 @@ defineEmits(['action'])
 
 <template>
   <div class="bg-surface-card rounded-3xl shadow-sm p-8 border border-border text-center space-y-3 animate-fade-in-up">
-    <div class="w-10 h-10 rounded-[10px] bg-brand/8 flex items-center justify-center mx-auto">
+    <img v-if="illustration" :src="illustration" alt="" class="w-36 h-28 object-contain mx-auto -my-2" />
+    <div v-else-if="icon" class="w-10 h-10 rounded-[10px] bg-brand/8 flex items-center justify-center mx-auto">
       <component :is="icon" class="w-5.5 h-5.5 text-brand/60" />
     </div>
     <div class="space-y-1">

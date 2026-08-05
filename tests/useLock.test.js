@@ -160,6 +160,18 @@ describe('changePassword', () => {
   })
 })
 
+describe('setAutoLock', () => {
+  it('saves the selected timeout through the background security gate', async () => {
+    chrome.runtime.sendMessage.mockResolvedValue({ result: { ok: true } })
+    const { setAutoLock } = useLock()
+    await setAutoLock(5)
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'SET_AUTO_LOCK',
+      params: [5],
+    })
+  })
+})
+
 // ── Enterprise hardening ────────────────────────────────────────
 
 describe('unlock — progressive lockout math', () => {

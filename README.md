@@ -6,7 +6,7 @@
 
 <p align="center">
   Your Bitcoin Lightning wallet and companion for Nostr apps,<br/>
-  social identity, privat messaging, and instant payments in the browser.
+  social identity, private messaging, and instant payments in the browser.
 </p>
 
 <p align="center">
@@ -38,6 +38,10 @@ Buho Jump is an open-source browser extension that brings **Nostr** and **Lightn
 - NWC, Cashu, and LNbits - three wallet types, one-click switching
 - NUTbits one-click wallet setup - connect a dedicated wallet instantly
 - Send and receive Bitcoin Lightning payments
+- Private eCash spending with encrypted backups, NIP-60 proof and receiving-key recovery, and recovery-word restoration
+- Cashu payment requests: create them and pay incoming ones (NUT-18, NUT-26)
+- Animated QR codes for large eCash tokens (NUT-16)
+- Mint list restore from your recovery words (NUT-27)
 - WebLN provider for in-browser payments
 - Per-site spending budgets
 - Fiat conversion (19 currencies)
@@ -57,20 +61,35 @@ Buho Jump is an open-source browser extension that brings **Nostr** and **Lightn
 
 ## Install
 
-Get Buho Jump from your browser's extension store:
+Buho Jump is in beta. Store listings (Chrome Web Store, Firefox Add-ons) are coming.
 
-- [Chrome Web Store](#)
-- [Firefox Add-ons](#)
+Until then, download a ready-to-load package from
+[GitHub Releases](https://github.com/Buho-Ecosystem/Buho-Jump/releases) and follow
+[TESTING.md](TESTING.md). No build required.
 
-Want to build from source? See [CONTRIBUTING.md](CONTRIBUTING.md).
+Found a bug? Open an [issue](https://github.com/Buho-Ecosystem/Buho-Jump/issues).
+For security problems, see [SECURITY.md](SECURITY.md) instead.
+
+---
+
+## Build and Test
+
+Requires Node.js 20+ and npm 10+.
+
+```bash
+npm ci               # install dependencies
+npm run dev          # live-reload dev build (Chrome); npm run dev:firefox for Firefox
+npm run build        # production build; npm run build:firefox for Firefox
+npm test             # run the unit tests (Vitest)
+```
+
+Full developer setup lives in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
 ## Built with nostr-core
 
-18 Nostr protocol implementations - all powered by [nostr-core](https://github.com/DoktorShift/nostr-core):
-
-`NIP-02` `NIP-04` `NIP-05` `NIP-06` `NIP-07` `NIP-11` `NIP-17` `NIP-19` `NIP-24` `NIP-42` `NIP-44` `NIP-46` `NIP-47` `NIP-50` `NIP-51` `NIP-57` `NIP-59` `NIP-65`
+Nostr identity, signing, relay, messaging, wallet, and safety flows are powered by [nostr-core](https://github.com/DoktorShift/nostr-core). Important wallet protocols include `NIP-47` for NWC and `NIP-60` for encrypted Cashu wallet state on Nostr relays.
 
 ---
 
@@ -104,7 +123,7 @@ components/
   options/             - Settings pages
 composables/           - Vue composables (useChat, useWallet, etc.)
 lib/                   - Core logic (accounts, crypto, relays, wallet, NIP-46)
-locales/               - i18n translations (15 languages)
+locales/               - i18n translations (17 languages)
 public/
   nostr-provider.js    - NIP-07 window.nostr injection
   webln-provider.js    - WebLN window.webln injection
@@ -124,6 +143,7 @@ public/
 | [FAQ](FAQ.md) | Common questions answered |
 | [Contributing](CONTRIBUTING.md) | How to help - code, translations, bug reports |
 | [Store Listing](STORE_LISTING.md) | Chrome/Firefox store descriptions and permissions |
+| [Firefox Release](docs/FIREFOX_RELEASE.md) | How builds are cut in CI and submitted to AMO |
 
 ---
 

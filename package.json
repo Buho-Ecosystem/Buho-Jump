@@ -36,16 +36,23 @@
     "postinstall": "wxt prepare",
     "locales:check": "node scripts/locales.mjs --check",
     "locales:sync": "node scripts/locales.mjs",
+    "test:cashu-live": "node scripts/check-cashu-mint.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@cashu/cashu-ts": "^4.5.1",
+    "@branta-ops/branta": "3.1.3",
+    "@cashu/cashu-ts": "4.7.2",
+    "@gandlaf21/bc-ur": "^1.1.12",
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
+    "@scure/bip32": "^2.2.0",
+    "@scure/bip39": "^2.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "html5-qrcode": "^2.3.8",
     "lucide-vue-next": "^1.0.0",
-    "nostr-core": "^1.0.0",
+    "nostr-core": "1.0.2",
     "qrcode": "^1.5.4",
     "tailwind-merge": "^3.5.0",
     "vue": "^3.5.27",
@@ -57,7 +64,11 @@
     "@wxt-dev/module-vue": "^1.0.3",
     "tailwindcss": "^4.2.0",
     "vitest": "^4.1.0",
-    "wxt": "^0.20.17"
+    "wxt": "^0.21.3"
+  },
+  "overrides": {
+    "fast-xml-parser": "5.10.1",
+    "postcss": "8.5.25"
   },
   "license": "AGPL-3.0-only"
 }

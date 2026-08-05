@@ -17,6 +17,7 @@ import AccountPage from '../../components/options/AccountPage.vue'
 import PreferencesPage from '../../components/options/PreferencesPage.vue'
 import AboutPage from '../../components/options/AboutPage.vue'
 import WalletPage from '../../components/options/WalletPage.vue'
+import ActivityPage from '../../components/options/ActivityPage.vue'
 import MessagingPage from '../../components/options/MessagingPage.vue'
 import RelaySettings from '../../components/RelaySettings.vue'
 import { Loader2 } from 'lucide-vue-next'
@@ -46,7 +47,7 @@ const lockBusy = ref(false)
 // Deep-link from query param
 const urlParams = new URLSearchParams(window.location.search)
 const initialPage = urlParams.get('page') || 'sites'
-const validPages = ['sites', 'account', 'wallets', 'messaging', 'relays', 'preferences', 'about']
+const validPages = ['sites', 'account', 'wallets', 'activity', 'messaging', 'relays', 'preferences', 'about']
 const activePage = ref(validPages.includes(initialPage) ? initialPage : 'sites')
 
 function navigate(page) {
@@ -74,7 +75,10 @@ async function handleUnlock(password) {
   try {
     await unlock(password)
   } catch (err) {
-    lockError.value = err.message || 'Wrong password'
+    const message = err.message || ''
+    lockError.value = message.startsWith('TOO_MANY_ATTEMPTS:')
+      ? t('lock.tooManyAttempts', { seconds: message.split(':')[1] })
+      : message === 'errors.WRONG_PASSWORD' ? t('lock.wrongPassword') : (message || t('lock.wrongPassword'))
   } finally {
     lockBusy.value = false
   }
@@ -116,6 +120,7 @@ async function handleUnlock(password) {
           <ConnectedSitesPage v-if="activePage === 'sites'" />
           <AccountPage v-else-if="activePage === 'account'" />
           <WalletPage v-else-if="activePage === 'wallets'" />
+          <ActivityPage v-else-if="activePage === 'activity'" />
           <MessagingPage v-else-if="activePage === 'messaging'" />
           <div v-else-if="activePage === 'relays'" class="max-w-lg">
             <div class="mb-5">

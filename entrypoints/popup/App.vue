@@ -13,11 +13,13 @@ import { useLocale } from '../../composables/useLocale.js'
 import { useListKeyboard } from '../../composables/useListKeyboard.js'
 import { usePopupState } from '../../composables/usePopupState.js'
 import { truncateKey } from '../../lib/utils.js'
+import { getAvatarColor } from '../../lib/avatarColor.js'
 import { nip19, nip21 } from 'nostr-core'
 import QRCode from 'qrcode'
 import LockScreen from '../../components/LockScreen.vue'
 import WelcomeScreen from '../../components/WelcomeScreen.vue'
 import IdentityWizard from '../../components/IdentityWizard.vue'
+import LightningLogin from '../../components/LightningLogin.vue'
 import LanguagePicker from '../../components/LanguagePicker.vue'
 import ToastContainer from '../../components/ToastContainer.vue'
 import SkeletonLoader from '../../components/SkeletonLoader.vue'
@@ -72,6 +74,7 @@ const dataLoaded = ref(false)
 const welcomeCompleted = ref(true) // assume true until checked (prevents flash)
 const lockError = ref('')
 const lockBusy = ref(false)
+const fatalDataError = ref('')
 
 // Delete confirmation state
 const confirmingDelete = ref(null)
@@ -306,6 +309,9 @@ async function confirmSwitch() {
     const acc = accounts.value.find(a => a.id === accId)
     await switchTo(accId)
     await loadPermissions()
+    // The wallet follows the identity: refresh balance and wallet list so
+    // the header never shows the previous identity's numbers.
+    Promise.all([loadWallet(), loadWallets()]).catch(() => {})
     profileData.value = null
     if (acc?.pubkey) {
       profileLoading.value = true
@@ -324,6 +330,12 @@ async function confirmSwitch() {
 
 const deletingAccountObj = computed(() =>
   accounts.value.find(a => a.id === confirmingDelete.value)
+)
+
+// The identity's own eCash wallet goes with it. Warn up front instead of
+// letting the background reject the removal after the user commits.
+const deletingAccountHasWallet = computed(() =>
+  savedWallets.value.some(w => w.type === 'cashu' && w.ownerAccountId === confirmingDelete.value)
 )
 
 function requestDelete(accId) {
@@ -349,7 +361,7 @@ async function confirmDelete() {
     confirmingDelete.value = null
     toast.info(t('toast.accountRemoved', { name: acc?.name || t('tabs.account') }))
   } catch (err) {
-    toast.error(t('toast.failedRemove'))
+    toast.error(err.message?.startsWith('errors.') ? t(err.message) : t('toast.failedRemove'))
   } finally {
     deletingAccount.value = false
   }
@@ -404,9 +416,13 @@ async function handleRenameWallet(walletId, name) {
 }
 
 async function handleRemoveWallet(walletId) {
-  await disconnectWallet(walletId)
-  walletView.value = 'home'
-  toast.info(t('toast.walletDisconnected'))
+  try {
+    await disconnectWallet(walletId)
+    walletView.value = 'home'
+    toast.info(t('toast.walletDisconnected'))
+  } catch (error) {
+    toast.error(t(error.message))
+  }
 }
 
 async function onWizardComplete() {
@@ -455,7 +471,15 @@ async function handleUnlock(password) {
 }
 
 async function loadData() {
-  await Promise.all([loadAccounts(), loadWallet(), loadWallets(), loadPermissions(), loadRelays()])
+  fatalDataError.value = ''
+  try {
+    await Promise.all([loadAccounts(), loadWallet(), loadWallets(), loadPermissions(), loadRelays()])
+  } catch (error) {
+    fatalDataError.value = error.message === 'errors.VAULT_INTEGRITY'
+      ? t('errors.VAULT_INTEGRITY')
+      : (error.message || t('common.error'))
+    throw error
+  }
   dataLoaded.value = true
   if (accounts.value.length === 0) {
     showWizard.value = true
@@ -548,8 +572,8 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
   if (isLocked) {
     // Fetch last-unlocked timestamp for lock screen display
     try {
-      const data = await chrome.storage.local.get('_sessionFallback')
-      lastUnlockedAt.value = data._sessionFallback?.unlockedAt || 0
+      const data = await chrome.storage.local.get('lastUnlockedAt')
+      lastUnlockedAt.value = data.lastUnlockedAt || 0
     } catch { lastUnlockedAt.value = 0 }
   } else if (!dataLoaded.value) {
     try {
@@ -636,6 +660,19 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         @unlock="handleUnlock"
       />
     </template>
+
+    <!-- Fail closed when an encrypted store cannot be authenticated. -->
+    <div v-else-if="fatalDataError" class="flex-1 flex items-center justify-center p-6">
+      <div class="max-w-sm rounded-3xl border border-error/25 bg-surface-card p-6 text-center shadow-sm">
+        <ShieldAlert class="w-10 h-10 text-error mx-auto" />
+        <h1 class="text-base font-extrabold mt-3">{{ t('account.vaultProblemTitle') }}</h1>
+        <p class="text-xs text-text-secondary mt-2 leading-relaxed">{{ fatalDataError }}</p>
+        <p class="text-[10px] text-text-muted mt-3">{{ t('account.vaultProblemHint') }}</p>
+        <button @click="handleLock" class="mt-5 px-4 py-2 rounded-xl bg-brand text-surface-base text-xs font-bold">
+          {{ t('lock.lockNow') }}
+        </button>
+      </div>
+    </div>
 
     <!-- Main UI (after unlock) -->
     <template v-else>
@@ -1074,10 +1111,13 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               </div>
             </div>
 
+            <LightningLogin v-if="activeAccount" :account="activeAccount" />
+
             <!-- Empty state -->
             <EmptyState
               v-if="!activeAccount"
               :icon="User"
+              illustration="/Onboarding%20wizard/storyset-account-bro.svg"
               :title="t('account.noAccountTitle')"
               :description="t('account.noAccountDesc')"
               :action-label="t('account.addAccount')"
@@ -1100,20 +1140,25 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                     class="w-7 h-7 rounded-full bg-brand/10 flex items-center justify-center">
                     <Loader2 class="w-3.5 h-3.5 text-brand animate-spin" />
                   </div>
-                  <div v-else class="w-7 h-7 rounded-full bg-surface-elevated flex items-center justify-center text-[10px] font-bold text-text-secondary">
+                  <!-- Per-identity color makes same-letter identities distinguishable -->
+                  <div v-else class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                    :style="{ background: getAvatarColor(acc.pubkey) }">
                     {{ (acc.name || '?')[0].toUpperCase() }}
                   </div>
-                  <div>
-                    <span class="text-text-secondary font-medium">{{ acc.name }}</span>
-                    <span v-if="switchingAccount === acc.id" class="text-[9px] ml-1.5 text-brand font-medium">
-                      {{ t('account.switching') }}
-                    </span>
-                    <span v-else class="text-[9px] ml-1.5 px-1.5 py-px rounded font-medium"
-                      :class="acc.mode === 'nip46'
-                        ? 'bg-warning/10 text-warning'
-                        : 'bg-surface-elevated text-text-muted'">
-                      {{ acc.mode === 'nip46' ? t('account.external') : t('account.local') }}
-                    </span>
+                  <div class="text-left">
+                    <div>
+                      <span class="text-text-secondary font-medium">{{ acc.name }}</span>
+                      <span v-if="switchingAccount === acc.id" class="text-[9px] ml-1.5 text-brand font-medium">
+                        {{ t('account.switching') }}
+                      </span>
+                      <span v-else class="text-[9px] ml-1.5 px-1.5 py-px rounded font-medium"
+                        :class="acc.mode === 'nip46'
+                          ? 'bg-warning/10 text-warning'
+                          : 'bg-surface-elevated text-text-muted'">
+                        {{ acc.mode === 'nip46' ? t('account.external') : t('account.local') }}
+                      </span>
+                    </div>
+                    <code v-if="acc.npub" class="block text-[9px] font-mono text-text-muted/70">{{ truncateKey(acc.npub, 10, 4) }}</code>
                   </div>
                 </div>
                 <span
@@ -1134,7 +1179,8 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               <template #title>{{ t('account.switchConfirmTitle') }}</template>
               <template #description>
                 <div v-if="switchTargetAccount" class="flex items-center gap-2 justify-center mb-1">
-                  <div class="w-6 h-6 rounded-full bg-surface-elevated flex items-center justify-center text-[9px] font-bold text-text-secondary">
+                  <div class="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+                    :style="{ background: getAvatarColor(switchTargetAccount.pubkey) }">
                     {{ (switchTargetAccount.name || '?')[0].toUpperCase() }}
                   </div>
                   <span class="font-semibold text-text-primary text-xs">{{ switchTargetAccount.name }}</span>
@@ -1193,6 +1239,12 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                   <div v-else class="flex gap-2.5 p-3 rounded-2xl bg-surface-base border border-border">
                     <ShieldAlert class="w-4 h-4 text-text-muted shrink-0 mt-0.5" />
                     <p class="text-[11px] text-text-muted leading-snug">{{ t('account.deleteDescRemote') }}</p>
+                  </div>
+
+                  <!-- This identity owns an eCash wallet -->
+                  <div v-if="deletingAccountHasWallet" class="flex gap-2.5 p-3 rounded-2xl bg-error/8 border border-error/15">
+                    <WalletIcon class="w-4 h-4 text-error shrink-0 mt-0.5" />
+                    <p class="text-[11px] text-text-muted leading-snug">{{ t('account.deleteWalletWarning') }}</p>
                   </div>
 
                   <!-- Description -->

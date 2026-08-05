@@ -24,6 +24,13 @@ describe('saveSession / getSession', () => {
     expect(session).toBeNull()
   })
 
+  it('fails closed for malformed session storage', async () => {
+    await chrome.storage.session.set({
+      _session: { password: '', unlockedAt: Number.NaN },
+    })
+    expect(await getSession()).toBeNull()
+  })
+
   it('overwrites previous session', async () => {
     await saveSession({ password: 'old', unlockedAt: 1000 })
     await saveSession({ password: 'new', unlockedAt: 2000 })
@@ -55,10 +62,9 @@ describe('saveSession — defensive inputs', () => {
     expect(session).toBeNull()
   })
 
-  it('stores empty object', async () => {
-    await saveSession({})
-    const session = await getSession()
-    expect(session).toEqual({})
+  it('rejects an incomplete session', async () => {
+    await expect(saveSession({})).rejects.toThrow('Invalid secure session data')
+    expect(await getSession()).toBeNull()
   })
 
   it('stores session with unicode fields', async () => {
@@ -67,11 +73,11 @@ describe('saveSession — defensive inputs', () => {
     expect(session.password).toBe('密码🔐')
   })
 
-  it('stores session with very long password', async () => {
+  it('rejects a session with a very long password', async () => {
     const longPw = 'x'.repeat(10000)
-    await saveSession({ password: longPw, unlockedAt: 1000 })
-    const session = await getSession()
-    expect(session.password).toBe(longPw)
+    await expect(saveSession({ password: longPw, unlockedAt: 1000 }))
+      .rejects.toThrow('Invalid secure session data')
+    expect(await getSession()).toBeNull()
   })
 
   it('multiple rapid overwrites only keeps last', async () => {

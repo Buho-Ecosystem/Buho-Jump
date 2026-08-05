@@ -10,7 +10,12 @@ import { useWallet } from '../../composables/useWallet.js'
 const { t } = useI18n()
 import TransactionItem from './TransactionItem.vue'
 import EmptyState from '../EmptyState.vue'
-import { ArrowLeft, Loader2, ChevronDown, Receipt } from 'lucide-vue-next'
+import OpenInBrowserButton from '../OpenInBrowserButton.vue'
+import { ArrowLeft, Loader2, ChevronDown, Receipt, RefreshCw } from 'lucide-vue-next'
+
+const props = defineProps({
+  fullPage: { type: Boolean, default: false },
+})
 
 const emit = defineEmits(['back', 'detail'])
 
@@ -101,13 +106,19 @@ onMounted(() => load())
 </script>
 
 <template>
-  <div class="animate-fade-in-up">
+  <div class="animate-fade-in-up" :class="fullPage ? 'max-w-2xl mx-auto' : ''">
     <!-- Header -->
     <div class="flex items-center gap-2 mb-3">
-      <button @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.back')">
+      <button v-if="!fullPage" @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.back')">
         <ArrowLeft class="w-4 h-4 text-text-muted" />
       </button>
       <span class="text-sm font-extrabold">{{ t('wallet.historyTitle') }}</span>
+      <div class="ml-auto flex items-center gap-1">
+        <button @click="load(0)" :disabled="loading" class="p-1.5 rounded-lg text-text-muted hover:text-brand hover:bg-surface-elevated" :title="t('wallet.refresh')">
+          <RefreshCw class="w-3.5 h-3.5" :class="loading ? 'animate-spin' : ''" />
+        </button>
+        <OpenInBrowserButton v-if="!fullPage" page="activity" />
+      </div>
     </div>
 
     <!-- Filter tabs -->
@@ -178,6 +189,7 @@ onMounted(() => load())
     <EmptyState
       v-else
       :icon="Receipt"
+      illustration="/Onboarding%20wizard/storyset-receipt-bro.svg"
       :title="t('wallet.noResults')"
       :description="t('wallet.noResultsHint')"
     />

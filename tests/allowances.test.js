@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { resetStorage } from './setup.js'
 import {
   getAllowances, getAllowance, setAllowance,
-  recordSpend, checkBudget, removeAllowance, resetAllowanceSpend,
+  recordSpend, reserveSpend, refundSpend, checkBudget, removeAllowance, resetAllowanceSpend,
 } from '../lib/allowances.js'
 
 beforeEach(() => {
@@ -15,8 +15,8 @@ beforeEach(() => {
 
 describe('setAllowance / getAllowance', () => {
   it('creates a new allowance', async () => {
-    await setAllowance('example.com', 1000)
-    const a = await getAllowance('example.com')
+    await setAllowance('https://example.com', 1000)
+    const a = await getAllowance('https://example.com')
     expect(a).not.toBeNull()
     expect(a.budget).toBe(1000)
     expect(a.spent).toBe(0)
@@ -24,10 +24,10 @@ describe('setAllowance / getAllowance', () => {
   })
 
   it('updates budget without resetting spent', async () => {
-    await setAllowance('example.com', 1000)
-    await recordSpend('example.com', 200)
-    await setAllowance('example.com', 2000)
-    const a = await getAllowance('example.com')
+    await setAllowance('https://example.com', 1000)
+    await recordSpend('https://example.com', 200)
+    await setAllowance('https://example.com', 2000)
+    const a = await getAllowance('https://example.com')
     expect(a.budget).toBe(2000)
     expect(a.spent).toBe(200)
   })
@@ -42,89 +42,89 @@ describe('setAllowance / getAllowance', () => {
 
 describe('recordSpend', () => {
   it('records spend within budget', async () => {
-    await setAllowance('example.com', 1000)
-    const ok = await recordSpend('example.com', 500)
+    await setAllowance('https://example.com', 1000)
+    const ok = await recordSpend('https://example.com', 500)
     expect(ok).toBeTruthy()
-    const a = await getAllowance('example.com')
+    const a = await getAllowance('https://example.com')
     expect(a.spent).toBe(500)
   })
 
   it('rejects spend over budget', async () => {
-    await setAllowance('example.com', 100)
-    const ok = await recordSpend('example.com', 101)
+    await setAllowance('https://example.com', 100)
+    const ok = await recordSpend('https://example.com', 101)
     expect(ok).toBeNull()
-    const a = await getAllowance('example.com')
+    const a = await getAllowance('https://example.com')
     expect(a.spent).toBe(0)
   })
 
   it('tracks cumulative spending', async () => {
-    await setAllowance('example.com', 1000)
-    await recordSpend('example.com', 300)
-    await recordSpend('example.com', 400)
-    const a = await getAllowance('example.com')
+    await setAllowance('https://example.com', 1000)
+    await recordSpend('https://example.com', 300)
+    await recordSpend('https://example.com', 400)
+    const a = await getAllowance('https://example.com')
     expect(a.spent).toBe(700)
   })
 
   it('rejects when cumulative would exceed budget', async () => {
-    await setAllowance('example.com', 500)
-    await recordSpend('example.com', 300)
-    const ok = await recordSpend('example.com', 300)
+    await setAllowance('https://example.com', 500)
+    await recordSpend('https://example.com', 300)
+    const ok = await recordSpend('https://example.com', 300)
     expect(ok).toBeNull()
-    const a = await getAllowance('example.com')
+    const a = await getAllowance('https://example.com')
     expect(a.spent).toBe(300) // unchanged
   })
 
   it('returns false for unknown host', async () => {
-    const ok = await recordSpend('unknown.com', 100)
+    const ok = await recordSpend('https://unknown.com', 100)
     expect(ok).toBeNull()
   })
 })
 
 describe('checkBudget', () => {
   it('returns true when within budget', async () => {
-    await setAllowance('example.com', 1000)
-    await recordSpend('example.com', 200)
-    expect(await checkBudget('example.com', 800)).toBe(true)
+    await setAllowance('https://example.com', 1000)
+    await recordSpend('https://example.com', 200)
+    expect(await checkBudget('https://example.com', 800)).toBe(true)
   })
 
   it('returns false when over budget', async () => {
-    await setAllowance('example.com', 1000)
-    await recordSpend('example.com', 600)
-    expect(await checkBudget('example.com', 500)).toBe(false)
+    await setAllowance('https://example.com', 1000)
+    await recordSpend('https://example.com', 600)
+    expect(await checkBudget('https://example.com', 500)).toBe(false)
   })
 
   it('returns false for unknown host', async () => {
-    expect(await checkBudget('nope.com', 1)).toBe(false)
+    expect(await checkBudget('https://nope.com', 1)).toBe(false)
   })
 
   it('returns true for exact remaining', async () => {
-    await setAllowance('example.com', 100)
-    await recordSpend('example.com', 50)
-    expect(await checkBudget('example.com', 50)).toBe(true)
+    await setAllowance('https://example.com', 100)
+    await recordSpend('https://example.com', 50)
+    expect(await checkBudget('https://example.com', 50)).toBe(true)
   })
 })
 
 describe('removeAllowance', () => {
   it('removes an allowance', async () => {
-    await setAllowance('example.com', 1000)
-    await removeAllowance('example.com')
-    expect(await getAllowance('example.com')).toBeNull()
+    await setAllowance('https://example.com', 1000)
+    await removeAllowance('https://example.com')
+    expect(await getAllowance('https://example.com')).toBeNull()
   })
 
   it('does not affect other allowances', async () => {
-    await setAllowance('a.com', 100)
-    await setAllowance('b.com', 200)
-    await removeAllowance('a.com')
-    expect(await getAllowance('b.com')).not.toBeNull()
+    await setAllowance('https://a.com', 100)
+    await setAllowance('https://b.com', 200)
+    await removeAllowance('https://a.com')
+    expect(await getAllowance('https://b.com')).not.toBeNull()
   })
 })
 
 describe('resetAllowanceSpend', () => {
   it('resets spent to zero', async () => {
-    await setAllowance('example.com', 1000)
-    await recordSpend('example.com', 500)
-    await resetAllowanceSpend('example.com')
-    const a = await getAllowance('example.com')
+    await setAllowance('https://example.com', 1000)
+    await recordSpend('https://example.com', 500)
+    await resetAllowanceSpend('https://example.com')
+    const a = await getAllowance('https://example.com')
     expect(a.spent).toBe(0)
     expect(a.budget).toBe(1000) // budget unchanged
   })
@@ -132,12 +132,12 @@ describe('resetAllowanceSpend', () => {
 
 describe('getAllowances', () => {
   it('returns all allowances', async () => {
-    await setAllowance('a.com', 100)
-    await setAllowance('b.com', 200)
+    await setAllowance('https://a.com', 100)
+    await setAllowance('https://b.com', 200)
     const all = await getAllowances()
     expect(Object.keys(all)).toHaveLength(2)
-    expect(all['a.com'].budget).toBe(100)
-    expect(all['b.com'].budget).toBe(200)
+    expect(all['https://a.com'].budget).toBe(100)
+    expect(all['https://b.com'].budget).toBe(200)
   })
 
   it('returns empty object when none set', async () => {
@@ -174,58 +174,52 @@ describe('setAllowance — defensive inputs', () => {
     expect(await getAllowances()).toEqual({})
   })
 
-  it('accepts zero budget', async () => {
-    await setAllowance('zero.com', 0)
-    const a = await getAllowance('zero.com')
-    expect(a.budget).toBe(0)
+  it('rejects zero budget', async () => {
+    await setAllowance('https://zero.com', 0)
+    expect(await getAllowance('https://zero.com')).toBeNull()
   })
 
-  it('accepts negative budget (no server-side validation)', async () => {
-    await setAllowance('neg.com', -100)
-    const a = await getAllowance('neg.com')
-    expect(a.budget).toBe(-100)
+  it('rejects negative budgets', async () => {
+    await setAllowance('https://neg.com', -100)
+    expect(await getAllowance('https://neg.com')).toBeNull()
   })
 
-  it('accepts NaN budget', async () => {
-    await setAllowance('nan.com', NaN)
-    const a = await getAllowance('nan.com')
-    expect(a.budget).toBeNaN()
+  it('rejects NaN budgets', async () => {
+    await setAllowance('https://nan.com', NaN)
+    expect(await getAllowance('https://nan.com')).toBeNull()
   })
 
-  it('accepts Infinity budget', async () => {
-    await setAllowance('inf.com', Infinity)
-    const a = await getAllowance('inf.com')
-    expect(a.budget).toBe(Infinity)
+  it('rejects infinite budgets', async () => {
+    await setAllowance('https://inf.com', Infinity)
+    expect(await getAllowance('https://inf.com')).toBeNull()
   })
 
-  it('accepts very large budget near MAX_SAFE_INTEGER', async () => {
-    await setAllowance('big.com', Number.MAX_SAFE_INTEGER)
-    const a = await getAllowance('big.com')
-    expect(a.budget).toBe(Number.MAX_SAFE_INTEGER)
+  it('rejects budgets above the Bitcoin supply', async () => {
+    await setAllowance('https://big.com', Number.MAX_SAFE_INTEGER)
+    expect(await getAllowance('https://big.com')).toBeNull()
   })
 })
 
 describe('recordSpend — defensive inputs', () => {
-  it('records zero-amount spend', async () => {
-    await setAllowance('example.com', 100)
-    const ok = await recordSpend('example.com', 0)
-    expect(ok).toBeTruthy()
-    expect((await getAllowance('example.com')).spent).toBe(0)
+  it('rejects zero-amount spend', async () => {
+    await setAllowance('https://example.com', 100)
+    const ok = await recordSpend('https://example.com', 0)
+    expect(ok).toBeNull()
+    expect((await getAllowance('https://example.com')).spent).toBe(0)
   })
 
-  it('records negative spend (adds to remaining — potential abuse)', async () => {
-    await setAllowance('example.com', 100)
-    await recordSpend('example.com', 50)
-    // Negative spend effectively gives free budget
-    const ok = await recordSpend('example.com', -200)
-    expect(ok).toBeTruthy() // remaining = 100 - 50 = 50, -200 <= 50 → true
+  it('rejects negative spend', async () => {
+    await setAllowance('https://example.com', 100)
+    await recordSpend('https://example.com', 50)
+    const ok = await recordSpend('https://example.com', -200)
+    expect(ok).toBeNull()
+    expect((await getAllowance('https://example.com')).spent).toBe(50)
   })
 
-  it('rejects NaN amount (NaN > remaining is false)', async () => {
-    await setAllowance('example.com', 100)
-    const ok = await recordSpend('example.com', NaN)
-    // NaN > 100 → false, so it proceeds and spent += NaN = NaN
-    expect(ok).toBeTruthy()
+  it('rejects NaN amounts', async () => {
+    await setAllowance('https://example.com', 100)
+    const ok = await recordSpend('https://example.com', NaN)
+    expect(ok).toBeNull()
   })
 
   it('returns false for null host', async () => {
@@ -238,20 +232,20 @@ describe('recordSpend — defensive inputs', () => {
 })
 
 describe('checkBudget — boundary conditions', () => {
-  it('returns true for zero amount', async () => {
-    await setAllowance('example.com', 100)
-    expect(await checkBudget('example.com', 0)).toBe(true)
+  it('returns false for zero amount', async () => {
+    await setAllowance('https://example.com', 100)
+    expect(await checkBudget('https://example.com', 0)).toBe(false)
   })
 
-  it('returns true for negative amount', async () => {
-    await setAllowance('example.com', 100)
-    expect(await checkBudget('example.com', -50)).toBe(true)
+  it('returns false for negative amount', async () => {
+    await setAllowance('https://example.com', 100)
+    expect(await checkBudget('https://example.com', -50)).toBe(false)
   })
 
   it('returns false for NaN amount', async () => {
-    await setAllowance('example.com', 100)
+    await setAllowance('https://example.com', 100)
     // (100 - 0) >= NaN → false
-    expect(await checkBudget('example.com', NaN)).toBe(false)
+    expect(await checkBudget('https://example.com', NaN)).toBe(false)
   })
 
   it('returns false for null host', async () => {
@@ -259,22 +253,41 @@ describe('checkBudget — boundary conditions', () => {
   })
 
   it('returns false for Infinity amount', async () => {
-    await setAllowance('example.com', 100)
-    expect(await checkBudget('example.com', Infinity)).toBe(false)
+    await setAllowance('https://example.com', 100)
+    expect(await checkBudget('https://example.com', Infinity)).toBe(false)
   })
 })
 
 describe('prototype pollution — extended', () => {
-  it('stores toString as host (valid string, not in RESERVED_KEYS)', async () => {
+  it('rejects non-origin property names', async () => {
     await setAllowance('toString', 100)
     const all = await getAllowances()
-    // toString is a valid host — stored as a property (overrides inherited method)
-    expect(all.toString).toEqual(expect.objectContaining({ budget: 100 }))
+    expect(Object.keys(all)).toEqual([])
   })
 
   it('setAllowance with __proto__ does not pollute prototype', async () => {
     await setAllowance('__proto__', 999)
     const obj = {}
     expect(obj.budget).toBeUndefined()
+  })
+})
+
+describe('atomic budget reservations', () => {
+  it('allows only one concurrent reservation to consume the remaining budget', async () => {
+    await setAllowance('https://example.com', 100)
+    const reservations = await Promise.all([
+      reserveSpend('https://example.com', 80),
+      reserveSpend('https://example.com', 80),
+    ])
+    expect(reservations.filter(Boolean)).toHaveLength(1)
+    expect((await getAllowance('https://example.com')).spent).toBe(80)
+  })
+
+  it('refunds a failed reserved payment exactly once', async () => {
+    await setAllowance('https://example.com', 100)
+    const reservation = await reserveSpend('https://example.com', 80)
+    expect(await refundSpend('https://example.com', reservation.reservationId)).toBe(true)
+    expect(await refundSpend('https://example.com', reservation.reservationId)).toBe(false)
+    expect((await getAllowance('https://example.com')).spent).toBe(0)
   })
 })

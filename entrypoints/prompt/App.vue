@@ -4,8 +4,8 @@
  *
  * Minimal, trust-first layout:
  * - Site identity first (who is asking) + plain-language intent
- * - One permission summary with a risk dot; specifics behind "View details"
- * - Two clear actions (Allow / Not now); granular choices behind "More options"
+ * - One permission summary; protocol terms live behind "Technical details"
+ * - A safe visit-scoped default; permanent choices live behind "More options"
  * - Payments always show the amount up front and never auto-approve
  * - Unlock mode shows the requesting site + password entry
  */
@@ -14,10 +14,12 @@ import { useI18n } from 'vue-i18n'
 import { useTheme } from '../../composables/useTheme.js'
 import { useFiat } from '../../composables/useFiat.js'
 import { truncateKey } from '../../lib/utils.js'
+import { eventKindLabel } from '../../lib/eventKinds.js'
+import { isLoopbackHostname, normalizeWebOrigin } from '../../lib/origins.js'
 import {
-  ShieldCheck, ShieldPlus, Globe, Fingerprint, FileSignature, Lock, Unlock,
-  Check, X, Clock, KeyRound, Eye, EyeOff, AlertTriangle, ShieldOff,
-  Ban, Loader2, Wallet, Zap, ChevronDown,
+  ShieldCheck, Globe, Fingerprint, FileSignature, Lock, Unlock,
+  Check, Clock, KeyRound, Eye, EyeOff, AlertTriangle, ShieldOff,
+  Loader2, Wallet, Zap, ChevronDown,
 } from 'lucide-vue-next'
 
 useTheme()
@@ -25,10 +27,11 @@ const { t } = useI18n()
 const { toFiat, loadRate } = useFiat()
 
 const mode = ref('permission') // 'permission' or 'unlock'
-const host = ref('')
+const requestOrigin = ref('')
 const origin = ref('') // for unlock mode — which site triggered it
 const method = ref('')
 const kind = ref('')
+const profileId = ref('')
 const requestId = ref('')
 const accountName = ref('')
 const accountNpub = ref('')
@@ -36,7 +39,6 @@ const accountMode = ref('') // 'local' or 'nip46'
 const profilePicture = ref('')
 const loading = ref(true)
 const deciding = ref('')
-const firstVisit = ref(false)
 
 // Unlock mode state
 const unlockPassword = ref('')
@@ -58,6 +60,7 @@ const showEventData = ref(false)
 const showMore = ref(false)
 const siteTitle = ref('')
 const siteFavicon = ref('')
+const queuedCount = ref(0)
 
 // Profile fetch with timeout
 async function fetchWithTimeout(message, ms = 5000) {
@@ -74,13 +77,15 @@ onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   requestId.value = params.get('requestId') || ''
   mode.value = params.get('mode') || 'permission'
-  host.value = params.get('host') || ''
+  requestOrigin.value = normalizeWebOrigin(params.get('origin') || '') || ''
   origin.value = params.get('origin') || ''
   method.value = params.get('method') || ''
   kind.value = params.get('kind') || ''
-  firstVisit.value = params.get('firstVisit') === 'true'
+  profileId.value = params.get('profileId') || ''
   siteTitle.value = params.get('siteTitle') || ''
   siteFavicon.value = params.get('siteFavicon') || ''
+  const queued = parseInt(params.get('queued') || '0', 10)
+  queuedCount.value = Number.isFinite(queued) && queued > 0 ? queued : 0
 
   // Unlock mode — only needs origin context, no account data
   if (mode.value === 'unlock') {
@@ -94,7 +99,9 @@ onMounted(async () => {
   try {
     const accountsRes = await fetchWithTimeout({ type: 'GET_ACCOUNTS', params: [] })
     const accountList = accountsRes?.result || accountsRes
-    const active = Array.isArray(accountList) ? accountList.find(a => a.isActive) : null
+    const active = Array.isArray(accountList)
+      ? accountList.find(a => a.id === profileId.value)
+      : null
     if (active) {
       accountName.value = active.name || ''
       accountNpub.value = active.npub || ''
@@ -120,7 +127,7 @@ onMounted(async () => {
   if (requestId.value) {
     try {
       const key = `prompt_event_${requestId.value}`
-      const data = await chrome.storage.local.get(key)
+      const data = await chrome.storage.session.get(key)
       if (data[key]) {
         eventData.value = data[key]
         // Default budget to 2x payment amount — conservative default
@@ -211,7 +218,7 @@ const PERMISSION_INFO = computed(() => ({
 }))
 
 const permInfo = computed(() => {
-  return PERMISSION_INFO.value[method.value] || {
+  const base = PERMISSION_INFO.value[method.value] || {
     label: method.value,
     what: t('prompt.permDefaultWhat'),
     detail: '',
@@ -219,6 +226,25 @@ const permInfo = computed(() => {
     risk: 'medium',
     riskLabel: t('prompt.permDefaultRisk'),
   }
+
+  if (method.value !== 'signEvent') return base
+
+  const actions = {
+    '0': [t('prompt.actionProfileLabel'), t('prompt.actionProfileWhat')],
+    '1': [t('prompt.actionNoteLabel'), t('prompt.actionNoteWhat')],
+    '3': [t('prompt.actionContactsLabel'), t('prompt.actionContactsWhat')],
+    '4': [t('prompt.actionMessageLabel'), t('prompt.actionMessageWhat')],
+    '6': [t('prompt.actionRepostLabel'), t('prompt.actionRepostWhat')],
+    '7': [t('prompt.actionReactionLabel'), t('prompt.actionReactionWhat')],
+    '9734': [t('prompt.actionZapLabel'), t('prompt.actionZapWhat')],
+    '10002': [t('prompt.actionRelaysLabel'), t('prompt.actionRelaysWhat')],
+    '27235': [t('prompt.actionLoginLabel'), t('prompt.actionLoginWhat')],
+    '30023': [t('prompt.actionArticleLabel'), t('prompt.actionArticleWhat')],
+    '30078': [t('prompt.actionAppDataLabel'), t('prompt.actionAppDataWhat')],
+  }
+  const action = actions[kind.value]
+  if (!action) return base
+  return { ...base, label: action[0], what: action[1] }
 })
 
 const riskBadge = computed(() => {
@@ -229,42 +255,38 @@ const riskBadge = computed(() => {
 
 const kindLabel = computed(() => {
   if (!kind.value) return ''
-  const kinds = {
-    '0': t('prompt.kindProfile'),
-    '1': t('prompt.kindNote'),
-    '3': t('prompt.kindContacts'),
-    '4': t('prompt.kindDM'),
-    '6': t('prompt.kindRepost'),
-    '7': t('prompt.kindReaction'),
-    '9734': t('prompt.kindZap'),
-    '10002': t('prompt.kindRelayList'),
-    '30023': t('prompt.kindArticle'),
-    '30078': t('prompt.kindAppData'),
-  }
-  return kinds[kind.value] || t('prompt.kindGeneric', { kind: kind.value })
+  return eventKindLabel(kind.value, t)
 })
+
+// Content-first preview: show what would actually be published, so the
+// user approves the note text, not an abstract category. Ciphertext-looking
+// content is labeled instead of dumped.
+const eventContentPreview = computed(() => {
+  if (!isSignEvent.value || isHttpAuth.value) return null
+  const content = eventData.value?.content
+  if (typeof content !== 'string' || !content.trim()) return null
+  const compact = content.trim()
+  const looksEncrypted = compact.length >= 24
+    && /^[A-Za-z0-9+/=_-]+(\?iv=[A-Za-z0-9+/=]+)?$/.test(compact)
+  return { text: compact.slice(0, 2000), encrypted: looksEncrypted }
+})
+
 
 // Show clean hostname for display, full origin for trust verification
 const displayHost = computed(() => {
   try {
-    return host.value.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '')
+    return new URL(requestOrigin.value).host.replace(/^www\./, '')
   } catch {
-    return host.value
+    return requestOrigin.value
   }
 })
 
-const fullOrigin = computed(() => {
-  try {
-    const raw = host.value.startsWith('http') ? host.value : `https://${host.value}`
-    return new URL(raw).origin
-  } catch {
-    return host.value
-  }
-})
+const fullOrigin = computed(() => requestOrigin.value)
 
 const isHttp = computed(() => {
   try {
-    return fullOrigin.value.startsWith('http://') && !fullOrigin.value.includes('localhost')
+    const url = new URL(fullOrigin.value)
+    return url.protocol === 'http:' && !isLoopbackHostname(url.hostname)
   } catch {
     return false
   }
@@ -274,7 +296,7 @@ const faviconUrl = computed(() => {
   // Prefer browser-provided favicon (higher quality, correct path)
   if (siteFavicon.value) return siteFavicon.value
   try {
-    const url = new URL(host.value.startsWith('http') ? host.value : `https://${host.value}`)
+    const url = new URL(requestOrigin.value)
     return `${url.origin}/favicon.ico`
   } catch {
     return ''
@@ -309,13 +331,21 @@ const paymentBudget = computed(() => {
 })
 
 const accountModeBadge = computed(() => {
-  if (accountMode.value === 'nip46') return 'Remote Signer'
-  return 'Extension'
+  return accountMode.value === 'nip46' ? t('account.external') : t('account.local')
 })
 
 // signEvent disclosure — only show the event toggle when there is event data
 const isSignEvent = computed(() => method.value === 'signEvent' && !!eventData.value)
 const isHttpAuth = computed(() => isSignEvent.value && eventData.value?.kind === 27235)
+
+const technicalProtocol = computed(() => {
+  if (method.value.startsWith('nip44_')) return 'NIP-07 · NIP-44'
+  if (method.value.startsWith('nip04_')) return 'NIP-07 · NIP-04'
+  if (method.value === 'signEvent') return isHttpAuth.value ? 'NIP-07 · NIP-98' : 'NIP-07'
+  if (method.value === 'getPublicKey') return 'NIP-07'
+  if (method.value.startsWith('webln')) return 'WebLN'
+  return method.value
+})
 
 // Unlock origin display
 const unlockOriginDisplay = computed(() => {
@@ -344,9 +374,6 @@ async function respond(decision) {
     const payload = {
       requestId: requestId.value,
       decision,
-      host: host.value,
-      method: method.value,
-      kind: kind.value || null,
     }
 
     // Include budget if user opted in during payment approval
@@ -541,6 +568,11 @@ async function submitUnlock() {
           <span class="text-[11px] text-warning font-medium">{{ t('prompt.httpWarning') }}</span>
         </div>
 
+        <!-- A burst of requests reads as one guided flow, not window spam -->
+        <p v-if="queuedCount > 0" class="mt-2.5 text-center text-[10px] text-text-muted">
+          {{ t('prompt.moreWaiting', { n: queuedCount }) }}
+        </p>
+
         <!-- ── Permission summary ── -->
         <div class="mt-5 rounded-2xl border border-border bg-surface-card overflow-hidden">
           <div class="flex items-start gap-3 px-4 py-3.5">
@@ -561,6 +593,17 @@ async function submitUnlock() {
                 </span>
               </div>
             </div>
+          </div>
+
+          <!-- What will actually be published (signEvent, content-first) -->
+          <div v-if="eventContentPreview" class="px-4 py-3 border-t border-border">
+            <p class="text-[10px] text-text-muted font-semibold uppercase tracking-wide mb-1.5">{{ t('prompt.eventPreview') }}</p>
+            <p v-if="eventContentPreview.encrypted" class="text-[11px] text-text-muted italic">
+              {{ t('prompt.encryptedContent') }}
+            </p>
+            <p v-else class="text-[11px] text-text-secondary leading-relaxed whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+              {{ eventContentPreview.text }}
+            </p>
           </div>
 
           <!-- Payment amount (weblnSendPayment / weblnKeysend) -->
@@ -587,27 +630,35 @@ async function submitUnlock() {
               <span class="text-[9px] font-bold uppercase text-brand bg-brand/10 px-1.5 py-0.5 rounded shrink-0">
                 {{ eventData.tags?.find(tag => tag[0] === 'method')?.[1] || 'GET' }}
               </span>
-              <span class="text-[10px] text-text-secondary font-mono truncate">
-                {{ eventData.tags?.find(tag => tag[0] === 'u')?.[1] || '' }}
+              <!-- Mid-truncate: keep start AND end visible so tampering shows -->
+              <span class="text-[10px] text-text-secondary font-mono">
+                {{ truncateKey(eventData.tags?.find(tag => tag[0] === 'u')?.[1] || '', 34, 14) }}
               </span>
             </div>
           </div>
 
-          <!-- signEvent (non-HTTP-auth): raw event behind a toggle -->
-          <template v-else-if="isSignEvent">
-            <button @click="showEventData = !showEventData"
-              class="w-full flex items-center justify-between px-4 py-2.5 border-t border-border text-[11px] text-text-muted hover:text-text-secondary transition-all font-medium">
-              <span>{{ showEventData ? t('prompt.hideEvent') : t('prompt.viewEvent') }}</span>
-              <ChevronDown class="w-3.5 h-3.5 transition-transform" :class="showEventData ? 'rotate-180' : ''" />
-            </button>
-            <div v-if="showEventData" class="px-4 pb-3">
-              <pre class="text-[10px] leading-relaxed font-mono bg-surface-base rounded-lg p-3 max-h-[160px] overflow-auto border border-border text-text-secondary whitespace-pre-wrap break-all">{{ JSON.stringify(eventData, null, 2) }}</pre>
-            </div>
-          </template>
-
-          <!-- Detail footer (non-event permissions) -->
-          <div v-else-if="permInfo.detail" class="px-4 py-2.5 border-t border-border bg-surface-elevated/40">
+          <div v-if="permInfo.detail && !isHttpAuth" class="px-4 py-2.5 border-t border-border bg-surface-elevated/40">
             <p class="text-[10px] text-text-muted leading-relaxed">{{ permInfo.detail }}</p>
+          </div>
+
+          <!-- Protocol names and raw event data are available without burdening new users. -->
+          <button @click="showEventData = !showEventData"
+            class="w-full flex items-center justify-between px-4 py-2.5 border-t border-border text-[11px] text-text-muted hover:text-text-secondary transition-all font-medium">
+            <span>{{ showEventData ? t('prompt.hideTechnicalDetails') : t('prompt.technicalDetails') }}</span>
+            <ChevronDown class="w-3.5 h-3.5 transition-transform" :class="showEventData ? 'rotate-180' : ''" />
+          </button>
+          <div v-if="showEventData" class="px-4 pb-3 space-y-2">
+            <div class="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-base px-3 py-2 text-[10px]">
+              <span class="text-text-muted">{{ t('prompt.protocol') }}</span>
+              <span class="font-mono text-text-secondary">{{ technicalProtocol }}</span>
+            </div>
+            <div v-if="isSignEvent" class="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-base px-3 py-2 text-[10px]">
+              <span class="text-text-muted">{{ t('prompt.eventType') }}</span>
+              <span class="text-text-secondary">{{ kindLabel || eventData.kind }}
+                <span class="font-mono text-text-muted/70">({{ eventData.kind }})</span>
+              </span>
+            </div>
+            <pre v-if="isSignEvent" class="text-[10px] leading-relaxed font-mono bg-surface-base rounded-lg p-3 max-h-[160px] overflow-auto border border-border text-text-secondary whitespace-pre-wrap break-all">{{ JSON.stringify(eventData, null, 2) }}</pre>
           </div>
         </div>
 
@@ -689,55 +740,18 @@ async function submitUnlock() {
             </button>
           </template>
 
-          <!-- ── First visit: connect-all / not now / more ── -->
-          <template v-else-if="firstVisit">
-            <button
-              @click="respond('allow_all')"
-              :disabled="!!deciding"
-              class="w-full flex items-center justify-center gap-2 py-3.5 text-sm rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all btn-primary"
-            >
-              <Loader2 v-if="deciding === 'allow_all'" class="w-4 h-4 animate-spin" />
-              <ShieldPlus v-else class="w-4 h-4" />
-              {{ t('prompt.allowAll') }}
-            </button>
-            <p class="text-center text-[10px] text-text-muted px-2 leading-relaxed">{{ t('prompt.allowAllExclude') }}</p>
-            <button
-              @click="respond('deny_once')"
-              :disabled="!!deciding"
-              class="w-full py-3 text-[13px] rounded-2xl text-text-muted font-semibold hover:bg-surface-card disabled:opacity-50 transition-all"
-            >
-              {{ t('prompt.notNow') }}
-            </button>
-
-            <button @click="showMore = !showMore"
-              class="w-full flex items-center justify-center gap-1 py-1.5 text-[11px] text-text-muted hover:text-text-secondary transition-all font-medium">
-              {{ t('common.more') }}
-              <ChevronDown class="w-3 h-3 transition-transform" :class="showMore ? 'rotate-180' : ''" />
-            </button>
-            <div v-if="showMore" class="flex items-center justify-center gap-2 animate-fade-in">
-              <button @click="respond('allow_always')" :disabled="!!deciding"
-                class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-success hover:bg-success/8 transition-all font-medium disabled:opacity-50">
-                <Check class="w-3.5 h-3.5" /> {{ t('prompt.allowAlways') }}
-              </button>
-              <span class="text-border text-[10px]">|</span>
-              <button @click="respond('deny_all')" :disabled="!!deciding"
-                class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-error hover:bg-error/8 transition-all font-medium disabled:opacity-50">
-                <Ban class="w-3.5 h-3.5" /> {{ t('prompt.blockSite') }}
-              </button>
-            </div>
-          </template>
-
           <!-- ── Standard: allow / not now / more ── -->
           <template v-else>
             <button
-              @click="respond('allow_always')"
+              @click="respond('allow_session')"
               :disabled="!!deciding"
               class="w-full flex items-center justify-center gap-2 py-3.5 text-sm rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all btn-primary"
             >
-              <Loader2 v-if="deciding === 'allow_always'" class="w-4 h-4 animate-spin" />
+              <Loader2 v-if="deciding === 'allow_session'" class="w-4 h-4 animate-spin" />
               <Check v-else class="w-4 h-4" />
-              {{ t('prompt.allow') }}
+              {{ t('prompt.allowForVisit') }}
             </button>
+            <p class="text-center text-[10px] text-text-muted px-2 leading-relaxed">{{ t('prompt.allowForVisitHint') }}</p>
             <button
               @click="respond('deny_once')"
               :disabled="!!deciding"
@@ -751,15 +765,18 @@ async function submitUnlock() {
               {{ t('common.more') }}
               <ChevronDown class="w-3 h-3 transition-transform" :class="showMore ? 'rotate-180' : ''" />
             </button>
+            <!-- Kind-scoped wording says exactly what a standing rule covers -->
             <div v-if="showMore" class="flex items-center justify-center gap-2 animate-fade-in">
-              <button @click="respond('allow_once')" :disabled="!!deciding"
+              <button @click="respond('allow_always')" :disabled="!!deciding"
                 class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-success hover:bg-success/8 transition-all font-medium disabled:opacity-50">
-                <Clock class="w-3.5 h-3.5" /> {{ t('prompt.allowOnce') }}
+                <Clock class="w-3.5 h-3.5" />
+                {{ isSignEvent && kindLabel ? t('prompt.allowAlwaysKind', { kind: kindLabel }) : t('prompt.allowAlways') }}
               </button>
               <span class="text-border text-[10px]">|</span>
               <button @click="respond('deny_always')" :disabled="!!deciding"
                 class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-error hover:bg-error/8 transition-all font-medium disabled:opacity-50">
-                <ShieldOff class="w-3.5 h-3.5" /> {{ t('prompt.denyAlways') }}
+                <ShieldOff class="w-3.5 h-3.5" />
+                {{ isSignEvent && kindLabel ? t('prompt.denyAlwaysKind', { kind: kindLabel }) : t('prompt.denyAlways') }}
               </button>
             </div>
           </template>

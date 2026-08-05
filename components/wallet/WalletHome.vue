@@ -20,13 +20,34 @@ import {
 
 const emit = defineEmits(['send', 'receive', 'history', 'detail', 'disconnect'])
 
-const { status, walletType, getBalance, getBudget, getInfo, listTransactions } = useWallet()
+const {
+  status, walletType, getBalance, getBudget, getInfo, listTransactions,
+  recoverPendingCashu,
+} = useWallet()
 const toast = useToast()
 const { toFiat, denomination, toggleDenomination, loadRate, currency } = useFiat()
 
 const fiatBalance = computed(() => {
   if (status.value.balance == null) return null
   return toFiat(status.value.balance)
+})
+
+const cashuAttention = computed(() => {
+  if (status.value.paymentPending) return {
+    title: 'wallet.cashuPaymentPendingTitle',
+    description: 'wallet.cashuPaymentPendingDesc',
+    action: 'wallet.cashuPaymentCheckAction',
+  }
+  if (status.value.recoveryPending) return {
+    title: 'wallet.cashuRecoveryPendingTitle',
+    description: 'wallet.cashuRecoveryPendingDesc',
+    action: 'wallet.cashuRecoveryAction',
+  }
+  return {
+    title: 'wallet.cashuIncomingPendingTitle',
+    description: 'wallet.cashuIncomingPendingDesc',
+    action: 'wallet.cashuIncomingPendingAction',
+  }
 })
 
 const recentTxs = ref([])
@@ -36,6 +57,27 @@ const walletBudget = ref(null)
 const nwcConnected = ref(true)
 const confirmDisconnect = ref(false)
 const disconnecting = ref(false)
+const recoveringProofs = ref(false)
+
+async function recoverProtectedProofs() {
+  recoveringProofs.value = true
+  try {
+    const result = await recoverPendingCashu()
+    await Promise.all([getBalance(), loadTransactions()])
+    if (result?.paymentPending) toast.info(t('wallet.cashuPaymentStillPending'))
+    else if (result?.incomingPending) toast.info(t('wallet.cashuIncomingStillPending'))
+    else if (result?.incomingRecoveredAmount > 0) {
+      toast.success(t('wallet.cashuIncomingRecovered', {
+        amount: formatSats(result.incomingRecoveredAmount),
+      }))
+    }
+    else toast.success(t('wallet.cashuRecoveryComplete', { amount: formatSats(result?.amountSats || 0) }))
+  } catch (error) {
+    toast.error(t(error.message))
+  } finally {
+    recoveringProofs.value = false
+  }
+}
 
 async function loadTransactions() {
   loadingTxs.value = true
@@ -202,6 +244,30 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <div
+      v-if="walletType === 'cashu' && (status.recoveryPending || status.paymentPending || status.incomingPending)"
+      class="rounded-2xl border border-warning/30 bg-warning/8 p-4 flex items-start gap-3"
+    >
+      <AlertTriangle class="w-5 h-5 text-warning shrink-0 mt-0.5" />
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-bold text-warning">
+          {{ t(cashuAttention.title) }}
+        </p>
+        <p class="text-[11px] text-text-secondary leading-relaxed mt-1">
+          {{ t(cashuAttention.description) }}
+        </p>
+        <button
+          @click="recoverProtectedProofs"
+          :disabled="recoveringProofs"
+          class="mt-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-warning text-white text-[11px] font-bold disabled:opacity-60"
+        >
+          <Loader2 v-if="recoveringProofs" class="w-3 h-3 animate-spin" />
+          <RefreshCw v-else class="w-3 h-3" />
+          {{ t(cashuAttention.action) }}
+        </button>
+      </div>
+    </div>
+
     <!-- Recent transactions -->
     <div class="space-y-2">
       <div class="flex items-center justify-between px-1">
@@ -229,7 +295,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-else class="bg-surface-card rounded-3xl border border-border p-6 text-center shadow-sm">
-        <Wallet class="w-5 h-5 text-text-muted mx-auto mb-2" />
+        <img src="/Onboarding%20wizard/storyset-receipt-bro.svg" alt="" class="w-28 h-20 object-contain mx-auto -mt-2 mb-1" />
         <p class="text-xs text-text-muted">{{ t('wallet.noTransactions') }}</p>
         <p class="text-[10px] text-text-muted mt-0.5">{{ t('wallet.noTransactionsHint') }}</p>
       </div>

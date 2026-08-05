@@ -3,22 +3,21 @@
  * Connected Sites page — full-width table of domains with permissions and budgets.
  * Wraps existing SiteDetail for per-site drill-down.
  */
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePermissions } from '../../composables/usePermissions.js'
 import { useAllowanceSync } from '../../composables/useAllowanceSync.js'
 import { formatSats } from '../../lib/utils.js'
 import SiteDetail from '../SiteDetail.vue'
-import { Globe, ChevronRight, Search, ShieldOff } from 'lucide-vue-next'
+import { ChevronRight, Search } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const { policies, load } = usePermissions()
+const { policies, sessionGrants, load } = usePermissions()
 const { getForHost } = useAllowanceSync()
 
 const selectedSite = ref(null)
 const search = ref('')
 const loading = ref(true)
-const faviconErrors = reactive(new Set())
 
 onMounted(async () => {
   await load()
@@ -26,7 +25,11 @@ onMounted(async () => {
 })
 
 const filteredSites = computed(() => {
-  let entries = Object.entries(policies.value)
+  const origins = new Set([
+    ...Object.keys(policies.value),
+    ...sessionGrants.value.map(grant => grant.origin).filter(Boolean),
+  ])
+  let entries = [...origins].map(origin => [origin, policies.value[origin] || {}])
   if (search.value.trim()) {
     const q = search.value.toLowerCase()
     entries = entries.filter(([host]) => host.toLowerCase().includes(q))
@@ -50,8 +53,18 @@ function allowedCount(methods) {
   return Object.values(methods).filter(m => m.decision === 'allow').length
 }
 
-function faviconUrl(host) {
-  try { return `https://www.google.com/s2/favicons?domain=${host}&sz=64` } catch { return '' }
+function grantsFor(origin) {
+  return sessionGrants.value.filter(grant => grant.origin === origin)
+}
+
+function siteInitial(origin) {
+  try { return new URL(origin).hostname.charAt(0).toUpperCase() || '?' } catch { return '?' }
+}
+
+function siteColor(origin) {
+  let hash = 0
+  for (const character of origin) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0
+  return `hsl(${Math.abs(hash) % 360} 55% 45%)`
 }
 
 function budgetInfo(host) {
@@ -66,6 +79,10 @@ function budgetInfo(host) {
 function onRevoked() {
   selectedSite.value = null
   load()
+}
+
+async function onChanged() {
+  await load()
 }
 </script>
 
@@ -82,8 +99,10 @@ function onRevoked() {
       v-if="selectedSite"
       :host="selectedSite"
       :methods="policies[selectedSite] || {}"
+      :session-grants="grantsFor(selectedSite)"
       @back="selectedSite = null"
       @revoked="onRevoked"
+      @changed="onChanged"
     />
 
     <!-- Loading -->
@@ -96,7 +115,7 @@ function onRevoked() {
     <!-- Sites list -->
     <template v-else>
       <!-- Search -->
-      <div v-if="Object.keys(policies).length > 3" class="relative">
+      <div v-if="filteredSites.length > 3 || search" class="relative">
         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
         <input
           v-model="search"
@@ -113,16 +132,10 @@ function onRevoked() {
           @click="selectedSite = host"
           class="w-full flex items-center gap-4 px-4 py-3.5 bg-surface-card rounded-3xl border border-border shadow-sm hover:border-brand/30 transition-all duration-200 group text-left"
         >
-          <!-- Favicon -->
-          <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
-            <img
-              v-if="!faviconErrors.has(host)"
-              :src="faviconUrl(host)"
-              @error="faviconErrors.add(host)"
-              class="w-5 h-5"
-              alt=""
-            />
-            <Globe v-else class="w-4 h-4 text-text-muted" />
+          <!-- Local site mark: never leaks the connected-site list to a favicon service. -->
+          <div class="w-10 h-10 rounded-[10px] border border-border flex items-center justify-center shrink-0 text-white font-extrabold"
+            :style="{ backgroundColor: siteColor(host) }">
+            {{ siteInitial(host) }}
           </div>
 
           <!-- Info -->
@@ -131,6 +144,9 @@ function onRevoked() {
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-[10px] text-text-muted">
                 {{ allowedCount(methods) }} {{ t('options.allowed') }}, {{ methodCount(methods) - allowedCount(methods) }} {{ t('options.denied') }}
+              </span>
+              <span v-if="grantsFor(host).length" class="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-brand/10 text-brand">
+                {{ grantsFor(host).length }} {{ t('sites.thisVisit') }}
               </span>
               <span v-if="budgetInfo(host)" class="text-[9px] px-1.5 py-0.5 rounded-full font-semibold"
                 :class="budgetInfo(host).color">
@@ -146,7 +162,7 @@ function onRevoked() {
 
       <!-- Empty state -->
       <div v-else class="bg-surface-card rounded-3xl border border-border shadow-sm p-10 text-center">
-        <ShieldOff class="w-8 h-8 text-text-muted mx-auto mb-3" />
+        <img src="/Onboarding%20wizard/storyset-software-integration-bro.svg" alt="" class="w-44 h-32 object-contain mx-auto -mt-4 mb-1" />
         <p class="text-sm font-medium text-text-secondary">{{ t('account.noSites') }}</p>
         <p class="text-xs text-text-muted mt-1">{{ t('options.noSitesHint') }}</p>
       </div>

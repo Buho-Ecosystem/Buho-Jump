@@ -29,6 +29,7 @@ async function getActiveAccount() {
 }
 import { getPoolRelays, getOutboxRelays, getInboxRelays, DEFAULT_CHAT_RELAYS } from '../lib/relays.js'
 import { cleanMessageContent } from '../lib/utils.js'
+import { looksLikePaymentPayload } from '../lib/cashu-payment-request.js'
 
 // ── Singleton reactive state ──
 const messages = ref({})     // { [pubkey]: Message[] }
@@ -546,6 +547,10 @@ export function useChat() {
 
             // ── Kind 14: Direct message ──
             if (rumor.kind !== 14) return // Ignore unknown kinds
+
+            // NUT-18 payment payloads are wallet plumbing, not chat text.
+            // The wallet detects and redeems them; keep the thread clean.
+            if (looksLikePaymentPayload(rumor.content)) return
 
             const expiry = rumor.tags ? (() => { const t = rumor.tags.find(t => t[0] === 'expiration'); return t ? parseInt(t[1]) : undefined })() : undefined
 

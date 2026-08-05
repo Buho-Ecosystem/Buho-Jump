@@ -109,6 +109,14 @@ export function useWallet() {
     return await send('WALLET_LIST_TRANSACTIONS', params || {})
   }
 
+  async function saveTransactionMetadata(transactionId, metadata) {
+    return await send('SAVE_TRANSACTION_METADATA', transactionId, metadata)
+  }
+
+  async function getTransactionMetadata(transactionId) {
+    return await send('GET_TRANSACTION_METADATA', transactionId)
+  }
+
   async function payKeysend(params) {
     return await send('WALLET_PAY_KEYSEND', params)
   }
@@ -121,8 +129,18 @@ export function useWallet() {
     return await send('WALLET_GET_BUDGET')
   }
 
-  async function sendZap({ recipientPubkey, amountSats, lightningAddress, content }) {
-    return await send('SEND_ZAP', { recipientPubkey, amountSats, lightningAddress, content })
+  async function sendZap({ recipientPubkey, amountSats, lightningAddress, content, payRequest }) {
+    return await send('SEND_ZAP', {
+      recipientPubkey, amountSats, lightningAddress, content, payRequest,
+    })
+  }
+
+  async function fetchLnurlWithdraw(input) {
+    return await send('LNURL_FETCH_WITHDRAW', input)
+  }
+
+  async function executeLnurlWithdraw(params, amountSats) {
+    return await send('LNURL_EXECUTE_WITHDRAW', params, amountSats)
   }
 
   // ── LNbits-specific methods ─────────────────────────────────────
@@ -156,6 +174,10 @@ export function useWallet() {
     return await send('CASHU_CHECK_MINT_QUOTE', mintUrl, quoteId)
   }
 
+  async function waitMintQuote(mintUrl, quoteId) {
+    return await send('CASHU_WAIT_MINT_QUOTE', mintUrl, quoteId)
+  }
+
   async function mintTokens(mintUrl, amountSats, quoteId) {
     return await send('CASHU_MINT_TOKENS', mintUrl, amountSats, quoteId)
   }
@@ -164,16 +186,56 @@ export function useWallet() {
     return await send('CASHU_EXPORT_BACKUP')
   }
 
-  async function importBackup(data) {
-    return await send('CASHU_IMPORT_BACKUP', data)
+  async function importBackup(data, backupPassword) {
+    return await send('CASHU_IMPORT_BACKUP', data, backupPassword)
+  }
+
+  async function previewBackupImport(data, backupPassword) {
+    return await send('CASHU_PREVIEW_IMPORT_BACKUP', data, backupPassword)
   }
 
   async function restoreFromRelay() {
     return await send('CASHU_RESTORE_FROM_RELAY')
   }
 
+  async function previewRelayRestore() {
+    return await send('CASHU_PREVIEW_RELAY_RESTORE')
+  }
+
+  async function restoreFromRecoveryWords(extraMints) {
+    return await send('CASHU_RESTORE_DETERMINISTIC', extraMints)
+  }
+
+  async function previewMintBackup() {
+    return await send('CASHU_PREVIEW_MINT_BACKUP')
+  }
+
+  async function recoverPendingCashu() {
+    const result = await send('CASHU_RECOVER_PENDING')
+    await loadStatus()
+    return result
+  }
+
   async function getCashuMintInfo(mintUrl) {
     return await send('CASHU_GET_MINT_INFO', mintUrl)
+  }
+
+  // ── Payment requests (NUT-18 / NUT-26) ────────────────────────
+
+  async function createPaymentRequest(amountSats, memo) {
+    return await send('CASHU_CREATE_PAYMENT_REQUEST', amountSats, memo)
+  }
+
+  async function checkRequestPayment(requestId) {
+    return await send('CASHU_CHECK_REQUEST_PAYMENT', requestId)
+  }
+
+  async function payPaymentRequest(encoded, amountSats, memo) {
+    return await send('CASHU_PAY_REQUEST', encoded, amountSats, memo)
+  }
+
+  async function getCashuMintBalances() {
+    return await send('CASHU_GET_MINT_BALANCES')
   }
 
   return {
@@ -199,9 +261,13 @@ export function useWallet() {
     makeInvoice,
     lookupInvoice,
     listTransactions,
+    saveTransactionMetadata,
+    getTransactionMetadata,
     payKeysend,
     signMessage,
     sendZap,
+    fetchLnurlWithdraw,
+    executeLnurlWithdraw,
     // LNbits-specific
     connectLnbits,
     // Cashu-specific
@@ -209,10 +275,20 @@ export function useWallet() {
     redeemToken,
     createToken,
     checkMintQuote,
+    waitMintQuote,
     mintTokens,
     exportBackup,
     importBackup,
+    previewBackupImport,
     restoreFromRelay,
+    previewRelayRestore,
+    restoreFromRecoveryWords,
+    recoverPendingCashu,
     getCashuMintInfo,
+    getCashuMintBalances,
+    createPaymentRequest,
+    checkRequestPayment,
+    payPaymentRequest,
+    previewMintBackup,
   }
 }

@@ -32,6 +32,7 @@ const toast = useToast()
 
 // Connect form
 const showConnectForm = ref(false)
+const vaultError = ref('')
 
 // Rename
 const renamingId = ref(null)
@@ -45,7 +46,13 @@ const activeWallet = computed(() => wallets.value.find(w => w.isActive))
 const otherWallets = computed(() => wallets.value.filter(w => !w.isActive))
 
 onMounted(async () => {
-  await Promise.all([loadStatus(), loadWallets()])
+  try {
+    await Promise.all([loadStatus(), loadWallets()])
+  } catch (error) {
+    vaultError.value = error.message === 'errors.VAULT_INTEGRITY'
+      ? t('errors.VAULT_INTEGRITY')
+      : (error.message || t('common.error'))
+  }
 })
 
 function onWalletConnected() {
@@ -88,9 +95,13 @@ async function handleSwitch(walletId) {
 
 async function confirmRemove() {
   if (!removingWallet.value) return
-  await disconnect(removingWallet.value.id)
-  removingWallet.value = null
-  toast.info(t('toast.walletDisconnected'))
+  try {
+    await disconnect(removingWallet.value.id)
+    removingWallet.value = null
+    toast.info(t('toast.walletDisconnected'))
+  } catch (error) {
+    toast.error(t(error.message))
+  }
 }
 
 async function handleRefresh() {
@@ -116,8 +127,17 @@ async function handleRefresh() {
       </button>
     </div>
 
+    <div v-if="vaultError" class="rounded-2xl border border-error/25 bg-error/10 p-5 flex items-start gap-3">
+      <AlertTriangle class="w-5 h-5 text-error shrink-0 mt-0.5" />
+      <div>
+        <p class="text-sm font-bold text-error">{{ t('account.vaultProblemTitle') }}</p>
+        <p class="text-xs text-text-secondary mt-1 leading-relaxed">{{ vaultError }}</p>
+        <p class="text-[10px] text-text-muted mt-2">{{ t('account.vaultProblemHint') }}</p>
+      </div>
+    </div>
+
     <!-- Active wallet card -->
-    <div v-if="activeWallet" class="bg-surface-card rounded-3xl border border-brand/20 shadow-sm overflow-hidden">
+    <div v-else-if="activeWallet" class="bg-surface-card rounded-3xl border border-brand/20 shadow-sm overflow-hidden">
       <div class="px-5 py-4">
         <div class="flex items-center gap-3">
           <div class="w-11 h-11 rounded-2xl bg-brand/10 flex items-center justify-center shrink-0 overflow-hidden">
@@ -210,9 +230,7 @@ async function handleRefresh() {
     <!-- Empty state -->
     <div v-if="wallets.length === 0 && !showConnectForm"
       class="bg-surface-card rounded-3xl border border-border shadow-sm p-8 text-center">
-      <div class="w-14 h-14 rounded-2xl bg-brand/10 flex items-center justify-center mx-auto mb-3">
-        <Wallet class="w-7 h-7 text-brand" />
-      </div>
+      <img src="/Onboarding%20wizard/storyset-ewallet-bro.svg" alt="" class="w-44 h-32 object-contain mx-auto -mt-4 mb-1" />
       <p class="text-sm font-extrabold mb-1">{{ t('wallet.noWallets') }}</p>
       <p class="text-xs text-text-muted mb-4">{{ t('wallet.noWalletHomeDesc') }}</p>
       <button

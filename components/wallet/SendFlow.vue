@@ -8,7 +8,7 @@
  *
  * Amount input supports sats and fiat toggle with live conversion.
  */
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWallet } from '../../composables/useWallet.js'
 import { useToast } from '../../composables/useToast.js'
@@ -19,38 +19,54 @@ import { getAvatarColor } from '../../lib/avatarColor.js'
 
 const { t } = useI18n()
 import { formatSats, detectPaymentInput } from '../../lib/utils.js'
+import { decodePaymentRequestInfo } from '../../lib/cashu-payment-request.js'
 import { parseZARFromMetadata, getMerchantInitials } from '../../lib/merchantQR.js'
-import { fetchInvoice, decodeBolt11, lnurl as lnurlCore, parseSuccessAction, decryptAesSuccessAction } from 'nostr-core'
-import { fetchLnurlPayParams, fetchLnurlPayInvoice, fetchLnurlPayInvoiceMsat, executeLnurlPay, verifyLnurlPayment } from '../../lib/lnurl.js'
+import { decodeBolt11 } from 'nostr-core'
+import {
+  fetchLnurlPayParams, fetchLnurlPayInvoice, fetchLnurlPayInvoiceMsat,
+  resolveLnurlServiceUrl,
+} from '../../lib/lnurl.js'
+import { resolveSuccessAction } from '../../lib/lnurlSuccess.js'
+import { pollVerify } from '../../lib/lnurlVerify.js'
+import { lookupBrantaVerification } from '../../lib/branta.js'
+import { hasOriginAccess, requestOriginAccess } from '../../lib/browser/hostPermissions.js'
 import QrScanner from '../QrScanner.vue'
+import QrDisplay from '../QrDisplay.vue'
 import ErrorBanner from '../ErrorBanner.vue'
 import SatButtons from './SatButtons.vue'
 import {
   ArrowLeft, ScanLine, Wallet, ArrowUpRight, ArrowDownLeft, ArrowLeftRight,
   Check, AlertTriangle, Loader2, AtSign, Store, Timer, Code, Zap,
+  Smartphone, BadgeCheck, Coins, Copy,
 } from 'lucide-vue-next'
 
 const emit = defineEmits(['back', 'done'])
-const { payInvoice, makeInvoice, status } = useWallet()
+const {
+  payInvoice, saveTransactionMetadata, status, walletType, wallets,
+  fetchLnurlWithdraw, executeLnurlWithdraw,
+  payPaymentRequest, redeemToken, getCashuMintBalances, createToken,
+} = useWallet()
 const toast = useToast()
-const { toFiat, fiatToSats, currency, loadRate } = useFiat()
+const { toFiat, toFiatRaw, fiatToSats, currency, rate, loadRate } = useFiat()
 const { online } = useOnline()
 const { resolveInput, fetchProfile, getCachedProfile } = useContacts()
 
 // ── State ──
-const step = ref('input') // 'input' | 'confirm' | 'merchant-confirm' | 'withdraw-confirm' | 'result'
+const step = ref('input') // 'input' | 'confirm' | 'merchant-confirm' | 'withdraw-confirm' | 'request-confirm' | 'ecash-share' | 'result'
 const showInvoicePreview = ref(false)
 const showPaymentProof = ref(false)
 const input = ref('')
 const amountSats = ref('')
 const amountFiat = ref('')
-const inputMode = ref('sats') // 'sats' | 'fiat'
+const amountPayout = ref('')
+const inputMode = ref('sats') // 'sats' | 'fiat' | 'payout'
 const showScanner = ref(false)
 const paying = ref(false)
 const resolving = ref(false)
 const payResult = ref(null)
 const payError = ref('')
 const resolvedInvoice = ref('')
+const resolvedInvoiceAmountMsat = ref(0)
 
 // ── Merchant payment state ──
 const merchantInfo = ref(null)
@@ -73,6 +89,27 @@ const successAction = ref(null) // Parsed SuccessAction from LNURL callback
 const pendingSuccessAction = ref(null) // Raw action stored between invoice fetch and payment
 const pendingVerifyUrl = ref(null) // LUD-21 verify URL
 const paymentVerified = ref(false) // True if LUD-21 verification passed
+const deliveryStatus = ref(null)
+const selectedMobileCountry = ref('')
+const merchantVerification = ref(null)
+const brantaEnabled = ref(true)
+const paidTransactionId = ref('')
+const lnurlPayParams = ref(null)
+let verifyController = null
+let brantaController = null
+
+// ── Ecash payment request state (NUT-18 / NUT-26) ──
+const requestPayMint = ref('') // mint the payment will be taken from
+const requestFallback = ref(null) // { token, amountSats, deliveryError, reclaimed }
+
+// ── Ecash share state (token shown as QR; animated when large, NUT-16) ──
+const shareAmountSats = ref('')
+const shareMemo = ref('')
+const shareToken = ref('')
+const shareProofCount = ref(0)
+const shareCopied = ref(false)
+const shareReclaimed = ref(false)
+const creatingShare = ref(false)
 
 // ── Nostr identity → Lightning address resolution ──
 const nostrProfile = ref(null) // { pubkey, name, picture, lud16 }
@@ -90,6 +127,19 @@ const detected = computed(() => {
 
 const isMerchant = computed(() => detected.value?.type === 'merchant')
 const isMerchantUnsupported = computed(() => detected.value?.type === 'merchant-unsupported')
+const mobileCandidates = computed(() => detected.value?.mobile?.candidates || [])
+const mobilePayment = computed(() => {
+  const mobile = detected.value?.mobile
+  if (!mobile) return null
+  if (!mobile.ambiguous) return mobile
+  return mobile.candidates?.find(candidate => candidate.country.code === selectedMobileCountry.value) || null
+})
+const payoutCurrency = computed(() => lnurlPayParams.value?.currency || null)
+const nextInputModeLabel = computed(() => {
+  if (inputMode.value === 'payout') return 'SATS'
+  if (inputMode.value === 'sats') return currency.value.toUpperCase()
+  return payoutCurrency.value?.code || 'SATS'
+})
 
 // ── Pasted invoice decoding ──
 // Decode BOLT11 invoices on paste so the embedded amount is shown before
@@ -110,25 +160,64 @@ const invoiceAmountSats = computed(() => {
 
 const isNostrIdentity = computed(() => detected.value?.type === 'nostr-identity')
 
+// ── Ecash payment request (NUT-18 / NUT-26) ──
+const isPaymentRequest = computed(() => detected.value?.type === 'payment-request')
+
+const requestInfo = computed(() => {
+  if (!isPaymentRequest.value) return null
+  return decodePaymentRequestInfo(detected.value.value)
+})
+
+// Why this request cannot be paid, in plain language ('' when payable)
+const requestBlocker = computed(() => {
+  if (!isPaymentRequest.value) return ''
+  const info = requestInfo.value
+  if (!info?.valid) {
+    if (info?.reason === 'unit') return t('wallet.requestUnitUnsupported')
+    if (info?.reason === 'mints') return t('wallet.requestInvalidMints')
+    return t('wallet.requestInvalid')
+  }
+  if (info.locked) return t('wallet.requestLockedUnsupported')
+  if (!info.transports.length) return t('errors.REQUEST_NO_TRANSPORT')
+  if (walletType.value !== 'cashu') return t('wallet.requestNeedsEcash')
+  return ''
+})
+
+const requestPayMintHost = computed(() => {
+  try { return new URL(requestPayMint.value).host } catch { return requestPayMint.value }
+})
+
+const requestDeliveryLabel = computed(() => {
+  const transport = requestInfo.value?.transports?.[0]
+  if (transport?.type === 'nostr') return t('wallet.requestDeliveryNostr')
+  if (transport?.type === 'post') return t('wallet.requestDeliveryPost')
+  return ''
+})
+
 const detectedLabel = computed(() => {
   if (!detected.value) return ''
   if (nostrResolved.value && nostrProfile.value?.lud16) return t('wallet.lightningAddress')
   const labels = {
     invoice: t('wallet.lightningInvoice'),
     lnaddress: t('wallet.lightningAddress'),
+    'mobile-payment': t('wallet.mobilePayment'),
     lnurl: t('wallet.lnurl'),
     merchant: t('wallet.merchantDetected'),
     'merchant-unsupported': t('wallet.merchantDetected'),
     'nostr-identity': nostrResolving.value ? t('wallet.resolvingProfile') : t('wallet.nostrIdentity'),
+    'payment-request': t('wallet.ecashRequestDetected'),
+    'ecash-token': t('wallet.ecashTokenDetected'),
     unknown: t('wallet.unknownFormat'),
   }
   return labels[detected.value.type] || ''
 })
 
 const detectedIcon = computed(() => {
+  if (detected.value?.type === 'mobile-payment' || detected.value?.mobile) return Smartphone
   if (detected.value?.type === 'merchant' || detected.value?.type === 'merchant-unsupported') return Store
   if (detected.value?.type === 'lnaddress') return AtSign
   if (detected.value?.type === 'nostr-identity') return nostrResolving.value ? Loader2 : AtSign
+  if (detected.value?.type === 'payment-request' || detected.value?.type === 'ecash-token') return Coins
   return Zap
 })
 
@@ -136,8 +225,13 @@ const detectedColor = computed(() => {
   if (!detected.value) return ''
   if (detected.value.type === 'unknown') return 'text-warning bg-warning/10'
   if (detected.value.type === 'merchant-unsupported') return 'text-warning bg-warning/10'
+  if (detected.value.type === 'payment-request') {
+    return requestBlocker.value ? 'text-warning bg-warning/10' : 'text-brand bg-brand/10'
+  }
+  if (detected.value.type === 'ecash-token') return 'text-warning bg-warning/10'
   if (detected.value.type === 'lnurl') return 'text-info bg-info/10'
   if (detected.value.type === 'merchant') return 'text-brand bg-brand/10'
+  if (detected.value.type === 'mobile-payment' || detected.value.mobile) return 'text-info bg-info/10'
   if (detected.value.type === 'nostr-identity') return nostrResolving.value ? 'text-text-muted bg-surface-elevated' : 'text-brand bg-brand/10'
   return 'text-success bg-success/10'
 })
@@ -146,21 +240,36 @@ const isWithdraw = computed(() => detected.value?.lnurlType === 'withdraw')
 
 const needsAmount = computed(() => {
   if (!detected.value) return false
+  if (detected.value.type === 'invoice') return !!invoiceDetails.value && invoiceDetails.value.amountMsat == null
   if (detected.value.type === 'merchant') return false
   if (isWithdraw.value) return false
   if (detected.value.type === 'nostr-identity') return nostrResolved.value && !!nostrProfile.value?.lud16
-  return detected.value.type === 'lnaddress' || detected.value.type === 'lnurl'
+  if (detected.value.type === 'payment-request') {
+    return !requestBlocker.value && requestInfo.value?.amountSats == null
+  }
+  return detected.value.type === 'lnaddress' || detected.value.type === 'lnurl' || detected.value.type === 'mobile-payment'
 })
 
 // Effective sats amount: pasted invoices carry their own amount; everything
 // else comes from the amount input (fiat mode writes sats via its watcher).
 const effectiveSats = computed(() => {
-  if (detected.value?.type === 'invoice') return invoiceAmountSats.value
+  if (resolvedInvoiceAmountMsat.value > 0) return Math.ceil(resolvedInvoiceAmountMsat.value / 1000)
+  if (detected.value?.type === 'invoice') return invoiceAmountSats.value || parseInt(amountSats.value) || 0
+  if (detected.value?.type === 'payment-request') {
+    return requestInfo.value?.amountSats || parseInt(amountSats.value) || 0
+  }
+  if (inputMode.value === 'payout' && payoutCurrency.value) {
+    const local = Number(amountPayout.value)
+    return local > 0 ? Math.floor((local * payoutCurrency.value.multiplier) / 1000) : 0
+  }
   return parseInt(amountSats.value) || 0
 })
 
 // Conversion display for the inactive denomination
 const conversionHint = computed(() => {
+  if (inputMode.value === 'payout') {
+    return effectiveSats.value > 0 ? `≈ ${formatSats(effectiveSats.value)} sats` : ''
+  }
   if (inputMode.value === 'sats') {
     const sats = parseInt(amountSats.value)
     if (!sats || sats <= 0) return ''
@@ -174,6 +283,8 @@ const conversionHint = computed(() => {
 })
 
 const amountError = computed(() => {
+  if (detected.value?.type === 'invoice' && !invoiceDetails.value) return t('wallet.invoiceInvalid')
+  if (invoiceDetails.value?.isExpired) return t('wallet.invoiceExpired')
   if (!needsAmount.value) return ''
   const sats = effectiveSats.value
   if (!sats) return ''
@@ -198,9 +309,17 @@ const canProceed = computed(() => {
     if (!nostrProfile.value?.lud16) return false
     return effectiveSats.value > 0
   }
-  if (detected.value.type === 'invoice') return true
+  if (detected.value.type === 'mobile-payment' && detected.value.mobile?.ambiguous && !mobilePayment.value) return false
+  if (detected.value.type === 'invoice') {
+    return !!invoiceDetails.value && !invoiceDetails.value.isExpired && effectiveSats.value > 0
+  }
   if (detected.value.type === 'merchant') return true
   if (isWithdraw.value) return true
+  if (detected.value.type === 'payment-request') {
+    return !requestBlocker.value && effectiveSats.value > 0
+  }
+  // Tokens are received, not sent — the input hint points to Receive.
+  if (detected.value.type === 'ecash-token') return false
   if (needsAmount.value) return effectiveSats.value > 0
   return true
 })
@@ -235,8 +354,21 @@ watch(amountFiat, (val) => {
 })
 
 function toggleInputMode() {
-  inputMode.value = inputMode.value === 'sats' ? 'fiat' : 'sats'
+  const modes = payoutCurrency.value ? ['payout', 'sats', 'fiat'] : ['sats', 'fiat']
+  const index = modes.indexOf(inputMode.value)
+  inputMode.value = modes[(index + 1) % modes.length]
 }
+
+function chooseMobileCountry(code) {
+  selectedMobileCountry.value = code
+}
+
+onMounted(async () => {
+  try {
+    const stored = await chrome.storage.local.get('brantaEnabled')
+    brantaEnabled.value = stored.brantaEnabled !== false
+  } catch { /* default on */ }
+})
 
 // ── Merchant flow ──
 
@@ -275,6 +407,8 @@ onBeforeUnmount(() => {
   stopCountdown()
   clearTimeout(fiatDebounce)
   clearTimeout(lnurlFetchTimer)
+  verifyController?.abort()
+  brantaController?.abort()
 })
 
 // ── Nostr identity resolution ──
@@ -318,12 +452,12 @@ watch(() => detected.value?.type, async (type) => {
 // (minSendable === maxSendable, e.g. point-of-sale invoices) are prefilled
 // and shown instead of asking the user to guess. Best-effort: on failure we
 // fall back to manual entry and proceed() revalidates against the service.
-const lnurlPayParams = ref(null)
 let lnurlFetchTimer = null
 let lnurlFetchSeq = 0
 
 const lnurlFixedAmount = computed(() =>
   !!lnurlPayParams.value
+  && !lnurlPayParams.value.currency
   && lnurlPayParams.value.minSendable === lnurlPayParams.value.maxSendable
 )
 
@@ -333,12 +467,20 @@ const lnurlRangeHint = computed(() => {
   return t('wallet.amountRange', { min: formatSats(p.minSendable), max: formatSats(p.maxSendable) })
 })
 
-watch(() => {
+const lnurlPaymentInput = computed(() => {
   const det = detected.value
-  if (det?.type !== 'lnurl') return null
-  if (det.lnurlType && det.lnurlType !== 'pay') return null // withdraw / auth
-  return det.value
-}, (value) => {
+  if (!det) return null
+  if (det.type === 'lnurl') {
+    if (det.lnurlType && det.lnurlType !== 'pay') return null
+    return det.value
+  }
+  if (det.type === 'nostr-identity') return nostrResolved.value ? nostrProfile.value?.lud16 || null : null
+  if (det.type === 'mobile-payment') return mobilePayment.value?.lightningAddress || null
+  if (det.type === 'lnaddress') return det.value
+  return null
+})
+
+watch(lnurlPaymentInput, (value) => {
   clearTimeout(lnurlFetchTimer)
   lnurlPayParams.value = null
   const seq = ++lnurlFetchSeq
@@ -349,7 +491,12 @@ watch(() => {
       if (seq !== lnurlFetchSeq) return // Input changed while fetching
       if (params.tag && params.tag !== 'payRequest') return
       lnurlPayParams.value = params
-      if (params.minSendable === params.maxSendable && !amountSats.value) {
+      if (params.currency) {
+        inputMode.value = 'payout'
+      } else if (inputMode.value === 'payout') {
+        inputMode.value = 'sats'
+      }
+      if (!params.currency && params.minSendable === params.maxSendable && !amountSats.value) {
         inputMode.value = 'sats'
         amountSats.value = String(params.minSendable)
       }
@@ -371,7 +518,17 @@ async function resolveMerchantPayment() {
     const [user, domain] = lnAddress.split('@')
     const lnurlUrl = `https://${domain}/.well-known/lnurlp/${user}`
 
-    const params = await fetchLnurlPayParams(lnurlUrl)
+    let params = lnurlPayParams.value
+    if (!params) {
+      if (!(await requestOriginAccess(lnurlUrl))) throw new Error(t('wallet.serverAccessDenied'))
+      params = await fetchLnurlPayParams(lnurlUrl)
+      lnurlPayParams.value = params
+      if (!(await hasOriginAccess(params.callback))) {
+        payError.value = t('wallet.lnurlCallbackReady')
+        return
+      }
+    }
+    if (!(await requestOriginAccess(params.callback))) throw new Error(t('wallet.serverAccessDenied'))
 
     // Parse ZAR amount from metadata description
     const zarInfo = parseZARFromMetadata(params.metadata)
@@ -397,14 +554,104 @@ async function resolveMerchantPayment() {
     // Fetch the invoice from CryptoQR callback (exact msat, no rounding)
     const lnResult = await fetchLnurlPayInvoiceMsat(params, amountMsat)
     resolvedInvoice.value = lnResult.invoice
+    resolvedInvoiceAmountMsat.value = lnResult.amountMsat
     pendingSuccessAction.value = lnResult.successAction || null
     pendingVerifyUrl.value = lnResult.verify || null
+    runBrantaVerification(lnResult.invoice)
 
     // Start countdown — invoice is time-sensitive
     startCountdown()
     step.value = 'merchant-confirm'
   } catch (err) {
     payError.value = err.message || t('wallet.lnurlFailed')
+  } finally {
+    resolving.value = false
+  }
+}
+
+function currentPayout() {
+  if (inputMode.value !== 'payout' || !payoutCurrency.value) return null
+  const amount = Number(amountPayout.value)
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  const decimals = payoutCurrency.value.decimals || 0
+  return { code: payoutCurrency.value.code, amount: Number(amount.toFixed(decimals)) }
+}
+
+function recipientContext() {
+  if (mobilePayment.value) {
+    return {
+      recipientAddress: mobilePayment.value.lightningAddress,
+      recipientName: `${mobilePayment.value.country.provider} · ${mobilePayment.value.display}`,
+      source: 'mobile',
+    }
+  }
+  if (nostrProfile.value?.lud16) {
+    const mobileAddress = detectPaymentInput(nostrProfile.value.lud16)?.mobile
+    return {
+      recipientAddress: nostrProfile.value.lud16,
+      recipientName: nostrProfile.value.name || nostrProfile.value.lud16,
+      source: mobileAddress ? 'mobile' : 'nostr',
+    }
+  }
+  if (detected.value?.type === 'lnaddress') {
+    return {
+      recipientAddress: detected.value.value,
+      recipientName: null,
+      source: detected.value.mobile ? 'mobile' : null,
+    }
+  }
+  if (merchantInfo.value) {
+    return {
+      recipientAddress: detected.value?.value || null,
+      recipientName: merchantStoreName.value || merchantInfo.value.name,
+      source: 'merchant',
+    }
+  }
+  return { recipientAddress: null, recipientName: null, source: null }
+}
+
+async function runBrantaVerification(invoice) {
+  merchantVerification.value = null
+  brantaController?.abort()
+  if (!brantaEnabled.value || !invoice) return
+  const controller = new AbortController()
+  brantaController = controller
+  const verification = await lookupBrantaVerification({ qrText: invoice, signal: controller.signal })
+  if (controller.signal.aborted || brantaController !== controller) return
+  merchantVerification.value = verification
+  if (verification && paidTransactionId.value) {
+    saveTransactionMetadata(paidTransactionId.value, { merchantVerification: verification }).catch(() => {})
+  }
+}
+
+async function resolveLnurlDestination(address, fallbackMessage) {
+  resolving.value = true
+  try {
+    let params = lnurlPaymentInput.value === address ? lnurlPayParams.value : null
+    if (!params) {
+      const serviceUrl = resolveLnurlServiceUrl(address)
+      if (!(await requestOriginAccess(serviceUrl))) throw new Error(t('wallet.serverAccessDenied'))
+      params = await fetchLnurlPayParams(address)
+      lnurlPayParams.value = params
+      // A callback may live on another origin. Finish discovery now, then use
+      // the user's next Continue click for that exact permission request.
+      if (!(await hasOriginAccess(params.callback))) {
+        payError.value = t('wallet.lnurlCallbackReady')
+        return
+      }
+    }
+    lnurlPayParams.value = params
+    if (!(await requestOriginAccess(params.callback))) throw new Error(t('wallet.serverAccessDenied'))
+    const payout = currentPayout()
+    const result = await fetchLnurlPayInvoice(params, effectiveSats.value, null, payout)
+    resolvedInvoice.value = result.invoice
+    resolvedInvoiceAmountMsat.value = result.amountMsat
+    pendingSuccessAction.value = result.successAction || null
+    pendingVerifyUrl.value = result.verify || null
+    runBrantaVerification(result.invoice)
+    step.value = 'confirm'
+  } catch (err) {
+    payError.value = err.message || fallbackMessage
   } finally {
     resolving.value = false
   }
@@ -427,15 +674,44 @@ async function proceed() {
     return
   }
 
+  // Ecash payment request → dedicated confirm screen
+  if (detected.value.type === 'payment-request') {
+    resolving.value = true
+    try {
+      // Work out which mint the payment would come from, so the confirm
+      // screen can say it and the browser can be granted access up front.
+      const balances = await getCashuMintBalances() || []
+      const info = requestInfo.value
+      const accepted = info.mints.length
+        ? info.mints
+        : balances.map(entry => entry.mint)
+      const funded = balances.find(entry =>
+        accepted.includes(entry.mint) && entry.balance >= effectiveSats.value)
+      if (!funded) {
+        payError.value = info.mints.length && !balances.some(entry => accepted.includes(entry.mint) && entry.balance > 0)
+          ? t('errors.REQUEST_MINT_MISMATCH')
+          : t('wallet.insufficientBalance', { balance: formatSats(status.value?.balance || 0) })
+        return
+      }
+      requestPayMint.value = funded.mint
+      step.value = 'request-confirm'
+    } finally {
+      resolving.value = false
+    }
+    return
+  }
+
   // LNURL-withdraw → claim flow
   if (isWithdraw.value) {
     resolving.value = true
     try {
-      const wr = await lnurlCore.fetchWithdrawRequest(detected.value.value)
+      const serviceUrl = resolveLnurlServiceUrl(detected.value.value)
+      if (!(await requestOriginAccess(serviceUrl))) throw new Error(t('wallet.serverAccessDenied'))
+      const wr = await fetchLnurlWithdraw(detected.value.value)
       withdrawInfo.value = {
         ...wr,
-        minSats: Math.ceil(wr.minWithdrawable / 1000),
-        maxSats: Math.floor(wr.maxWithdrawable / 1000),
+        minSats: wr.minWithdrawable,
+        maxSats: wr.maxWithdrawable,
       }
       withdrawAmountSats.value = String(withdrawInfo.value.maxSats)
       step.value = 'withdraw-confirm'
@@ -449,49 +725,22 @@ async function proceed() {
 
   // Nostr identity → use resolved Lightning address
   if (detected.value.type === 'nostr-identity' && nostrProfile.value?.lud16) {
-    resolving.value = true
-    try {
-      const result = await fetchInvoice(nostrProfile.value.lud16, effectiveSats.value)
-      resolvedInvoice.value = result.invoice
-      step.value = 'confirm'
-    } catch (err) {
-      payError.value = err.message || t('wallet.addressResolveFailed')
-    } finally {
-      resolving.value = false
-    }
+    await resolveLnurlDestination(nostrProfile.value.lud16, t('wallet.addressResolveFailed'))
     return
   }
 
-  if (detected.value.type === 'lnaddress') {
-    resolving.value = true
-    try {
-      const result = await fetchInvoice(detected.value.value, effectiveSats.value)
-      resolvedInvoice.value = result.invoice
-      step.value = 'confirm'
-    } catch (err) {
-      payError.value = err.message || t('wallet.addressResolveFailed')
-    } finally {
-      resolving.value = false
-    }
+  if (detected.value.type === 'lnaddress' || detected.value.type === 'mobile-payment') {
+    const address = mobilePayment.value?.lightningAddress || detected.value.value
+    await resolveLnurlDestination(address, t('wallet.addressResolveFailed'))
     return
   }
 
   if (detected.value.type === 'lnurl') {
-    resolving.value = true
-    try {
-      const result = await executeLnurlPay(detected.value.value, effectiveSats.value)
-      resolvedInvoice.value = result.invoice
-      pendingSuccessAction.value = result.successAction || null
-      pendingVerifyUrl.value = result.verify || null
-      step.value = 'confirm'
-    } catch (err) {
-      payError.value = err.message || t('wallet.lnurlFailed')
-    } finally {
-      resolving.value = false
-    }
+    await resolveLnurlDestination(detected.value.value, t('wallet.lnurlFailed'))
     return
   }
 
+  if (detected.value.type === 'invoice') runBrantaVerification(detected.value.value)
   step.value = 'confirm'
 }
 
@@ -501,10 +750,10 @@ async function confirmWithdraw() {
   try {
     const sats = parseInt(withdrawAmountSats.value) || 0
     if (!sats || sats <= 0) throw new Error('Invalid amount')
-    // Create an invoice via NWC, then submit it to the withdraw service
-    const invoiceResult = await makeInvoice(sats, withdrawInfo.value.defaultDescription || 'LNURL withdraw')
-    if (!invoiceResult?.invoice) throw new Error('Failed to create invoice')
-    await lnurlCore.submitWithdrawRequest(withdrawInfo.value, invoiceResult.invoice)
+    if (!(await requestOriginAccess(withdrawInfo.value?.callback))) {
+      throw new Error(t('wallet.serverAccessDenied'))
+    }
+    await executeLnurlWithdraw(withdrawInfo.value, sats)
     payResult.value = { withdrawn: true, amount: sats }
     step.value = 'result'
   } catch (err) {
@@ -514,37 +763,182 @@ async function confirmWithdraw() {
   }
 }
 
+// ── Ecash share (token as QR / copyable string) ──
+
+async function createShareToken() {
+  const amount = parseInt(shareAmountSats.value) || 0
+  if (amount <= 0 || creatingShare.value) return
+  creatingShare.value = true
+  payError.value = ''
+  try {
+    const mint = wallets.value.find(wallet => wallet.isActive && wallet.type === 'cashu')?.mints?.[0]
+    if (!mint || !(await requestOriginAccess(mint))) throw new Error(t('cashu.mintAccessDenied'))
+    const result = await createToken(amount, shareMemo.value.trim())
+    shareToken.value = result?.token || ''
+    if (!shareToken.value) throw new Error(t('wallet.paymentFailed'))
+    // NUT-16: tokens with more than 2 proofs get an animated QR.
+    try {
+      const { getDecodedToken } = await import('@cashu/cashu-ts')
+      shareProofCount.value = getDecodedToken(shareToken.value).proofs.length
+    } catch {
+      shareProofCount.value = 0
+    }
+  } catch (err) {
+    payError.value = err.message?.startsWith('errors.') ? t(err.message) : (err.message || t('wallet.paymentFailed'))
+  } finally {
+    creatingShare.value = false
+  }
+}
+
+function copyShareToken() {
+  if (!shareToken.value) return
+  navigator.clipboard.writeText(shareToken.value)
+  shareCopied.value = true
+  toast.success(t('common.copied'))
+  setTimeout(() => (shareCopied.value = false), 2500)
+}
+
+async function takeBackShareToken() {
+  if (!shareToken.value || shareReclaimed.value || paying.value) return
+  paying.value = true
+  payError.value = ''
+  try {
+    await redeemToken(shareToken.value)
+    shareReclaimed.value = true
+    toast.success(t('wallet.tokenTakenBack'))
+  } catch (err) {
+    payError.value = err.message?.startsWith('errors.') ? t(err.message) : (err.message || t('wallet.paymentFailed'))
+  } finally {
+    paying.value = false
+  }
+}
+
+function resetShare() {
+  shareAmountSats.value = ''
+  shareMemo.value = ''
+  shareToken.value = ''
+  shareProofCount.value = 0
+  shareCopied.value = false
+  shareReclaimed.value = false
+  creatingShare.value = false
+}
+
+async function confirmPayRequest() {
+  paying.value = true
+  payError.value = ''
+  try {
+    if (!requestPayMint.value || !(await requestOriginAccess(requestPayMint.value))) {
+      throw new Error(t('cashu.mintAccessDenied'))
+    }
+    const result = await payPaymentRequest(detected.value.value, effectiveSats.value)
+    if (result?.delivered) {
+      payResult.value = { requestSent: true, amount: result.amountSats }
+    } else {
+      // The sats already moved into this token; keep it visible so the user
+      // can share it by hand or pull it back into the wallet.
+      requestFallback.value = {
+        token: result?.token || '',
+        amountSats: result?.amountSats || effectiveSats.value,
+        reclaimed: false,
+        copied: false,
+      }
+    }
+    step.value = 'result'
+  } catch (err) {
+    payError.value = err.message?.startsWith('errors.') ? t(err.message) : (err.message || t('wallet.paymentFailed'))
+  } finally {
+    paying.value = false
+  }
+}
+
+function copyFallbackToken() {
+  if (!requestFallback.value?.token) return
+  navigator.clipboard.writeText(requestFallback.value.token)
+  requestFallback.value.copied = true
+  toast.success(t('common.copied'))
+  setTimeout(() => { if (requestFallback.value) requestFallback.value.copied = false }, 2500)
+}
+
+async function takeBackRequestToken() {
+  if (!requestFallback.value?.token || requestFallback.value.reclaimed) return
+  paying.value = true
+  payError.value = ''
+  try {
+    await redeemToken(requestFallback.value.token)
+    requestFallback.value.reclaimed = true
+    toast.success(t('wallet.tokenTakenBack'))
+  } catch (err) {
+    payError.value = err.message?.startsWith('errors.') ? t(err.message) : (err.message || t('wallet.paymentFailed'))
+  } finally {
+    paying.value = false
+  }
+}
+
 async function confirmPay() {
   paying.value = true
   payError.value = ''
   try {
+    if (walletType.value === 'cashu') {
+      const mint = wallets.value.find(wallet => wallet.isActive && wallet.type === 'cashu')?.mints?.[0]
+      if (!mint || !(await requestOriginAccess(mint))) throw new Error(t('cashu.mintAccessDenied'))
+    }
     const invoice = resolvedInvoice.value || detected.value.value
-    const result = await payInvoice(invoice)
+    const amountlessSats = detected.value?.type === 'invoice' && invoiceDetails.value?.amountMsat == null
+      ? effectiveSats.value
+      : undefined
+    const result = await payInvoice(invoice, amountlessSats)
     payResult.value = result
     stopCountdown()
 
-    // Process LNURL success action if present
-    if (pendingSuccessAction.value) {
+    successAction.value = await resolveSuccessAction(pendingSuccessAction.value, result?.preimage)
+    const verifyUrl = pendingVerifyUrl.value
+    const payout = currentPayout()
+    const recipient = recipientContext()
+    const paidSats = (() => {
+      try { return Math.round(decodeBolt11(invoice)?.amountSat || effectiveSats.value || 0) }
+      catch { return effectiveSats.value || 0 }
+    })()
+    const fiatAtPayment = toFiatRaw(paidSats)
+    const fiatSnapshot = fiatAtPayment != null ? {
+      code: currency.value.toUpperCase(), amount: fiatAtPayment,
+      rate: rate.value, capturedAt: Date.now(),
+    } : null
+    let transactionId = result?.payment_hash || result?.paymentHash || ''
+    if (!transactionId) {
+      try { transactionId = decodeBolt11(invoice)?.paymentHash || '' } catch { /* already paid */ }
+    }
+    paidTransactionId.value = transactionId
+
+    if (transactionId) {
       try {
-        const parsed = parseSuccessAction(pendingSuccessAction.value)
-        const action = { ...parsed }
-        if (parsed.tag === 'aes' && result?.preimage) {
-          action.decrypted = await decryptAesSuccessAction(parsed, result.preimage)
-        }
-        successAction.value = action
-      } catch { /* success action parsing is non-critical */ }
-      pendingSuccessAction.value = null
+        await saveTransactionMetadata(transactionId, {
+          ...recipient,
+          successAction: successAction.value,
+          verifyUrl,
+          payout,
+          fiatSnapshot,
+          merchantVerification: merchantVerification.value,
+        })
+      } catch { /* metadata never changes payment success */ }
     }
 
-    // LUD-21 payment verification (non-blocking)
-    if (pendingVerifyUrl.value) {
-      verifyLnurlPayment(pendingVerifyUrl.value).then(v => {
-        if (v?.settled) paymentVerified.value = true
-      })
-      pendingVerifyUrl.value = null
-    }
-
+    pendingSuccessAction.value = null
+    pendingVerifyUrl.value = null
     step.value = 'result'
+
+    // LUD-21 status is progressive: update this receipt and the durable
+    // transaction record without holding the success screen open.
+    if (verifyUrl) {
+      verifyController?.abort()
+      verifyController = new AbortController()
+      pollVerify(verifyUrl, (next) => {
+        deliveryStatus.value = next
+        paymentVerified.value = next.settled
+        if (transactionId) {
+          saveTransactionMetadata(transactionId, { deliveryStatus: next }).catch(() => {})
+        }
+      }, { signal: verifyController.signal, expectPayout: recipient.source === 'mobile' }).catch(() => {})
+    }
   } catch (err) {
     payError.value = err.message || t('wallet.paymentFailed')
   } finally {
@@ -557,14 +951,30 @@ function onScan(val) {
   showScanner.value = false
 }
 
+function goBack() {
+  if (step.value === 'input') { emit('back'); return }
+  if (step.value === 'ecash-share') {
+    // A created token holds real sats: never discard it on a stray tap.
+    // The user leaves through "Take it back" or "Done" instead.
+    if (shareToken.value && !shareReclaimed.value) return
+    reset()
+    return
+  }
+  if (step.value === 'merchant-confirm' || step.value === 'withdraw-confirm') { reset(); return }
+  step.value = 'input'
+}
+
 function reset() {
   step.value = 'input'
   input.value = ''
   amountSats.value = ''
   amountFiat.value = ''
+  amountPayout.value = ''
+  inputMode.value = 'sats'
   payResult.value = null
   payError.value = ''
   resolvedInvoice.value = ''
+  resolvedInvoiceAmountMsat.value = 0
   merchantInfo.value = null
   merchantZAR.value = null
   merchantStoreName.value = ''
@@ -573,14 +983,25 @@ function reset() {
   merchantLogoFailed.value = false
   withdrawInfo.value = null
   withdrawAmountSats.value = ''
+  requestPayMint.value = ''
+  requestFallback.value = null
+  resetShare()
   successAction.value = null
   pendingSuccessAction.value = null
   pendingVerifyUrl.value = null
   paymentVerified.value = false
+  deliveryStatus.value = null
+  selectedMobileCountry.value = ''
+  merchantVerification.value = null
+  paidTransactionId.value = ''
   fiatRateUnavailable.value = false
   nostrProfile.value = null
   nostrResolving.value = false
   nostrResolved.value = false
+  verifyController?.abort()
+  verifyController = null
+  brantaController?.abort()
+  brantaController = null
   stopCountdown()
 }
 </script>
@@ -591,7 +1012,7 @@ function reset() {
     <!-- Header -->
     <div class="flex items-center gap-3 mb-5">
       <button
-        @click="step === 'input' ? emit('back') : (step === 'merchant-confirm' || step === 'withdraw-confirm' ? reset() : (step = 'input'))"
+        @click="goBack"
         :aria-label="t('common.back')"
         class="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-surface-elevated transition-all duration-200"
       >
@@ -602,6 +1023,8 @@ function reset() {
           {{ step === 'result' ? (payResult?.withdrawn ? t('wallet.withdrawSuccess') : t('wallet.sendResult'))
             : step === 'merchant-confirm' ? t('wallet.merchantPayment')
             : step === 'withdraw-confirm' ? t('wallet.withdrawTitle')
+            : step === 'request-confirm' ? t('wallet.reviewRequestTitle')
+            : step === 'ecash-share' ? t('wallet.shareEcashTitle')
             : t('wallet.sendTitle') }}
         </h1>
       </div>
@@ -662,6 +1085,33 @@ function reset() {
             {{ detected.merchant.name }}
           </span>
         </div>
+      </div>
+
+      <!-- Mobile-money destination and explicit country choice for local numbers -->
+      <div v-if="detected?.mobile" class="bg-surface-card rounded-2xl border border-info/25 p-3.5 space-y-3 animate-fade-in-up">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center overflow-hidden border border-border">
+            <img :src="(mobilePayment || detected.mobile).country.logoUrl" :alt="(mobilePayment || detected.mobile).country.provider" class="w-full h-full object-contain p-1" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-bold truncate">{{ (mobilePayment || detected.mobile).display }}</p>
+            <p class="text-[10px] text-text-muted truncate">
+              {{ (mobilePayment || detected.mobile).country.provider }} · {{ (mobilePayment || detected.mobile).operator }} · {{ (mobilePayment || detected.mobile).country.currency }}
+            </p>
+          </div>
+        </div>
+        <div v-if="detected.mobile.ambiguous && !mobilePayment" class="space-y-2">
+          <p class="text-[10px] text-warning">{{ t('wallet.chooseMobileCountry') }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <button v-for="candidate in mobileCandidates" :key="candidate.country.code"
+              @click="chooseMobileCountry(candidate.country.code)"
+              class="px-3 py-2 rounded-xl border border-border bg-surface-elevated hover:border-brand/40 text-left transition-colors">
+              <span class="text-xs font-semibold">{{ candidate.country.flag }} {{ candidate.country.name }}</span>
+              <span class="block text-[9px] text-text-muted">{{ candidate.country.provider }}</span>
+            </button>
+          </div>
+        </div>
+        <p v-else class="text-[10px] text-info">{{ mobilePayment?.country.hint || detected.mobile.country.hint }}</p>
       </div>
 
       <!-- Unknown format — guidance + report -->
@@ -732,11 +1182,50 @@ function reset() {
         <p v-if="invoiceDetails?.description" class="text-[11px] text-text-muted mt-1 truncate">{{ invoiceDetails.description }}</p>
       </div>
 
+      <ErrorBanner
+        v-if="detected?.type === 'invoice' && amountError && !needsAmount"
+        type="error"
+        :message="amountError"
+      />
+
+      <!-- Ecash request that cannot be paid — say why in plain words -->
+      <ErrorBanner
+        v-if="isPaymentRequest && requestBlocker"
+        type="warning"
+        :message="requestBlocker"
+      />
+
+      <!-- Ecash token pasted into Send — it belongs in Receive -->
+      <ErrorBanner
+        v-if="detected?.type === 'ecash-token'"
+        type="warning"
+        :message="t('wallet.tokenBelongsInReceive')"
+      />
+
+      <!-- Ecash request summary (also shown for blocked requests so the
+           user still sees what was asked of them) -->
+      <div v-if="isPaymentRequest && requestInfo?.valid" class="bg-surface-card rounded-2xl border border-border p-4 text-center animate-fade-in-up">
+        <template v-if="requestInfo.amountSats">
+          <div class="flex items-baseline justify-center gap-1.5">
+            <span class="text-3xl font-extrabold tracking-tight tabular-nums">{{ formatSats(requestInfo.amountSats) }}</span>
+            <span class="text-sm font-medium text-text-muted">{{ t('wallet.sats') }}</span>
+          </div>
+          <p v-if="toFiat(requestInfo.amountSats)" class="text-[11px] text-brand mt-1 font-medium">≈ {{ toFiat(requestInfo.amountSats) }}</p>
+        </template>
+        <p v-else class="text-sm font-bold">{{ t('wallet.requestChooseAmount') }}</p>
+        <p v-if="requestInfo.description" class="text-[11px] text-text-muted mt-1 truncate">{{ requestInfo.description }}</p>
+        <p v-if="requestInfo.mintHosts.length" class="text-[10px] text-text-muted mt-1.5 truncate">
+          {{ t('wallet.requestAcceptsMint', { host: requestInfo.mintHosts.join(', ') }) }}
+        </p>
+      </div>
+
       <!-- Amount input card (only when needed) -->
       <div v-if="needsAmount" class="bg-surface-card rounded-2xl border border-border p-4 space-y-3">
         <div class="flex items-center justify-between">
           <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
-            {{ inputMode === 'sats' ? t('wallet.amountSats') : t('wallet.amountFiat', { currency: currency.toUpperCase() }) }}
+            {{ inputMode === 'sats' ? t('wallet.amountSats')
+              : inputMode === 'payout' ? t('wallet.recipientGets', { currency: payoutCurrency?.code })
+              : t('wallet.amountFiat', { currency: currency.toUpperCase() }) }}
           </label>
           <button
             v-if="!lnurlFixedAmount"
@@ -744,7 +1233,7 @@ function reset() {
             class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium"
           >
             <ArrowLeftRight class="w-3 h-3" />
-            {{ inputMode === 'sats' ? currency.toUpperCase() : 'SATS' }}
+            {{ nextInputModeLabel }}
           </button>
         </div>
 
@@ -760,7 +1249,7 @@ function reset() {
             class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
           <input
-            v-else
+            v-else-if="inputMode === 'fiat'"
             v-model="amountFiat"
             type="number"
             min="0.01"
@@ -768,6 +1257,17 @@ function reset() {
             placeholder="0.00"
             class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
+          <div v-else class="flex items-baseline justify-center gap-2">
+            <input
+              v-model="amountPayout"
+              type="number"
+              min="0"
+              :step="payoutCurrency?.decimals > 0 ? 0.01 : 1"
+              :placeholder="payoutCurrency?.decimals > 0 ? '0.00' : '0'"
+              class="min-w-0 text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <span class="text-sm font-bold text-info">{{ payoutCurrency?.code }}</span>
+          </div>
           <p v-if="conversionHint" class="text-[11px] text-text-muted mt-1 font-medium">{{ conversionHint }}</p>
         </div>
 
@@ -806,6 +1306,138 @@ function reset() {
         <Loader2 v-if="resolving" class="w-4 h-4 animate-spin" />
         {{ resolving ? (isMerchant ? t('wallet.merchantResolvingAddress') : t('wallet.resolving')) : t('wallet.reviewPayment') }}
       </button>
+
+      <!-- Ecash share entry (Cashu wallets, before anything is typed) -->
+      <button
+        v-if="walletType === 'cashu' && !input.trim()"
+        @click="step = 'ecash-share'"
+        class="w-full py-2 text-xs text-text-muted hover:text-brand transition-all duration-200 font-medium flex items-center justify-center gap-1.5"
+      >
+        <Coins class="w-3.5 h-3.5" />
+        {{ t('wallet.shareEcashInstead') }}
+      </button>
+    </div>
+
+    <!-- ═══ Step: Ecash Share (token as QR, animated when large) ═══ -->
+    <div v-if="step === 'ecash-share'" class="space-y-4 animate-fade-in-up">
+
+      <!-- Amount + memo form -->
+      <template v-if="!shareToken">
+        <div class="bg-surface-card rounded-2xl border border-border p-4 space-y-3">
+          <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+            {{ t('wallet.amountSats') }}
+          </label>
+          <div class="text-center">
+            <input
+              v-model="shareAmountSats"
+              type="number"
+              min="1"
+              placeholder="0"
+              autofocus
+              class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <p v-if="toFiat(parseInt(shareAmountSats) || 0)" class="text-[11px] text-text-muted mt-1 font-medium">
+              ≈ {{ toFiat(parseInt(shareAmountSats) || 0) }}
+            </p>
+          </div>
+          <SatButtons v-model="shareAmountSats" :max="status?.balance || Infinity" />
+        </div>
+
+        <div class="relative">
+          <input
+            v-model="shareMemo"
+            :placeholder="t('wallet.memoPlaceholder')"
+            class="w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted"
+          />
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-text-muted/60 font-medium pointer-events-none">
+            {{ t('common.optional') }}
+          </span>
+        </div>
+
+        <div v-if="payError" class="flex items-start gap-2 p-2.5 rounded-xl bg-error/10 text-error text-xs animate-scale-in">
+          <AlertTriangle class="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>{{ payError }}</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <button
+            @click="step = 'input'; resetShare(); payError = ''"
+            class="py-2.5 text-sm rounded-2xl bg-surface-card border border-border text-text-secondary hover:bg-surface-elevated transition-all duration-200 font-semibold"
+          >
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            @click="createShareToken"
+            :disabled="!(parseInt(shareAmountSats) > 0) || creatingShare"
+            class="py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-30 transition-all duration-200 font-bold btn-primary flex items-center justify-center gap-1.5"
+          >
+            <Loader2 v-if="creatingShare" class="w-4 h-4 animate-spin" />
+            <Coins v-else class="w-4 h-4" />
+            {{ creatingShare ? t('wallet.creating') : t('wallet.createShareToken') }}
+          </button>
+        </div>
+      </template>
+
+      <!-- Token display -->
+      <template v-else>
+        <div class="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div class="px-4 pt-4 pb-2 text-center">
+            <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider">{{ t('wallet.shareEcashScanHint') }}</p>
+            <div class="flex items-baseline justify-center gap-1.5 mt-1">
+              <span class="text-2xl font-extrabold tracking-tight">{{ formatSats(parseInt(shareAmountSats) || 0) }}</span>
+              <span class="text-xs font-medium text-text-muted">{{ t('wallet.sats') }}</span>
+            </div>
+          </div>
+          <div class="flex justify-center pb-4">
+            <QrDisplay :value="shareToken" :mode="shareProofCount > 2 ? 'animated' : 'auto'" />
+          </div>
+          <div v-if="shareMemo" class="px-4 pb-3 text-center">
+            <p class="text-[11px] text-text-muted italic">{{ shareMemo }}</p>
+          </div>
+        </div>
+
+        <!-- Token text + copy -->
+        <button
+          @click="copyShareToken"
+          class="relative w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-left hover:border-brand/40 transition-all duration-200 cursor-pointer"
+        >
+          <div class="text-[9px] font-mono text-text-muted break-all line-clamp-2 leading-relaxed pr-8">
+            {{ shareToken }}
+          </div>
+          <div class="absolute top-1/2 -translate-y-1/2 right-3 p-1 rounded-md transition-colors"
+            :class="shareCopied ? 'text-success' : 'text-text-muted'"
+          >
+            <Check v-if="shareCopied" class="w-3.5 h-3.5" />
+            <Copy v-else class="w-3.5 h-3.5" />
+          </div>
+        </button>
+
+        <div v-if="payError" class="flex items-start gap-2 p-2.5 rounded-xl bg-error/10 text-error text-xs animate-scale-in">
+          <AlertTriangle class="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>{{ payError }}</span>
+        </div>
+
+        <p v-if="shareReclaimed" class="text-[11px] text-success text-center font-medium">
+          {{ t('wallet.tokenTakenBackDesc') }}
+        </p>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <button
+            @click="takeBackShareToken"
+            :disabled="paying || shareReclaimed"
+            class="py-2.5 text-sm rounded-2xl bg-surface-card border border-border text-text-secondary hover:bg-surface-elevated disabled:opacity-40 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5"
+          >
+            <Loader2 v-if="paying" class="w-3.5 h-3.5 animate-spin" />
+            {{ t('wallet.takeItBack') }}
+          </button>
+          <button
+            @click="emit('done')"
+            class="py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all duration-200 font-bold btn-primary"
+          >
+            {{ t('common.done') }}
+          </button>
+        </div>
+      </template>
     </div>
 
     <!-- ═══ Step: Merchant Confirm ═══ -->
@@ -978,14 +1610,72 @@ function reset() {
       </div>
     </div>
 
+    <!-- ═══ Step: Request Confirm (ecash payment request) ═══ -->
+    <div v-if="step === 'request-confirm'" class="space-y-4 animate-fade-in-up">
+
+      <div class="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm">
+        <div class="p-5 text-center">
+          <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-2">{{ t('wallet.sending') }}</p>
+          <div class="flex items-baseline justify-center gap-1.5">
+            <span class="text-3xl font-extrabold tracking-tight">{{ formatSats(effectiveSats) }}</span>
+            <span class="text-sm font-medium text-text-muted">{{ t('wallet.sats') }}</span>
+          </div>
+          <p v-if="toFiat(effectiveSats)" class="text-[11px] text-brand mt-1 font-medium">≈ {{ toFiat(effectiveSats) }}</p>
+          <p v-if="requestInfo?.description" class="text-[11px] text-text-muted mt-1 truncate">{{ requestInfo.description }}</p>
+        </div>
+
+        <!-- How the payment travels -->
+        <div class="flex items-center gap-2 px-4 py-2.5 border-t border-border text-brand bg-brand/10">
+          <Coins class="w-3.5 h-3.5" />
+          <span class="text-[11px] font-medium truncate">{{ requestDeliveryLabel }}</span>
+        </div>
+
+        <!-- Which mint pays -->
+        <div v-if="requestPayMint" class="flex items-center gap-2 px-4 py-2.5 border-t border-border text-[11px] text-text-muted">
+          <Wallet class="w-3.5 h-3.5" />
+          <span class="truncate">{{ t('wallet.requestPaysFrom', { host: requestPayMintHost }) }}</span>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div v-if="payError" class="flex items-start gap-2 p-2.5 rounded-xl bg-error/10 text-error text-xs animate-scale-in">
+        <AlertTriangle class="w-3.5 h-3.5 mt-0.5 shrink-0" />
+        <span>{{ payError }}</span>
+      </div>
+
+      <!-- Actions -->
+      <div class="grid grid-cols-2 gap-2.5">
+        <button
+          @click="step = 'input'"
+          :disabled="paying"
+          class="py-2.5 text-sm rounded-2xl bg-surface-card border border-border text-text-secondary hover:bg-surface-elevated transition-all duration-200 font-semibold"
+        >
+          {{ t('common.cancel') }}
+        </button>
+        <button
+          @click="confirmPayRequest"
+          :disabled="paying"
+          class="py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-50 transition-all duration-200 font-bold btn-primary flex items-center justify-center gap-1.5"
+        >
+          <Loader2 v-if="paying" class="w-4 h-4 animate-spin" />
+          <Wallet v-else class="w-4 h-4" />
+          {{ paying ? t('wallet.paying') : t('common.confirm') }}
+        </button>
+      </div>
+    </div>
+
     <!-- ═══ Step: Confirm (normal) ═══ -->
     <div v-if="step === 'confirm'" class="space-y-4 animate-fade-in-up">
 
       <div class="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm">
         <div class="p-5 text-center">
           <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-2">{{ t('wallet.sending') }}</p>
+          <div v-if="currentPayout()" class="flex items-baseline justify-center gap-1.5 mb-1">
+            <span class="text-3xl font-extrabold tracking-tight">{{ currentPayout().amount }}</span>
+            <span class="text-sm font-bold text-info">{{ currentPayout().code }}</span>
+          </div>
           <div v-if="effectiveSats" class="flex items-baseline justify-center gap-1.5">
-            <span class="text-3xl font-extrabold tracking-tight">{{ formatSats(effectiveSats) }}</span>
+            <span :class="currentPayout() ? 'text-sm font-semibold text-text-muted' : 'text-3xl font-extrabold tracking-tight'">{{ currentPayout() ? '≈ ' : '' }}{{ formatSats(effectiveSats) }}</span>
             <span class="text-sm font-medium text-text-muted">{{ t('wallet.sats') }}</span>
           </div>
           <div v-else class="text-xs text-text-muted">{{ t('wallet.amountInInvoice') }}</div>
@@ -1007,6 +1697,16 @@ function reset() {
           <span v-else class="text-[11px] font-medium truncate">{{ detected?.type === 'lnaddress' ? detected.value : detectedLabel }}</span>
         </div>
       </div>
+
+      <a v-if="merchantVerification" :href="merchantVerification.verifyUrl || undefined" target="_blank" rel="noopener noreferrer"
+        class="flex items-center gap-3 p-3 rounded-2xl border border-success/25 bg-success/8 text-left">
+        <img v-if="merchantVerification.logoUrl" :src="merchantVerification.logoUrl" alt="" class="w-9 h-9 rounded-lg object-contain bg-white p-1" />
+        <div v-else class="w-9 h-9 rounded-lg bg-success/15 flex items-center justify-center"><BadgeCheck class="w-5 h-5 text-success" /></div>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-bold truncate">{{ merchantVerification.name || t('wallet.verifiedMerchant') }}</p>
+          <p class="text-[10px] text-success">{{ t('wallet.verifiedByBranta') }}</p>
+        </div>
+      </a>
 
       <!-- Invoice preview (collapsible) -->
       <div class="space-y-1">
@@ -1051,26 +1751,89 @@ function reset() {
     <div v-if="step === 'result'" class="animate-fade-in-up">
 
       <div class="text-center pt-6 pb-4">
-        <!-- Animated checkmark -->
-        <div class="w-16 h-16 rounded-full bg-success/12 flex items-center justify-center mx-auto mb-4 animate-scale-in">
-          <Check class="w-8 h-8 text-success" />
+        <!-- Animated checkmark (warning icon while a token needs rescuing) -->
+        <div
+          class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 animate-scale-in"
+          :class="requestFallback && !requestFallback.reclaimed ? 'bg-warning/12' : 'bg-success/12'"
+        >
+          <AlertTriangle v-if="requestFallback && !requestFallback.reclaimed" class="w-8 h-8 text-warning" />
+          <Check v-else class="w-8 h-8 text-success" />
         </div>
 
+        <!-- Ecash request: delivery failed, the token holds the sats -->
+        <template v-if="requestFallback">
+          <template v-if="requestFallback.reclaimed">
+            <h3 class="text-[15px] font-extrabold mb-1">{{ t('wallet.tokenTakenBack') }}</h3>
+            <p class="text-xs text-text-muted">{{ t('wallet.tokenTakenBackDesc') }}</p>
+          </template>
+          <template v-else>
+            <h3 class="text-[15px] font-extrabold mb-1">{{ t('wallet.requestDeliveryFailed') }}</h3>
+            <p class="text-xs text-text-muted px-2">{{ t('wallet.requestDeliveryFailedHint') }}</p>
+
+            <button
+              @click="copyFallbackToken"
+              class="relative mt-4 w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-left hover:border-brand/40 transition-all duration-200 cursor-pointer"
+            >
+              <div class="text-[9px] font-mono text-text-muted break-all line-clamp-3 leading-relaxed pr-8">
+                {{ requestFallback.token }}
+              </div>
+              <div class="absolute top-1/2 -translate-y-1/2 right-3 p-1 rounded-md transition-colors"
+                :class="requestFallback.copied ? 'text-success' : 'text-text-muted'"
+              >
+                <Check v-if="requestFallback.copied" class="w-3.5 h-3.5" />
+                <Copy v-else class="w-3.5 h-3.5" />
+              </div>
+            </button>
+
+            <button
+              @click="takeBackRequestToken"
+              :disabled="paying"
+              class="mt-2.5 w-full py-2.5 text-xs rounded-xl bg-success/10 text-success hover:bg-success/15 disabled:opacity-40 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5"
+            >
+              <Loader2 v-if="paying" class="w-3.5 h-3.5 animate-spin" />
+              {{ t('wallet.takeTokenBack', { amount: formatSats(requestFallback.amountSats) }) }}
+            </button>
+
+            <div v-if="payError" class="mt-2 flex items-start gap-2 p-2.5 rounded-xl bg-error/10 text-error text-xs text-left">
+              <AlertTriangle class="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>{{ payError }}</span>
+            </div>
+          </template>
+        </template>
+
         <!-- Withdraw success -->
-        <template v-if="payResult?.withdrawn">
+        <template v-else-if="payResult?.withdrawn">
           <p class="text-2xl font-extrabold tracking-tight">+{{ formatSats(payResult.amount) }}</p>
           <p class="text-xs text-text-muted mt-1.5">{{ t('wallet.withdrawSuccessDesc') }}</p>
         </template>
 
         <!-- Payment success -->
         <template v-else>
-          <h3 class="text-[15px] font-extrabold mb-1">{{ t('wallet.paymentSent') }}</h3>
-          <p class="text-xs text-text-muted">
-            {{ merchantInfo ? `${t('wallet.merchantPaying')} ${merchantInfo.name}` : t('wallet.paymentSuccess') }}
-          </p>
+          <template v-if="payResult?.requestSent">
+            <p class="text-2xl font-extrabold tracking-tight">-{{ formatSats(payResult.amount) }}</p>
+            <h3 class="text-[15px] font-extrabold mb-1 mt-1">{{ t('wallet.paymentSent') }}</h3>
+            <p class="text-xs text-text-muted">{{ t('wallet.requestPaidDesc') }}</p>
+          </template>
+          <template v-else>
+            <h3 class="text-[15px] font-extrabold mb-1">{{ t('wallet.paymentSent') }}</h3>
+            <p class="text-xs text-text-muted">
+              {{ merchantInfo ? `${t('wallet.merchantPaying')} ${merchantInfo.name}` : t('wallet.paymentSuccess') }}
+            </p>
+          </template>
           <p v-if="paymentVerified" class="text-[10px] text-success mt-1 font-medium">
             {{ t('wallet.paymentVerified') }}
           </p>
+
+          <div v-if="deliveryStatus?.hasPayout" class="mt-3 rounded-2xl border p-3 text-left"
+            :class="deliveryStatus.delivered ? 'border-success/25 bg-success/8' : 'border-info/25 bg-info/8'">
+            <div class="flex items-center gap-2">
+              <Check v-if="deliveryStatus.delivered" class="w-4 h-4 text-success" />
+              <Loader2 v-else class="w-4 h-4 text-info animate-spin" />
+              <p class="text-xs font-bold">{{ deliveryStatus.delivered ? t('wallet.mobileDelivered') : t('wallet.mobileDeliveryPending') }}</p>
+            </div>
+            <p v-if="deliveryStatus.recipient" class="text-[10px] text-text-secondary mt-1">{{ deliveryStatus.recipient }}</p>
+            <p v-if="deliveryStatus.receipt" class="text-[9px] font-mono text-text-muted mt-1 break-all">{{ deliveryStatus.receipt }}</p>
+          </div>
 
           <div v-if="merchantInfo && merchantZAR" class="mt-3 text-sm text-text-secondary">
             R{{ merchantZAR.toFixed(2) }} → {{ formatSats(merchantSats) }} sats
@@ -1109,9 +1872,10 @@ function reset() {
                 <p v-if="successAction.description" class="text-xs text-text-secondary">
                   {{ successAction.description }}
                 </p>
-                <div v-if="successAction.decrypted" class="bg-surface-base rounded-lg px-3 py-2 border border-border">
-                  <p class="text-xs text-text-primary break-all leading-relaxed">{{ successAction.decrypted }}</p>
+                <div v-if="successAction.secret" class="bg-surface-base rounded-lg px-3 py-2 border border-border">
+                  <p class="text-xs text-text-primary break-all leading-relaxed">{{ successAction.secret }}</p>
                 </div>
+                <p v-else-if="successAction.decryptError" class="text-[10px] text-warning">{{ t('wallet.successActionDecryptFailed') }}</p>
               </div>
             </template>
           </div>

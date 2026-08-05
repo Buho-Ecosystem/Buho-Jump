@@ -15,6 +15,7 @@ import LanguagePicker from '../LanguagePicker.vue'
 import {
   Sun, Moon, Check, Languages, Coins, Bell, MessageSquare,
   Wallet, Lock, Clock, Eye, EyeOff, Loader2, KeyRound, MoonStar,
+  BadgeCheck,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -26,7 +27,7 @@ const {
   toggleDms, togglePayments,
   toggleDnd, toggleQuietHours, setQuietStart, setQuietEnd,
 } = useNotifications()
-const { lock, changePassword } = useLock()
+const { lock, changePassword, setAutoLock: saveAutoLock } = useLock()
 const toast = useToast()
 
 const showLanguagePicker = ref(false)
@@ -34,6 +35,7 @@ const showCurrencyPicker = ref(false)
 
 // Auto-lock
 const autoLockMinutes = ref(0)
+const brantaEnabled = ref(true)
 const autoLockOptions = [1, 5, 15, 30, 0] // 0 = never
 
 // Password change
@@ -47,7 +49,7 @@ const showNewPw = ref(false)
 
 const newPwStrength = computed(() => {
   const p = newPassword.value
-  if (!p || p.length < 8) return { label: t('lock.strengthTooShort'), level: 0, color: 'bg-error' }
+  if (!p || p.length < 12) return { label: t('lock.strengthTooShort'), level: 0, color: 'bg-error' }
   let score = 0
   if (p.length >= 12) score++
   if (/[A-Z]/.test(p) && /[a-z]/.test(p)) score++
@@ -61,14 +63,24 @@ const newPwStrength = computed(() => {
 onMounted(async () => {
   loadNotif()
   try {
-    const data = await chrome.storage.local.get('autoLockMinutes')
+    const data = await chrome.storage.local.get(['autoLockMinutes', 'brantaEnabled'])
     autoLockMinutes.value = data.autoLockMinutes ?? 0
+    brantaEnabled.value = data.brantaEnabled !== false
   } catch {}
 })
 
 async function setAutoLock(minutes) {
-  autoLockMinutes.value = minutes
-  await chrome.storage.local.set({ autoLockMinutes: minutes })
+  try {
+    await saveAutoLock(minutes)
+    autoLockMinutes.value = minutes
+  } catch {
+    toast.error(t('common.error'))
+  }
+}
+
+async function toggleBranta() {
+  brantaEnabled.value = !brantaEnabled.value
+  await chrome.storage.local.set({ brantaEnabled: brantaEnabled.value })
 }
 
 async function handleChangePassword() {
@@ -83,7 +95,14 @@ async function handleChangePassword() {
     newPassword.value = ''
     confirmNewPassword.value = ''
   } catch (err) {
-    toast.error(err.message || t('common.error'))
+    const message = err.message || ''
+    if (message.startsWith('TOO_MANY_ATTEMPTS:')) {
+      toast.error(t('lock.tooManyAttempts', { seconds: message.split(':')[1] }))
+    } else if (message === 'errors.WRONG_PASSWORD') {
+      toast.error(t('lock.wrongPassword'))
+    } else {
+      toast.error(message || t('common.error'))
+    }
   } finally {
     changingPassword.value = false
   }
@@ -143,6 +162,29 @@ function handleLock() {
           <Check v-if="currentTheme === id" class="w-3 h-3 text-brand" />
         </button>
       </div>
+    </section>
+
+    <!-- ═══ PAYMENT SAFETY ═══ -->
+    <section class="space-y-3">
+      <h2 class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('settings.paymentSafety') }}</h2>
+      <div class="flex items-center justify-between px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-10 h-10 rounded-[10px] bg-success/10 flex items-center justify-center shrink-0">
+            <BadgeCheck class="w-4 h-4 text-success" />
+          </div>
+          <div class="min-w-0">
+            <span class="text-sm font-medium block">{{ t('settings.brantaVerification') }}</span>
+            <span class="text-[10px] text-text-muted leading-relaxed block">{{ t('settings.brantaVerificationDesc') }}</span>
+          </div>
+        </div>
+        <button @click="toggleBranta" role="switch" :aria-checked="brantaEnabled"
+          class="relative w-9 h-5 p-0 rounded-full transition-all duration-200 shrink-0 ml-3"
+          :class="brantaEnabled ? 'bg-brand' : 'bg-surface-elevated border border-border'">
+          <span class="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+            :class="brantaEnabled ? 'translate-x-4' : 'translate-x-0.5'" />
+        </button>
+      </div>
+      <p class="text-[10px] text-text-muted px-1">{{ t('settings.brantaPrivacy') }}</p>
     </section>
 
     <!-- ═══ LANGUAGE ═══ -->
@@ -368,6 +410,7 @@ function handleLock() {
       <div v-if="showPasswordChange" class="bg-surface-card rounded-3xl border border-border shadow-sm p-4 space-y-3">
         <div class="relative">
           <input v-model="oldPassword" :type="showOldPw ? 'text' : 'password'"
+            autocomplete="current-password"
             :placeholder="t('options.currentPassword')"
             class="w-full bg-surface-base border border-border rounded-lg px-3 py-2.5 pr-10 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted" />
           <button @click="showOldPw = !showOldPw" class="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text-secondary">
@@ -377,6 +420,7 @@ function handleLock() {
         </div>
         <div class="relative">
           <input v-model="newPassword" :type="showNewPw ? 'text' : 'password'"
+            autocomplete="new-password"
             :placeholder="t('options.newPassword')"
             class="w-full bg-surface-base border border-border rounded-lg px-3 py-2.5 pr-10 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted" />
           <button @click="showNewPw = !showNewPw" class="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text-secondary">
@@ -395,12 +439,13 @@ function handleLock() {
           </span>
         </div>
         <input v-model="confirmNewPassword" type="password"
+          autocomplete="new-password"
           :placeholder="t('options.confirmNewPassword')"
           class="w-full bg-surface-base border border-border rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted" />
         <p v-if="newPassword && confirmNewPassword && newPassword !== confirmNewPassword"
           class="text-[10px] text-error px-1">{{ t('lock.mismatch') }}</p>
         <button @click="handleChangePassword"
-          :disabled="changingPassword || !oldPassword || !newPassword || newPassword !== confirmNewPassword"
+          :disabled="changingPassword || !oldPassword || newPassword.length < 12 || newPassword !== confirmNewPassword"
           class="w-full py-2.5 text-xs rounded-2xl bg-brand text-surface-base hover:bg-brand-hover font-semibold transition-all duration-200 btn-primary disabled:opacity-40 flex items-center justify-center gap-1.5">
           <Loader2 v-if="changingPassword" class="w-3 h-3 animate-spin" />
           {{ t('options.changePassword') }}

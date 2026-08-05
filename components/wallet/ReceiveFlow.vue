@@ -16,20 +16,29 @@ import { useFiat } from '../../composables/useFiat.js'
 
 const { t } = useI18n()
 import { formatSats } from '../../lib/utils.js'
+import { getTokenMetadata } from '@cashu/cashu-ts'
+import { requestOriginAccess } from '../../lib/browser/hostPermissions.js'
+import { requireSecureUrl } from '../../lib/origins.js'
 import SatButtons from './SatButtons.vue'
+import QrDisplay from '../QrDisplay.vue'
 import {
   ArrowLeft, Copy, Check, Loader2, AlertTriangle,
   QrCode, RefreshCw, ArrowLeftRight, ArrowDownLeft, Wallet,
-  ScanLine, Clipboard,
+  ScanLine, Clipboard, Zap, Coins,
 } from 'lucide-vue-next'
 
 const emit = defineEmits(['back', 'done'])
-const { makeInvoice, walletType, checkMintQuote, mintTokens, getBalance, wallets, redeemToken, lookupInvoice } = useWallet()
+const {
+  makeInvoice, walletType, checkMintQuote, waitMintQuote, mintTokens, getBalance, wallets,
+  redeemToken, lookupInvoice, recoverPendingCashu, restoreFromRecoveryWords,
+  createPaymentRequest, checkRequestPayment,
+} = useWallet()
 const toast = useToast()
 const { toFiat, fiatToSats, currency, loadRate } = useFiat()
 
 // ── State ──
-const step = ref('form') // 'form' | 'invoice' | 'success'
+const step = ref('form') // 'form' | 'invoice' | 'request' | 'success'
+const receiveMode = ref('lightning') // 'lightning' | 'ecash' (Cashu wallets only)
 const amountSats = ref('')
 const amountFiat = ref('')
 const inputMode = ref('sats') // 'sats' | 'fiat'
@@ -42,17 +51,55 @@ const qrDataUrl = ref('')
 
 // Cashu mint quote polling
 const quoteId = ref('')
+const quoteMintUrl = ref('')
+const quoteExpiry = ref(0)
 const polling = ref(false)
+const claiming = ref(false)
 const mintedAmount = ref(0)
 let pollTimer = null
+let pollInFlight = false
+let pollAttempts = 0
+
+// Ecash payment request (NUT-18) — created for other Cashu wallets to pay
+const requestEncoded = ref('')
+const requestId = ref('')
+const requestCopied = ref(false)
+const reviewPayment = ref(null) // payment from a mint we do not use yet
+let requestPollTimer = null
+let requestPollInFlight = false
 
 // Ecash token paste (inline — no tabs)
 const tokenInput = ref('')
 const redeeming = ref(false)
-const tokenDetected = computed(() => {
+const tokenLooksLikeCashu = computed(() => {
   const v = tokenInput.value.trim().toLowerCase()
   return v.startsWith('cashua') || v.startsWith('cashub')
 })
+const tokenPreview = computed(() => {
+  const token = tokenInput.value.trim()
+  if (!tokenLooksLikeCashu.value) return null
+  if (token.length > 1_000_000) return { valid: false }
+  try {
+    const metadata = getTokenMetadata(token)
+    const mint = requireSecureUrl(metadata.mint, { allowLoopback: true })
+    const amount = typeof metadata.amount?.toNumber === 'function'
+      ? metadata.amount.toNumber()
+      : Number(metadata.amount)
+    if ((metadata.unit || 'sat') !== 'sat' || !Number.isSafeInteger(amount) || amount <= 0) {
+      return { valid: false }
+    }
+    return {
+      valid: true,
+      amount,
+      mint: mint.toString().replace(/\/$/, ''),
+      mintHost: mint.host,
+      memo: typeof metadata.memo === 'string' ? metadata.memo.slice(0, 140) : '',
+    }
+  } catch {
+    return { valid: false }
+  }
+})
+const tokenDetected = computed(() => tokenPreview.value?.valid === true)
 
 // Load rate for conversions
 loadRate()
@@ -82,6 +129,12 @@ const canCreate = computed(() => {
   return effectiveSats.value > 0 && !creating.value
 })
 
+// Requests may leave the amount empty: the sender chooses how much to pay.
+const canCreateRequest = computed(() => {
+  if (creating.value) return false
+  return amountSats.value === '' || effectiveSats.value > 0
+})
+
 // Watch fiat input → convert to sats
 let fiatDebounce = null
 watch(amountFiat, (val) => {
@@ -105,9 +158,16 @@ async function createInvoice() {
   creating.value = true
   error.value = ''
   try {
+    if (isCashu.value) {
+      const active = wallets.value.find(wallet => wallet.isActive && wallet.type === 'cashu')
+      const mint = active?.mints?.[0]
+      if (!mint || !(await requestOriginAccess(mint))) throw new Error(t('cashu.mintAccessDenied'))
+    }
     const result = await makeInvoice(effectiveSats.value, memo.value.trim())
     invoice.value = result?.invoice || result?.payment_request || ''
     quoteId.value = result?.quoteId || ''
+    quoteMintUrl.value = result?.mintUrl || ''
+    quoteExpiry.value = Number(result?.expiry) || 0
     paymentHash.value = result?.payment_hash || result?.checking_id || ''
     if (!invoice.value) throw new Error('No invoice returned')
     step.value = 'invoice'
@@ -130,31 +190,124 @@ async function createInvoice() {
 function startQuotePoll() {
   polling.value = true
   const active = wallets.value.find(w => w.isActive)
-  const mintUrl = active?.mints?.[0]
+  const mintUrl = quoteMintUrl.value || active?.mints?.[0]
   if (!mintUrl) { polling.value = false; return }
 
   const QUOTE_POLL_MS = 3000
+  pollAttempts = 0
   pollTimer = setInterval(async () => {
+    if (pollInFlight) return
+    if (quoteExpiry.value && quoteExpiry.value <= Math.floor(Date.now() / 1000)) {
+      clearInterval(pollTimer)
+      pollTimer = null
+      polling.value = false
+      error.value = t('wallet.invoiceExpired')
+      return
+    }
+    if (++pollAttempts > 200) {
+      clearInterval(pollTimer)
+      pollTimer = null
+      polling.value = false
+      error.value = t('wallet.receiveCheckTimeout')
+      return
+    }
+    pollInFlight = true
     try {
-      const quoteStatus = await checkMintQuote(mintUrl, quoteId.value)
+      const quoteStatus = await waitMintQuote(mintUrl, quoteId.value)
       if (quoteStatus?.paid) {
         clearInterval(pollTimer)
         pollTimer = null
-        const result = await mintTokens(mintUrl, effectiveSats.value, quoteId.value)
-        mintedAmount.value = result?.amountSats || effectiveSats.value
-        polling.value = false
-        step.value = 'success'
-        await getBalance()
-        toast.success(t('wallet.receivedSats', { amount: formatSats(mintedAmount.value) }))
+        await claimPaidQuote(mintUrl)
       }
-    } catch { /* keep polling */ }
+    } catch (pollError) {
+      if (!pollTimer) {
+        polling.value = false
+        error.value = pollError.message || t('wallet.mintClaimFailed')
+      }
+      // Quote status failures remain retryable until expiry.
+    }
+    finally { pollInFlight = false }
   }, QUOTE_POLL_MS)
+}
+
+async function finishCashuReceive(amount = effectiveSats.value) {
+  mintedAmount.value = amount || effectiveSats.value
+  polling.value = false
+  error.value = ''
+  step.value = 'success'
+  await getBalance()
+  toast.success(t('wallet.receivedSats', { amount: formatSats(mintedAmount.value) }))
+}
+
+async function claimPaidQuote(mintUrl) {
+  if (claiming.value) return
+  claiming.value = true
+  error.value = ''
+  try {
+    const result = await mintTokens(mintUrl, effectiveSats.value, quoteId.value)
+    await finishCashuReceive(result?.amountSats)
+  } catch (claimError) {
+    polling.value = false
+    error.value = claimError.message?.startsWith('errors.')
+      ? t(claimError.message)
+      : t('wallet.mintClaimFailed')
+  } finally {
+    claiming.value = false
+  }
+}
+
+async function retryCashuClaim() {
+  const active = wallets.value.find(wallet => wallet.isActive)
+  const mintUrl = quoteMintUrl.value || active?.mints?.[0]
+  if (!mintUrl || claiming.value) return
+  claiming.value = true
+  error.value = ''
+  try {
+    const status = await checkMintQuote(mintUrl, quoteId.value)
+    if (status?.paid) {
+      claiming.value = false
+      await claimPaidQuote(mintUrl)
+      return
+    }
+    if (status?.state === 'ISSUED') {
+      const emergency = await recoverPendingCashu()
+      if (emergency?.recovered || emergency?.incomingRecovered > 0) {
+        await finishCashuReceive(effectiveSats.value)
+        return
+      }
+      const deterministic = await restoreFromRecoveryWords()
+      if ((deterministic?.proofCount || 0) > 0) {
+        await finishCashuReceive(effectiveSats.value)
+        return
+      }
+      throw new Error(t('wallet.mintIssuedRecoveryNeeded'))
+    }
+    claiming.value = false
+    startQuotePoll()
+  } catch (retryError) {
+    polling.value = false
+    error.value = retryError.message?.startsWith('errors.')
+      ? t(retryError.message)
+      : (retryError.message || t('wallet.mintClaimFailed'))
+  } finally {
+    claiming.value = false
+  }
 }
 
 function startLnbitsPoll() {
   polling.value = true
   const POLL_MS = 3000
+  pollAttempts = 0
   pollTimer = setInterval(async () => {
+    if (pollInFlight) return
+    if (++pollAttempts > 200) {
+      clearInterval(pollTimer)
+      pollTimer = null
+      polling.value = false
+      error.value = t('wallet.receiveCheckTimeout')
+      return
+    }
+    pollInFlight = true
     try {
       const status = await lookupInvoice({ payment_hash: paymentHash.value })
       if (status?.paid) {
@@ -167,6 +320,7 @@ function startLnbitsPoll() {
         toast.success(t('wallet.receivedSats', { amount: formatSats(mintedAmount.value) }))
       }
     } catch { /* keep polling */ }
+    finally { pollInFlight = false }
   }, POLL_MS)
 }
 
@@ -175,7 +329,12 @@ async function redeemEcashToken() {
   redeeming.value = true
   error.value = ''
   try {
-    const result = await redeemToken(tokenInput.value.trim())
+    const token = tokenInput.value.trim()
+    if (token.length > 1_000_000) throw new Error(t('wallet.invalidEcashToken'))
+    if (!tokenPreview.value?.valid || !(await requestOriginAccess(tokenPreview.value.mint))) {
+      throw new Error(t('cashu.mintAccessDenied'))
+    }
+    const result = await redeemToken(token)
     mintedAmount.value = result?.amountSats || 0
     step.value = 'success'
     await getBalance()
@@ -194,16 +353,87 @@ async function pasteFromClipboard() {
   } catch { /* clipboard not available */ }
 }
 
+// ── Ecash payment request (NUT-18) ──
+
+async function createRequest() {
+  creating.value = true
+  error.value = ''
+  try {
+    const result = await createPaymentRequest(effectiveSats.value || null, memo.value.trim())
+    requestEncoded.value = result?.encoded || ''
+    requestId.value = result?.id || ''
+    if (!requestEncoded.value) throw new Error(t('wallet.requestFailed'))
+    step.value = 'request'
+    startRequestPoll()
+  } catch (err) {
+    error.value = err.message?.startsWith('errors.') ? t(err.message) : (err.message || t('wallet.requestFailed'))
+  } finally {
+    creating.value = false
+  }
+}
+
+function startRequestPoll() {
+  stopRequestPoll()
+  polling.value = true
+  const REQUEST_POLL_MS = 6000
+  requestPollTimer = setInterval(async () => {
+    if (requestPollInFlight) return
+    requestPollInFlight = true
+    try {
+      const status = await checkRequestPayment(requestId.value)
+      if (status?.received && status.needsReview) {
+        stopRequestPoll()
+        reviewPayment.value = status
+      } else if (status?.received) {
+        stopRequestPoll()
+        await finishCashuReceive(status.amountSats)
+      }
+    } catch { /* keep polling; the request stays valid */ }
+    finally { requestPollInFlight = false }
+  }, REQUEST_POLL_MS)
+}
+
+function stopRequestPoll() {
+  if (requestPollTimer) { clearInterval(requestPollTimer); requestPollTimer = null }
+  polling.value = false
+}
+
+// A payment arrived from a mint this wallet has never used. Redeeming needs
+// the user's explicit go-ahead plus browser access to that mint.
+async function redeemReviewPayment() {
+  if (!reviewPayment.value?.token) return
+  redeeming.value = true
+  error.value = ''
+  try {
+    if (!(await requestOriginAccess(reviewPayment.value.mint))) {
+      throw new Error(t('cashu.mintAccessDenied'))
+    }
+    const result = await redeemToken(reviewPayment.value.token)
+    reviewPayment.value = null
+    await finishCashuReceive(result?.amountSats)
+  } catch (err) {
+    error.value = err.message?.startsWith('errors.') ? t(err.message) : (err.message || t('wallet.mintClaimFailed'))
+  } finally {
+    redeeming.value = false
+  }
+}
+
+function copyRequest() {
+  navigator.clipboard.writeText(requestEncoded.value)
+  requestCopied.value = true
+  toast.success(t('wallet.requestCopied'))
+  setTimeout(() => (requestCopied.value = false), 2500)
+}
+
 async function generateQR() {
   try {
     const QRCode = (await import('qrcode')).default
     qrDataUrl.value = await QRCode.toDataURL(invoice.value.toUpperCase(), {
       width: 220,
       margin: 2,
-      color: {
-        dark: getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#000000',
-        light: '#ffffff',
-      },
+      // The QR always sits on a white card, so the modules must stay black.
+      // Theme text colors would render white-on-white in dark mode.
+      color: { dark: '#000000', light: '#ffffff' },
       errorCorrectionLevel: 'M',
     })
   } catch {
@@ -227,15 +457,27 @@ function reset() {
   qrDataUrl.value = ''
   error.value = ''
   quoteId.value = ''
+  quoteMintUrl.value = ''
+  quoteExpiry.value = 0
   paymentHash.value = ''
   polling.value = false
+  claiming.value = false
+  pollInFlight = false
+  pollAttempts = 0
   mintedAmount.value = 0
   tokenInput.value = ''
+  requestEncoded.value = ''
+  requestId.value = ''
+  requestCopied.value = false
+  reviewPayment.value = null
+  requestPollInFlight = false
+  stopRequestPoll()
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
 
 onBeforeUnmount(() => {
   clearTimeout(fiatDebounce)
+  stopRequestPoll()
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 })
 </script>
@@ -255,11 +497,14 @@ onBeforeUnmount(() => {
       <div>
         <h1 class="text-[15px] font-extrabold leading-tight">
           {{ step === 'invoice' ? t('wallet.shareInvoice')
+            : step === 'request' ? t('wallet.shareRequest')
             : step === 'success' ? t('wallet.statusReceived')
             : t('wallet.receiveTitle') }}
         </h1>
         <p v-if="step === 'form'" class="text-[10px] text-text-muted mt-0.5">
-          {{ isCashu ? t('wallet.receiveHintCashu') : t('wallet.receiveHintNwc') }}
+          {{ !isCashu ? t('wallet.receiveHintNwc')
+            : receiveMode === 'ecash' ? t('wallet.receiveHintEcash')
+            : t('wallet.receiveHintCashu') }}
         </p>
       </div>
     </div>
@@ -274,6 +519,26 @@ onBeforeUnmount(() => {
         <div class="w-14 h-14 rounded-2xl bg-success/10 flex items-center justify-center">
           <ArrowDownLeft class="w-6 h-6 text-success" />
         </div>
+      </div>
+
+      <!-- Lightning / Ecash mode toggle (Cashu wallets only) -->
+      <div v-if="isCashu" class="flex rounded-xl bg-surface-card border border-border p-1">
+        <button
+          @click="receiveMode = 'lightning'; error = ''"
+          class="flex-1 py-2 text-xs rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all duration-200"
+          :class="receiveMode === 'lightning' ? 'bg-brand text-surface-base' : 'text-text-muted hover:text-text-secondary'"
+        >
+          <Zap class="w-3.5 h-3.5" />
+          {{ t('wallet.receiveModeLightning') }}
+        </button>
+        <button
+          @click="receiveMode = 'ecash'; error = ''"
+          class="flex-1 py-2 text-xs rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all duration-200"
+          :class="receiveMode === 'ecash' ? 'bg-brand text-surface-base' : 'text-text-muted hover:text-text-secondary'"
+        >
+          <Coins class="w-3.5 h-3.5" />
+          {{ t('wallet.receiveModeEcash') }}
+        </button>
       </div>
 
       <!-- Amount input area -->
@@ -331,8 +596,9 @@ onBeforeUnmount(() => {
         </span>
       </div>
 
-      <!-- Create invoice button -->
+      <!-- Create invoice button (Lightning mode) -->
       <button
+        v-if="!isCashu || receiveMode === 'lightning'"
         @click="createInvoice"
         :disabled="!canCreate"
         class="w-full py-3 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 font-bold btn-primary flex items-center justify-center gap-2"
@@ -342,8 +608,24 @@ onBeforeUnmount(() => {
         {{ creating ? t('wallet.creating') : t('wallet.createInvoice') }}
       </button>
 
-      <!-- Token redeem section (Cashu only) — no tabs, just an accordion-style area -->
-      <div v-if="isCashu" class="pt-1">
+      <!-- Create request button (Ecash mode) -->
+      <template v-else>
+        <p v-if="!effectiveSats" class="text-[10px] text-text-muted text-center -mt-2">
+          {{ t('wallet.requestAmountOptional') }}
+        </p>
+        <button
+          @click="createRequest"
+          :disabled="!canCreateRequest"
+          class="w-full py-3 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 font-bold btn-primary flex items-center justify-center gap-2"
+        >
+          <Loader2 v-if="creating" class="w-4 h-4 animate-spin" />
+          <Coins v-else class="w-4 h-4" />
+          {{ creating ? t('wallet.creating') : t('wallet.createRequest') }}
+        </button>
+      </template>
+
+      <!-- Token redeem section (Cashu ecash mode) — no tabs, just an accordion-style area -->
+      <div v-if="isCashu && receiveMode === 'ecash'" class="pt-1">
         <div class="relative">
           <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-border" /></div>
           <div class="relative flex justify-center">
@@ -364,7 +646,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               @click="pasteFromClipboard"
-              :title="t('common.copy')"
+              :title="t('wallet.pasteToken')"
               class="absolute top-2.5 right-2.5 p-1 rounded-md text-text-muted hover:text-brand hover:bg-brand/10 transition-all duration-150"
             >
               <Clipboard class="w-3.5 h-3.5" />
@@ -372,19 +654,41 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Token detected indicator -->
-          <div v-if="tokenDetected" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-medium text-success bg-success/10 animate-fade-in">
-            <Check class="w-3 h-3" />
-            {{ t('wallet.ecashTokenDetected') }}
+          <div v-if="tokenDetected" class="rounded-xl border border-success/20 bg-success/8 p-3 animate-fade-in">
+            <div class="flex items-center gap-2 text-[11px] font-bold text-success">
+              <Check class="w-3 h-3" />
+              {{ t('wallet.ecashTokenDetected') }}
+            </div>
+            <div class="mt-2 flex items-center justify-between gap-3">
+              <span class="text-sm font-extrabold">{{ t('wallet.ecashTokenAmount', { amount: formatSats(tokenPreview.amount) }) }}</span>
+              <span class="text-[10px] text-text-muted truncate">{{ tokenPreview.mintHost }}</span>
+            </div>
+            <p v-if="tokenPreview.memo" class="text-[10px] text-text-secondary mt-1.5 break-words">
+              {{ tokenPreview.memo }}
+            </p>
           </div>
+
+          <div v-else-if="tokenLooksLikeCashu" class="flex items-start gap-2 px-3 py-2 rounded-lg text-[11px] text-error bg-error/10 animate-fade-in">
+            <AlertTriangle class="w-3 h-3 shrink-0 mt-0.5" />
+            {{ t('wallet.invalidEcashToken') }}
+          </div>
+
+          <p v-else-if="tokenInput.trim()" class="px-3 py-1 text-[10px] text-text-muted animate-fade-in">
+            {{ t('wallet.tokenNotRecognized') }}
+          </p>
 
           <button
             v-if="tokenInput.trim()"
             @click="redeemEcashToken"
-            :disabled="!tokenInput.trim() || redeeming"
+            :disabled="!tokenDetected || redeeming"
             class="w-full py-2.5 text-xs rounded-xl bg-success/10 text-success hover:bg-success/15 disabled:opacity-40 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5"
           >
             <Loader2 v-if="redeeming" class="w-3.5 h-3.5 animate-spin" />
-            {{ redeeming ? t('wallet.redeeming') : t('wallet.redeemToken') }}
+            {{ redeeming
+              ? t('wallet.redeeming')
+              : tokenDetected
+                ? t('wallet.redeemTokenAmount', { amount: formatSats(tokenPreview.amount) })
+                : t('wallet.redeemToken') }}
           </button>
         </div>
       </div>
@@ -435,6 +739,23 @@ onBeforeUnmount(() => {
             {{ t('wallet.waitingForPayment') }}
           </div>
         </div>
+
+        <div v-if="error" class="px-4 pb-3">
+          <div class="flex items-start gap-2 p-3 rounded-xl bg-error/10 text-error text-xs">
+            <AlertTriangle class="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>{{ error }}</span>
+          </div>
+          <button
+            v-if="isCashu && quoteId"
+            @click="retryCashuClaim"
+            :disabled="claiming"
+            class="mt-2 w-full py-2.5 rounded-xl bg-warning text-white text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-60"
+          >
+            <Loader2 v-if="claiming" class="w-3.5 h-3.5 animate-spin" />
+            <RefreshCw v-else class="w-3.5 h-3.5" />
+            {{ t('wallet.retryClaim') }}
+          </button>
+        </div>
       </div>
 
       <!-- Invoice text + copy -->
@@ -471,6 +792,111 @@ onBeforeUnmount(() => {
           <Check v-if="copied" class="w-4 h-4" />
           <Copy v-else class="w-4 h-4" />
           {{ copied ? t('common.copied') : t('common.copy') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- PAYMENT REQUEST DISPLAY (NUT-18)               -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <div v-if="step === 'request'" class="space-y-4 animate-fade-in-up">
+
+      <!-- QR card -->
+      <div class="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm">
+        <!-- Amount header -->
+        <div class="px-4 pt-4 pb-2 text-center">
+          <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider">{{ t('wallet.requesting') }}</p>
+          <div v-if="effectiveSats" class="flex items-baseline justify-center gap-1.5 mt-1">
+            <span class="text-2xl font-extrabold tracking-tight">{{ formatSats(effectiveSats) }}</span>
+            <span class="text-xs font-medium text-text-muted">{{ t('wallet.sats') }}</span>
+          </div>
+          <p v-else class="text-sm font-bold mt-1">{{ t('wallet.requestAnyAmount') }}</p>
+          <p v-if="effectiveSats && toFiat(effectiveSats)" class="text-[11px] text-brand mt-0.5 font-medium">≈ {{ toFiat(effectiveSats) }}</p>
+        </div>
+
+        <!-- QR code (always one static image so every wallet can scan it) -->
+        <div class="flex justify-center pb-4">
+          <QrDisplay :value="requestEncoded" mode="static" />
+        </div>
+
+        <!-- Memo -->
+        <div v-if="memo" class="px-4 pb-3 text-center">
+          <p class="text-[11px] text-text-muted italic">{{ memo }}</p>
+        </div>
+
+        <!-- Waiting indicator -->
+        <div v-if="polling && !reviewPayment" class="px-4 pb-3">
+          <div class="flex items-center justify-center gap-2 py-2 rounded-xl bg-brand/8 text-xs text-brand font-medium animate-pulse">
+            <Loader2 class="w-3.5 h-3.5 animate-spin" />
+            {{ t('wallet.waitingForPayment') }}
+          </div>
+        </div>
+
+        <!-- Payment arrived from a mint this wallet has not used yet -->
+        <div v-if="reviewPayment" class="px-4 pb-4">
+          <div class="rounded-xl border border-warning/25 bg-warning/8 p-3 space-y-2">
+            <div class="flex items-center gap-2 text-[11px] font-bold text-warning">
+              <AlertTriangle class="w-3 h-3" />
+              {{ t('wallet.requestReceivedNewMint') }}
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm font-extrabold">{{ t('wallet.ecashTokenAmount', { amount: formatSats(reviewPayment.amountSats) }) }}</span>
+              <span class="text-[10px] text-text-muted truncate">{{ reviewPayment.mintHost }}</span>
+            </div>
+            <p class="text-[10px] text-text-secondary">{{ t('wallet.requestReviewHint', { host: reviewPayment.mintHost }) }}</p>
+            <button
+              @click="redeemReviewPayment"
+              :disabled="redeeming"
+              class="w-full py-2.5 text-xs rounded-xl bg-success/10 text-success hover:bg-success/15 disabled:opacity-40 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5"
+            >
+              <Loader2 v-if="redeeming" class="w-3.5 h-3.5 animate-spin" />
+              {{ redeeming ? t('wallet.redeeming') : t('wallet.redeemTokenAmount', { amount: formatSats(reviewPayment.amountSats) }) }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="error" class="px-4 pb-3">
+          <div class="flex items-start gap-2 p-3 rounded-xl bg-error/10 text-error text-xs">
+            <AlertTriangle class="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>{{ error }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Request text + copy -->
+      <div class="relative group">
+        <button
+          @click="copyRequest"
+          class="w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-left hover:border-brand/40 transition-all duration-200 cursor-pointer"
+        >
+          <div class="text-[9px] font-mono text-text-muted break-all line-clamp-2 leading-relaxed pr-8">
+            {{ requestEncoded }}
+          </div>
+          <div class="absolute top-1/2 -translate-y-1/2 right-3 p-1 rounded-md transition-colors"
+            :class="requestCopied ? 'text-success' : 'text-text-muted group-hover:text-brand'"
+          >
+            <Check v-if="requestCopied" class="w-3.5 h-3.5" />
+            <Copy v-else class="w-3.5 h-3.5" />
+          </div>
+        </button>
+      </div>
+
+      <!-- Actions -->
+      <div class="grid grid-cols-2 gap-2.5">
+        <button
+          @click="reset"
+          class="py-2.5 text-sm rounded-2xl bg-surface-card border border-border text-text-secondary hover:bg-surface-elevated transition-all duration-200 font-semibold flex items-center justify-center gap-1.5"
+        >
+          <RefreshCw class="w-3.5 h-3.5" />
+          {{ t('wallet.newRequest') }}
+        </button>
+        <button
+          @click="copyRequest"
+          class="py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all duration-200 font-bold btn-primary flex items-center justify-center gap-1.5"
+        >
+          <Check v-if="requestCopied" class="w-4 h-4" />
+          <Copy v-else class="w-4 h-4" />
+          {{ requestCopied ? t('common.copied') : t('common.copy') }}
         </button>
       </div>
     </div>

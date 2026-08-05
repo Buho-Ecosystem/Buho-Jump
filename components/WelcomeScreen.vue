@@ -8,7 +8,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLocale } from '../composables/useLocale.js'
-import { Fingerprint, ShieldCheck, Wallet, Lock, Check, ArrowRight, Globe } from 'lucide-vue-next'
+import { Fingerprint, ShieldCheck, Wallet, Check, ArrowRight, Globe } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { locale, locales, switchLocale } = useLocale()
@@ -17,14 +17,21 @@ const emit = defineEmits(['complete'])
 const step = ref(1)
 const showLangPicker = ref(false)
 const langDetected = ref(false)
+// Hold the first paint until the language is decided, so the whole
+// onboarding renders in one language instead of flashing English first.
+const localeReady = ref(false)
 
 onMounted(async () => {
-  // Auto-detect browser language on first launch
-  const browserLang = (navigator.language || '').split('-')[0].toLowerCase()
-  const match = locales.find(l => l.code === browserLang)
-  if (match && match.code !== locale.value) {
-    await switchLocale(match.code)
-    langDetected.value = true
+  try {
+    // Auto-detect browser language on first launch
+    const browserLang = (navigator.language || '').split('-')[0].toLowerCase()
+    const match = locales.find(l => l.code === browserLang)
+    if (match && match.code !== locale.value) {
+      await switchLocale(match.code)
+      langDetected.value = true
+    }
+  } finally {
+    localeReady.value = true
   }
 })
 
@@ -44,19 +51,29 @@ function next() {
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-between min-h-[500px] px-6 pt-12 pb-6">
+  <div v-if="!localeReady" class="flex flex-col items-center justify-center min-h-[500px]">
+    <img src="/logo/logo.svg" alt="Buho Jump" class="w-14 h-14 animate-pulse" />
+  </div>
+  <div v-else class="flex flex-col items-center justify-between min-h-[500px] px-6 pt-12 pb-6">
 
     <!-- ═══ STEP 1: Meet Buho ═══ -->
     <template v-if="step === 1">
       <div class="flex-1 flex flex-col items-center">
         <!-- Logo + name -->
-        <div class="flex flex-col items-center mb-8 animate-fade-in">
-          <img src="/logo/logo.svg" alt="Buho Jump" class="w-14 h-14 mb-3" />
+        <div class="flex flex-col items-center mb-4 animate-fade-in">
+          <img src="/logo/logo.svg" alt="Buho Jump" class="w-10 h-10 mb-2" />
           <span class="text-[10px] font-semibold text-text-muted tracking-widest uppercase">Buho Jump</span>
         </div>
 
+        <!-- Illustration -->
+        <img
+          src="/Onboarding wizard/storyset-connected-world-bro.svg"
+          alt=""
+          class="w-36 h-36 object-contain mb-4 animate-fade-in"
+        />
+
         <!-- Greeting — warm, personal -->
-        <div class="text-center mb-8 animate-fade-in-up stagger-1">
+        <div class="text-center mb-6 animate-fade-in-up stagger-1">
           <h1 class="text-[22px] font-extrabold tracking-tight leading-tight">
             {{ t('welcome.headline') }}
           </h1>
@@ -126,10 +143,12 @@ function next() {
     <!-- ═══ STEP 2: Your password protects everything ═══ -->
     <template v-else>
       <div class="flex-1 flex flex-col items-center">
-        <!-- Icon in a card -->
-        <div class="w-14 h-14 rounded-2xl bg-surface-card border border-border flex items-center justify-center mb-6 animate-fade-in">
-          <Lock class="w-7 h-7 text-brand" />
-        </div>
+        <!-- Illustration -->
+        <img
+          src="/Onboarding wizard/storyset-secure-login-bro.svg"
+          alt=""
+          class="w-36 h-36 object-contain mb-4 animate-fade-in"
+        />
 
         <!-- Copy -->
         <div class="text-center mb-8 animate-fade-in-up stagger-1">

@@ -39,14 +39,14 @@ const passwordInput = ref(null)
 const canSubmit = computed(() => {
   if (props.loading) return false
   if (props.isSetup) {
-    return password.value.length >= 8 && password.value === confirmPassword.value
+    return password.value.length >= 12 && password.value === confirmPassword.value
   }
   return password.value.length > 0
 })
 
 const passwordStrength = computed(() => {
   const p = password.value
-  if (p.length < 8) return { label: t('lock.strengthTooShort'), level: 0 }
+  if (p.length < 12) return { label: t('lock.strengthTooShort'), level: 0 }
   let score = 0
   if (p.length >= 12) score++
   if (/[A-Z]/.test(p) && /[a-z]/.test(p)) score++
@@ -132,7 +132,7 @@ onMounted(() => {
             v-model="password"
             :type="showPassword ? 'text' : 'password'"
             :placeholder="isSetup ? t('lock.minChars') : t('lock.enterPassword')"
-            autocomplete="off"
+            :autocomplete="isSetup ? 'new-password' : 'current-password'"
             class="w-full bg-surface-base border border-border rounded-lg px-3 py-2.5 pr-10 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted"
           />
           <button
@@ -167,7 +167,7 @@ onMounted(() => {
           v-model="confirmPassword"
           :type="showPassword ? 'text' : 'password'"
           :placeholder="t('lock.repeatPassword')"
-          autocomplete="off"
+          autocomplete="new-password"
           class="w-full bg-surface-base border border-border rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted"
           :class="mismatch ? 'border-error/50' : ''"
         />

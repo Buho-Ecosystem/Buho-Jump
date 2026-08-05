@@ -2,7 +2,7 @@
 
 This guide is for testers who want to try Buho Jump before it lands in the
 browser stores. You do **not** need to be a developer and you do **not** need to
-build anything. The repo ships ready to load extension packages.
+build anything. Every release ships ready-to-load extension packages.
 
 By the end you will have Buho Jump running in your browser toolbar, ready to test.
 
@@ -19,18 +19,16 @@ exactly like the store version.
 
 ## Before you start
 
-You need the extension package files. Get them in either of these ways:
+You need the extension package files. Download them from the latest
+[GitHub Release](https://github.com/Buho-Ecosystem/Buho-Jump/releases):
 
-- **Download the repo:** on the GitHub page click the green **Code** button, then
-  **Download ZIP**. Unzip it. The packages are in the top folder of the project:
-  - `buho-jump-chrome-mv3.zip` (Chrome, Brave, Edge, Opera, Vivaldi, Arc)
-  - `buho-jump-firefox-mv3.zip` (Firefox)
-- **Or clone it:** `git clone https://github.com/Buho-Ecosystem/Buho-Jump.git`
+- `buho-jump-<version>-chrome.zip` (Chrome, Brave, Edge, Opera, Vivaldi, Arc)
+- `buho-jump-<version>-firefox.zip` (Firefox)
 
 > [!NOTE]
-> You now have a `.zip` inside the project. You will unzip that browser package
-> in the steps below. Loading an extension always points at a **folder**, never
-> at the `.zip` itself, so unzipping is required.
+> You will unzip that browser package in the steps below. Loading an extension
+> always points at a **folder**, never at the `.zip` itself, so unzipping is
+> required.
 
 Pick your browser and follow the matching section.
 
@@ -43,8 +41,8 @@ Pick your browser and follow the matching section.
 These all use the same engine, so the steps are identical. The address differs
 per browser (shown below).
 
-1. **Unzip** `buho-jump-chrome-mv3.zip`. This creates a folder (for example
-   `buho-jump-chrome-mv3`). Keep this folder somewhere permanent. The browser
+1. **Unzip** the chrome package (for example `buho-jump-1.0.0-chrome.zip`). This
+   creates a folder. Keep this folder somewhere permanent. The browser
    loads the extension live from it, so if you delete or move it, the extension
    stops working.
 2. Open the extensions page:
@@ -66,7 +64,7 @@ per browser (shown below).
 
 ### Firefox
 
-1. **Unzip** `buho-jump-firefox-mv3.zip`.
+1. **Unzip** the firefox package (for example `buho-jump-1.0.0-firefox.zip`).
 2. In the address bar, go to `about:debugging#/runtime/this-firefox`.
 3. Click **Load Temporary Add-on...**
 4. In the file picker, open the unzipped folder and select the **`manifest.json`**
@@ -76,7 +74,7 @@ per browser (shown below).
 > [!IMPORTANT]
 > A **temporary** add-on is removed every time you **restart Firefox**. This is a
 > Firefox rule for unsigned add-ons, not a bug. To test again after a restart,
-> just repeat steps 2 to 4. Firefox **115 or newer** is required.
+> just repeat steps 2 to 4. Firefox **140 or newer** is required.
 
 > [!TIP]
 > Want it to survive restarts? Use Firefox **Developer Edition** or **Nightly**,

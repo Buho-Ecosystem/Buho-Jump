@@ -6,7 +6,11 @@ dev/
 .DS_Store
 .claude/
 
+# Build artifacts (produced by `npm run zip:all` and CI, never committed)
+*.zip
+
 # Internal planning docs (not for public repo)
 *_PLAN.md
 NOSTR_CORE_MIGRATION.md
 BACKLOG.md
+PRODUCT_TREE.md

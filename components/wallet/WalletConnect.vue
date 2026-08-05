@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { useWallet } from '../../composables/useWallet.js'
 import { useToast } from '../../composables/useToast.js'
 import QrScanner from '../QrScanner.vue'
+import { requestOriginAccess } from '../../lib/browser/hostPermissions.js'
 import {
   Link, ScanLine, Loader2, ArrowLeft, Server, Eye, EyeOff, Wallet,
 } from 'lucide-vue-next'
@@ -71,8 +72,10 @@ async function handleConnectLnbits() {
   if (!lnbitsUrl.value.trim() || !lnbitsKey.value.trim()) return
   error.value = ''
   try {
+    const apiUrl = normaliseLnbitsUrl(lnbitsUrl.value)
+    if (!(await requestOriginAccess(apiUrl))) throw new Error(t('wallet.serverAccessDenied'))
     await connectLnbits(
-      normaliseLnbitsUrl(lnbitsUrl.value),
+      apiUrl,
       lnbitsKey.value.trim(),
       walletName.value.trim() || undefined,
     )

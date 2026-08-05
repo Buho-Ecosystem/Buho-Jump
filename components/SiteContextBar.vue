@@ -16,6 +16,7 @@ const { t } = useI18n()
 const { send } = useMessaging()
 const { getForHost, loaded } = useAllowanceSync()
 
+const tabOrigin = ref('')
 const tabHost = ref('')
 const tabFavicon = ref('')
 const loading = ref(true)
@@ -23,15 +24,16 @@ const loading = ref(true)
 onMounted(async () => {
   try {
     const info = await send('GET_ACTIVE_TAB_INFO')
-    if (info?.host) {
-      tabHost.value = info.host
+    if (info?.origin) {
+      tabOrigin.value = info.origin
+      tabHost.value = info.host || info.origin
       tabFavicon.value = info.favIconUrl || ''
     }
   } catch { /* not on a web page */ }
   loading.value = false
 })
 
-const allowance = computed(() => getForHost(tabHost.value))
+const allowance = computed(() => getForHost(tabOrigin.value))
 const hasBudget = computed(() => !!allowance.value?.budget)
 const budgetPaused = computed(() => allowance.value?.enabled === false)
 
@@ -58,10 +60,10 @@ const barColorClass = computed(() => ({
 }[statusColor.value]))
 
 const faviconFailed = ref(false)
-const visible = computed(() => !!tabHost.value && loaded.value)
+const visible = computed(() => !!tabOrigin.value && loaded.value)
 
 function navigateToSite() {
-  emit('navigate-site', tabHost.value)
+  emit('navigate-site', tabOrigin.value)
 }
 </script>
 

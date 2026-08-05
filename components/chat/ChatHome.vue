@@ -131,9 +131,7 @@ onMounted(async () => {
 
     <!-- Empty state -->
     <div v-else class="flex flex-col items-center justify-center py-12 text-center space-y-4 px-6">
-      <div class="w-14 h-14 rounded-full bg-brand/10 flex items-center justify-center">
-        <MessageSquare class="w-7 h-7 text-brand" />
-      </div>
+      <img src="/Onboarding%20wizard/storyset-online-friends-bro.svg" alt="" class="w-36 h-28 object-contain -mb-2" />
       <div>
         <p class="text-sm font-semibold">{{ t('chat.emptyTitle') }}</p>
         <p class="text-xs text-text-muted mt-1 leading-relaxed">{{ t('chat.emptyDesc') }}</p>

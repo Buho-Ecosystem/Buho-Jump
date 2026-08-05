@@ -9,9 +9,13 @@
  * - Profile publishing/fetching
  */
 
-import { finalizeEvent, getPublicKey, hexToBytes, bytesToHex, randomBytes, nip19, nip42, nip57, nip59, nip09, nip25, createReactionEvent, createHttpAuthEvent, getAuthorizationHeader, NWC, createSecretKeySigner, fetchPayRequest, fetchInvoice, decodeBolt11 } from 'nostr-core'
+import { finalizeEvent, getPublicKey, hexToBytes, bytesToHex, randomBytes, nip19, nip42, nip57, nip59, nip09, createHttpAuthEvent, getAuthorizationHeader, NWC, createSecretKeySigner, fetchPayRequest, fetchInvoice, decodeBolt11 } from 'nostr-core'
+import { validatePaymentInvoice } from '../lib/invoiceValidation.js'
+import { withStorageRollback } from '../lib/storageTransaction.js'
+import { mnemonicToSeedSync } from '@scure/bip39'
 import {
   getActiveAccount,
+  getActiveAccountForClient,
   getAccounts,
   getActiveAccountId,
   setActiveAccount,
@@ -25,12 +29,14 @@ import {
   getAccountSummaries,
   reEncryptAccounts,
 } from '../lib/accounts.js'
+import { proveLightningLogin, submitLightningLogin } from '../lib/lightningAuth.js'
 import {
   checkPermission,
   setPermission,
   getPermissions,
   removePermission,
   removeDomainPermissions,
+  clearAllPermissions,
 } from '../lib/permissions.js'
 import {
   isPasswordSet,
@@ -44,8 +50,9 @@ import { isBlocked, getBlocklist, addToBlocklist, removeFromBlocklist } from '..
 import {
   getActiveWallet, getWalletSummaries,
   addWallet, removeWallet, setActiveWallet, renameWallet,
-  reEncryptWallets, clearAllWallets, addCashuWallet, updateCashuMints,
-  addLnbitsWallet,
+  reEncryptWallets, clearAllWallets, addCashuWallet,
+  addCashuMint, bindCashuWalletOwner, setCashuWalletPrivkey,
+  addLnbitsWallet, validateNwcConnectionUri,
 } from '../lib/wallet.js'
 import {
   lnbitsConnect, lnbitsGetBalance, lnbitsMakeInvoice,
@@ -53,26 +60,60 @@ import {
   createLnbitsWs,
 } from '../lib/lnbits.js'
 import {
-  getCashuBalance, getAllProofs as getCashuProofs, addProofs as addCashuProofs, clearProofStore,
-  reEncryptProofStore, readProofStore,
+  getCashuBalance, getProofSets,
+  getRelayEventIds, getRelayMintStates, setRelayEventIds, mergeCashuCounters,
+  clearProofStore, reEncryptProofStore, readProofStore,
 } from '../lib/cashu-store.js'
 import {
-  createMintQuote, checkMintQuote, mintTokens, meltTokens,
-  createEcashToken, receiveEcashToken, getMintInfo, teardownCashu,
+  createMintQuote, checkMintQuote, waitForMintQuote, mintTokens, meltTokens,
+  createEcashToken, receiveEcashToken, recoverExternalProofs,
+  restoreDeterministicProofs, recoverPendingCashuProofs, hasVolatileCashuRecovery,
+  resolvePendingCashuMelt, getMintInfo, teardownCashu,
 } from '../lib/cashu-engine.js'
+import {
+  cashuRecoveryKey, clearCashuRecovery, hasCashuRecovery, reEncryptCashuRecovery,
+} from '../lib/cashu-recovery.js'
+import {
+  cashuMeltJournalKey, clearCashuMeltJournal, hasCashuMeltJournal, readCashuMeltJournal,
+  reEncryptCashuMeltJournal,
+} from '../lib/cashu-melt-journal.js'
+import {
+  cashuMintJournalKey, clearCashuMintJournal, hasCashuMintJournal,
+  listCashuMintQuotes, removeCashuMintQuote, reEncryptCashuMintJournal,
+  saveCashuMintQuote,
+} from '../lib/cashu-mint-journal.js'
 import {
   publishWalletEvent, publishTokenEvent, publishHistoryEvent,
   deleteTokenEvents, restoreFromRelays,
+  publishMintBackupEvent, fetchMintBackup,
 } from '../lib/cashu-sync.js'
 import { exportCashuBackup, importCashuBackup } from '../lib/cashu-backup.js'
+import {
+  buildPaymentRequest, makePaymentRequestId, decodePaymentRequestInfo,
+  buildPaymentPayload, parsePaymentPayload, payloadToToken, looksLikePaymentPayload,
+} from '../lib/cashu-payment-request.js'
+import { getDecodedToken } from '@cashu/cashu-ts'
 import { fetchLnurlWithdrawParams, executeLnurlWithdraw } from '../lib/lnurl.js'
-import { recordCashuTx, updateCashuTx, getCashuTransactions, clearCashuTxHistory } from '../lib/cashu-transactions.js'
+import {
+  recordCashuTx, updateCashuTx, getCashuTx, getCashuTransactions, clearCashuTxHistory,
+  reEncryptCashuTxHistory,
+} from '../lib/cashu-transactions.js'
+import {
+  saveTransactionMetadata,
+  getTransactionMetadata,
+  enrichTransactionsWithMetadata,
+  removeWalletTransactionMetadataEverywhere,
+  removeAccountTransactionMetadata,
+  reEncryptTransactionMetadata,
+  clearAllTransactionMetadata,
+} from '../lib/transactionMetadata.js'
 import { DEFAULT_MINT, DEFAULT_WALLET_NAME } from '../lib/cashu-constants.js'
 import {
   getAllowances, getAllowance, setAllowance, setAllowanceEnabled,
-  recordSpend, checkBudget, removeAllowance, resetAllowanceSpend,
+  recordSpend, reserveSpend, refundSpend, removeAllowance, resetAllowanceSpend,
 } from '../lib/allowances.js'
 import { publishProfile, fetchProfile } from '../lib/profile.js'
+import { discoverNip06Identities } from '../lib/nostrIdentity.js'
 import {
   getRelayConfig, getPoolRelays, setPoolRelays,
   addRelay as addRelayToPool, removeRelay as removeRelayFromPool,
@@ -82,28 +123,103 @@ import {
 import { getPool, setAuthHandler } from '../lib/relayPool.js'
 import { connectBunker, createNostrConnectURI, awaitNostrConnect, parseConnectionURI } from '../lib/nip46-bridge.js'
 import { openPromptWindow } from '../lib/browser/capabilities.js'
-import { buildNutbitsDeepLink, getCallbackUrl, rotateCallbackToken } from '../lib/nutbits.js'
+import { buildNutbitsDeepLink, rotateCallbackToken, verifyCallbackToken } from '../lib/nutbits.js'
 import { notifyDm, notifyPayment, notifyBudgetSpend, setupNotificationClickHandler } from '../lib/notifications.js'
 import { startNotificationPoller } from '../lib/notificationPoller.js'
 import { saveSession, getSession, clearSession } from '../lib/session.js'
 import { performAccountSwitch } from '../lib/accountSwitch.js'
 import { log, getLogEntries, clearLog as clearLogEntries, exportLog as exportLogData } from '../lib/logger.js'
-import { createRequestCoordinator, PROMPT_EVENT_PREFIX } from '../lib/background/requestCoordinator.js'
+import { createRequestCoordinator, PROMPT_CONTEXT_PREFIX, PROMPT_EVENT_PREFIX } from '../lib/background/requestCoordinator.js'
+import { createPermissionSession } from '../lib/background/permissionSession.js'
+import { normalizeWebOrigin, requireSecureUrl } from '../lib/origins.js'
+import { checkPasswordRateLimit, clearPasswordFailures, recordPasswordFailure } from '../lib/authRateLimit.js'
+import {
+  validateCryptoPayload,
+  validateInvoice,
+  validateKeysend,
+  validateSats,
+  validateUnsignedEvent,
+} from '../lib/background/publicRequestValidation.js'
 
 // ── In-memory state ──────────────────────────────────────────────
 let nwcClient = null
 let nwcNotifUnsub = null // NIP-47 notification subscription cleanup
+// Gift-wrap event ids already redeemed as payment-request payments. Bounded;
+// after a worker restart the proof store still rejects double redemption.
+const processedRequestPayments = new Set()
 let lnbitsWsHandle = null // LNbits WebSocket handle (from createLnbitsWs)
 let remoteSigner = null
+let remoteSignerAccountId = null
 let _cachedPassword = null // In-memory cache of session password
 let rejectedOrigins = new Set() // Anti-spam: tracks rejected origins
 let _nostrConnectAbort = null // AbortController for pending nostrconnect flow
 let _accountSwitching = false // Guard against in-flight requests during account switch
 const requestCoordinator = createRequestCoordinator()
+const permissionSession = createPermissionSession()
+const BACKUP_CHALLENGE_PREFIX = 'backup_challenge_'
+
+async function createBackupChallenge(account, backupValue, kind) {
+  const token = crypto.randomUUID()
+  let challenge
+  let expected
+  if (kind === 'mnemonic') {
+    const words = backupValue.split(' ')
+    const indices = new Set()
+    while (indices.size < Math.min(3, words.length)) {
+      indices.add(randomBytes(1)[0] % words.length)
+    }
+    const ordered = [...indices].sort((a, b) => a - b)
+    challenge = { type: 'words', indices: ordered }
+    expected = ordered.map(index => words[index].toLowerCase())
+  } else {
+    challenge = { type: 'suffix', length: 6 }
+    expected = [backupValue.slice(-6).toLowerCase()]
+  }
+  await chrome.storage.session.set({
+    [`${BACKUP_CHALLENGE_PREFIX}${token}`]: {
+      accountId: account.id,
+      expected,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    },
+  })
+  return { token, ...challenge }
+}
+
+async function confirmBackupChallenge(accountId, token, answers) {
+  if (!accountId || !token || !Array.isArray(answers)) return false
+  const key = `${BACKUP_CHALLENGE_PREFIX}${token}`
+  const data = await chrome.storage.session.get(key)
+  await chrome.storage.session.remove(key)
+  const challenge = data[key]
+  if (!challenge || challenge.accountId !== accountId || Date.now() > challenge.expiresAt) return false
+  const clean = answers.map(value => String(value || '').trim().toLowerCase())
+  if (clean.length !== challenge.expected.length) return false
+  let difference = 0
+  for (let index = 0; index < clean.length; index++) {
+    const actual = new TextEncoder().encode(clean[index])
+    const expected = new TextEncoder().encode(challenge.expected[index])
+    difference |= actual.length ^ expected.length
+    for (let byte = 0; byte < Math.max(actual.length, expected.length); byte++) {
+      difference |= (actual[byte] || 0) ^ (expected[byte] || 0)
+    }
+  }
+  return difference === 0
+}
 
 // ── Error classification ─────────────────────────────────────────
 /** Map raw errors to structured codes for the frontend. */
 function classifyError(err) {
+  if (err?.code === 'VAULT_INTEGRITY') return 'VAULT_INTEGRITY'
+  if (err?.code === 'REQUEST_LIMIT') return 'REQUEST_LIMIT'
+  if (err?.code === 'INVALID_REQUEST') return 'INVALID_REQUEST'
+  if (err?.code === 'INVOICE_AMOUNT_REQUIRED') return 'INVOICE_AMOUNT_REQUIRED'
+  if (err?.code === 'INVOICE_ALREADY_PAID') return 'INVOICE_ALREADY_PAID'
+  if (err?.code === 'CASHU_RECOVERY_REQUIRED') return 'CASHU_RECOVERY_REQUIRED'
+  if (err?.code === 'CASHU_STORAGE_FATAL') return 'CASHU_STORAGE_FATAL'
+  if (err?.code === 'CASHU_PAYMENT_PENDING') return 'CASHU_PAYMENT_PENDING'
+  if (err?.code === 'CASHU_INVOICE_PENDING') return 'CASHU_INVOICE_PENDING'
+  if (err?.code === 'CASHU_RESTORE_CONFLICT') return 'CASHU_RESTORE_CONFLICT'
+  if (err?.code === 'CASHU_MINT_BALANCE') return 'CASHU_MINT_BALANCE'
   const msg = err?.message || ''
   const lower = msg.toLowerCase()
   if (lower.includes('no wallet connected') || lower.includes('no wallet'))
@@ -124,16 +240,63 @@ function classifyError(err) {
   return msg || 'UNKNOWN_ERROR'
 }
 
+async function authenticateMasterPassword(password) {
+  const limit = await checkPasswordRateLimit()
+  if (!limit.allowed) return { valid: false, error: `TOO_MANY_ATTEMPTS:${limit.retryAfter}` }
+  const valid = typeof password === 'string' && await verifyPassword(password)
+  if (valid) {
+    await clearPasswordFailures()
+    return { valid: true, error: null }
+  }
+  const afterFailure = await recordPasswordFailure()
+  return {
+    valid: false,
+    error: afterFailure.allowed ? 'WRONG_PASSWORD' : `TOO_MANY_ATTEMPTS:${afterFailure.retryAfter}`,
+  }
+}
+
+function validateNewPassword(password) {
+  if (typeof password !== 'string' || password.length < 12) {
+    return 'Password must be at least 12 characters'
+  }
+  if (password.length > 1024) return 'Password is too long'
+  return null
+}
+
+function sanitizeProfileInput(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid profile')
+  const text = (field, max) => typeof value[field] === 'string'
+    ? Array.from(value[field].trim()).slice(0, max).join('')
+    : ''
+  const secureImage = (field) => {
+    const candidate = text(field, 2048)
+    if (!candidate) return ''
+    try { return requireSecureUrl(candidate).toString() } catch { throw new Error(`${field} must use HTTPS`) }
+  }
+  const profile = {
+    name: text('name', 80),
+    display_name: text('display_name', 80),
+    about: text('about', 1_000),
+    picture: secureImage('picture'),
+    banner: secureImage('banner'),
+    nip05: text('nip05', 320),
+    lud16: text('lud16', 320),
+  }
+  if (profile.nip05 && !/^[^\s@]+@[^\s@]+$/.test(profile.nip05)) throw new Error('Enter a valid NIP-05 address')
+  if (profile.lud16 && !/^[^\s@]+@[^\s@]+$/.test(profile.lud16)) throw new Error('Enter a valid Lightning address')
+  return profile
+}
+
 // ── Session restore (service worker wake-up) ─────────────────────
 let _sessionLoadPromise = null
 
 async function ensureSessionLoaded() {
-  if (_cachedPassword !== null) return
   if (_sessionLoadPromise) return _sessionLoadPromise
   _sessionLoadPromise = (async () => {
     const session = await getSession()
     if (!session) {
       log.debug('session', 'NO_SESSION')
+      if (_cachedPassword !== null) await clearUnlockedSessionState()
       return
     }
     // Check auto-lock expiry
@@ -142,13 +305,29 @@ async function ensureSessionLoaded() {
     if (minutes > 0) {
       const elapsed = (Date.now() - session.unlockedAt) / 1000 / 60
       if (elapsed >= minutes) {
-        await clearSession()
+        await clearUnlockedSessionState()
         return
       }
     }
     _cachedPassword = session.password
   })()
   try { await _sessionLoadPromise } finally { _sessionLoadPromise = null }
+}
+
+async function clearUnlockedSessionState() {
+  _cachedPassword = null
+  await clearSession()
+  permissionSession.clear()
+  await requestCoordinator.resolveWhere(
+    () => true,
+    false,
+    { removeEventData: true, closePrompt: true },
+  )
+  teardownNwc()
+  teardownCashu()
+  teardownLnbitsWs()
+  if (remoteSigner) { try { remoteSigner.close() } catch {} remoteSigner = null }
+  remoteSignerAccountId = null
 }
 
 // ── Lock / Unlock ────────────────────────────────────────────────
@@ -168,53 +347,69 @@ const ALL_PERMISSION_METHODS = [
 // Payment methods always require per-transaction approval — never auto-approve from stored perms
 const PAYMENT_METHODS = ['weblnSendPayment', 'weblnKeysend']
 
-async function requestPermission(host, method, kind, eventData, meta) {
+async function requestPermission(origin, method, kind, eventData, meta) {
   const activeId = await getActiveAccountId()
+  if (!activeId) return { allowed: false, profileId: null }
   const isPayment = PAYMENT_METHODS.includes(method)
+  const scope = {
+    profileId: activeId,
+    tabId: meta?.tabId,
+    origin,
+    method,
+    kind: method === 'signEvent' ? kind : null,
+  }
 
   // Payment prompts always show — never auto-approve from stored perms
   if (!isPayment) {
-    const existing = await checkPermission(host, method, kind, activeId)
-    if (existing === 'allow') return true
-    if (existing === 'deny') return false
+    const existing = await checkPermission(origin, method, kind, activeId)
+    if (existing === 'allow') return { allowed: true, profileId: activeId }
+    if (existing === 'deny') return { allowed: false, profileId: activeId }
+    if (permissionSession.hasGrant(scope)) return { allowed: true, profileId: activeId }
   }
 
-  // Check if this is the first time this host is asking for any permission
-  // Payment prompts never use the first-visit flow — they always show per-transaction
-  const allPerms = await getPermissions(activeId)
-  const hostPerms = allPerms[host]
-  const firstVisit = !isPayment && (!hostPerms || Object.keys(hostPerms).length === 0)
+  const allowed = await permissionSession.coalesce(scope, ({ queuedBehind = 0 } = {}) => {
+    return new Promise((resolve) => {
+      const requestId = crypto.randomUUID()
+      requestCoordinator.register(requestId, resolve, { ...scope, isPayment })
 
-  return new Promise((resolve) => {
-    const requestId = crypto.randomUUID()
-    requestCoordinator.register(requestId, resolve)
+      Promise.all([
+        requestCoordinator.setEventData(requestId, eventData),
+        requestCoordinator.persistContext(requestId, { ...scope, isPayment, createdAt: Date.now() }),
+      ]).then(() => {
+        // Build prompt URL from trusted request context. The response contains
+        // only the unguessable request id and the user's decision.
+        const siteTitle = meta?.siteTitle || ''
+        const siteFavicon = meta?.siteFavicon || ''
+        const url = chrome.runtime.getURL(
+          `/prompt.html?requestId=${requestId}&origin=${encodeURIComponent(origin)}&method=${encodeURIComponent(method)}&kind=${kind ?? ''}&profileId=${encodeURIComponent(activeId)}&siteTitle=${encodeURIComponent(siteTitle)}&siteFavicon=${encodeURIComponent(siteFavicon)}&queued=${queuedBehind}`
+        )
 
-    // Store extra data so the prompt can display context
-    requestCoordinator.setEventData(requestId, eventData).catch(err =>
-      log.warn('permissions', 'SET_EVENT_DATA_FAILED', { requestId, err: err?.message })
-    )
-
-    // Build prompt URL with site metadata from the requesting tab
-    const siteTitle = meta?.siteTitle || ''
-    const siteFavicon = meta?.siteFavicon || ''
-    const url = chrome.runtime.getURL(
-      `/prompt.html?requestId=${requestId}&host=${encodeURIComponent(host)}&method=${encodeURIComponent(method)}&kind=${kind ?? ''}&firstVisit=${firstVisit}&siteTitle=${encodeURIComponent(siteTitle)}&siteFavicon=${encodeURIComponent(siteFavicon)}`
-    )
-
-    // Dynamic sizing: taller for prompts that reveal extra context (event data, payment + budget)
-    const isTallPrompt = method === 'signEvent' || PAYMENT_METHODS.includes(method)
-    const promptHeight = isTallPrompt ? 600 : firstVisit ? 560 : 520
-    openPromptWindow(url, { width: 420, height: promptHeight }).then((win) => {
-      requestCoordinator.attachWindowClose(requestId, win, false)
+        const isTallPrompt = method === 'signEvent' || isPayment
+        const promptHeight = isTallPrompt ? 600 : 520
+        return openPromptWindow(url, { width: 420, height: promptHeight })
+      }).then((win) => {
+        requestCoordinator.attachWindowClose(requestId, win, false)
+      }).catch((err) => {
+        log.warn('permissions', 'OPEN_PROMPT_FAILED', { requestId, err: err?.message })
+        requestCoordinator.resolve(requestId, false, { removeEventData: true }).catch(() => {})
+      })
     })
   })
+  if (!allowed) permissionSession.cancelLane(scope)
+  return { allowed: !!allowed, profileId: activeId }
 }
 
 // ── NIP-46 connection management ─────────────────────────────────
-async function ensureRemoteSigner() {
-  if (remoteSigner?.connected) return remoteSigner
+async function ensureRemoteSigner(accountId = null) {
+  const expectedId = accountId || await getActiveAccountId()
+  if (remoteSigner?.connected && remoteSignerAccountId === expectedId) return remoteSigner
+  if (remoteSigner && remoteSignerAccountId !== expectedId) {
+    try { await remoteSigner.disconnect?.() } catch {}
+    remoteSigner = null
+    remoteSignerAccountId = null
+  }
 
-  const account = await getActiveAccount(_cachedPassword)
+  const account = (await getAccounts(_cachedPassword))[expectedId]
   if (!account || account.mode !== 'nip46') return null
   if (!account.nip46Session?.bunkerUri || !account.nip46ClientSecretHex) return null
 
@@ -224,6 +419,7 @@ async function ensureRemoteSigner() {
       account.nip46Session.bunkerUri,
       account.nip46ClientSecretHex
     )
+    remoteSignerAccountId = expectedId
     return remoteSigner
   } catch (err) {
     log.warn('nip46', 'RECONNECT_FAILED', { err: err?.message })
@@ -237,8 +433,9 @@ async function ensureRemoteSigner() {
  * Get a Signer for the active account (local or NIP-46).
  * Both return the same nostr-core Signer interface.
  */
-async function getSigner() {
-  const account = await getActiveAccount(_cachedPassword)
+async function getSigner(accountId = null) {
+  const expectedId = accountId || await getActiveAccountId()
+  const account = (await getAccounts(_cachedPassword))[expectedId]
   if (!account) return null
 
   if (account.mode === 'local' && account.secretHex) {
@@ -246,7 +443,7 @@ async function getSigner() {
   }
 
   if (account.mode === 'nip46') {
-    return ensureRemoteSigner()
+    return ensureRemoteSigner(expectedId)
   }
 
   return null
@@ -295,32 +492,54 @@ async function requireUnlocked(origin) {
 
 /** Extract site metadata from the Chrome sender object for richer prompt display. */
 function getSiteMeta(sender) {
+  const title = typeof sender?.tab?.title === 'string'
+    ? Array.from(sender.tab.title).slice(0, 200).join('')
+    : ''
+  const favicon = (() => {
+    const value = sender?.tab?.favIconUrl
+    if (typeof value !== 'string' || value.length > 4096) return ''
+    try {
+      const url = new URL(value)
+      return ['https:', 'data:'].includes(url.protocol) ? value : ''
+    } catch { return '' }
+  })()
   return {
-    siteTitle: sender?.tab?.title || '',
-    siteFavicon: sender?.tab?.favIconUrl || '',
+    tabId: sender?.tab?.id,
+    siteTitle: title,
+    siteFavicon: favicon,
   }
 }
 
+function getSenderOrigin(sender) {
+  const value = sender?.url || sender?.tab?.url || ''
+  const origin = normalizeWebOrigin(value)
+  if (!origin || !sender?.tab?.id) {
+    const error = new Error('Request did not come from a supported website tab')
+    error.code = 'INVALID_REQUEST'
+    throw error
+  }
+  return origin
+}
+
 async function handleGetPublicKey(sender) {
-  const host = new URL(sender.url).hostname
-  await requireUnlocked(host)
-  const allowed = await requestPermission(host, 'getPublicKey', null, null, getSiteMeta(sender))
+  const origin = getSenderOrigin(sender)
+  await requireUnlocked(origin)
+  const { allowed, profileId } = await requestPermission(origin, 'getPublicKey', null, null, getSiteMeta(sender))
   if (!allowed) return { error: 'PERMISSION_DENIED' }
 
-  const signer = await getSigner()
+  const signer = await getSigner(profileId)
   if (!signer) return { error: 'NO_SIGNER' }
   return { result: await signer.getPublicKey() }
 }
 
 async function handleSignEvent(params, sender) {
-  const host = new URL(sender.url).hostname
-  await requireUnlocked(host)
-  const event = params[0]
-  if (!event) return { error: 'NO_EVENT' }
-  const allowed = await requestPermission(host, 'signEvent', event.kind, event, getSiteMeta(sender))
+  const origin = getSenderOrigin(sender)
+  await requireUnlocked(origin)
+  const event = validateUnsignedEvent(params[0])
+  const { allowed, profileId } = await requestPermission(origin, 'signEvent', event.kind, event, getSiteMeta(sender))
   if (!allowed) return { error: 'PERMISSION_DENIED' }
 
-  const signer = await getSigner()
+  const signer = await getSigner(profileId)
   if (!signer) return { error: 'NO_SIGNER' }
   return { result: await signer.signEvent(event) }
 }
@@ -346,14 +565,14 @@ async function handleGetRelays() {
 }
 
 async function handleEncryptDecrypt(type, params, sender) {
-  const host = new URL(sender.url).hostname
-  await requireUnlocked(host)
-  const [pubkey, text] = params
+  const origin = getSenderOrigin(sender)
+  await requireUnlocked(origin)
+  const [pubkey, text] = validateCryptoPayload(params[0], params[1], { decrypt: type.endsWith('_DECRYPT') })
   const method = type.toLowerCase()
-  const allowed = await requestPermission(host, method, null, null, getSiteMeta(sender))
+  const { allowed, profileId } = await requestPermission(origin, method, null, null, getSiteMeta(sender))
   if (!allowed) return { error: 'PERMISSION_DENIED' }
 
-  const signer = await getSigner()
+  const signer = await getSigner(profileId)
   if (!signer) return { error: 'NO_SIGNER' }
 
   if (type === 'NIP04_ENCRYPT' || type === 'NIP04_DECRYPT') {
@@ -421,32 +640,318 @@ async function getActiveWalletType() {
   return wallet.type || 'nwc'
 }
 
+async function getCashuOwner(wallet) {
+  const accounts = await getAccounts(_cachedPassword)
+  let ownerId = wallet.ownerAccountId
+  if (!ownerId || !accounts[ownerId]) {
+    ownerId = await getActiveAccountId()
+    if (!ownerId || !accounts[ownerId]) return null
+    await bindCashuWalletOwner(wallet.id, ownerId, _cachedPassword)
+    wallet.ownerAccountId = ownerId
+  }
+  return accounts[ownerId]
+}
+
+async function getCashuSeed(wallet) {
+  const owner = await getCashuOwner(wallet)
+  const mnemonic = owner?.identitySeed?.mnemonic
+  return typeof mnemonic === 'string' && mnemonic ? mnemonicToSeedSync(mnemonic) : null
+}
+
+/**
+ * Scan incoming NIP-17 gift wraps for NUT-18 payment payloads and redeem
+ * them. Two modes:
+ *   - live poll (requestId set): stop at the first relevant payment and
+ *     return it, surfacing new-mint payments for user review.
+ *   - sweep (redeemAll): redeem every payment from mints this wallet
+ *     already uses; new-mint payments are left for the request screen.
+ * Only mints the wallet already uses are contacted automatically.
+ */
+async function scanIncomingRequestPayments(wallet, owner, { requestId = null, redeemAll = false } = {}) {
+  const secretKey = hexToBytes(owner.secretHex)
+  const relays = await getPoolRelays(owner.pubkey, 'chat').catch(() => [])
+  if (!relays.length) return { received: false }
+  // Gift wraps randomize created_at up to two days back, so the filter
+  // window must reach that far; the processed set and the proof store keep
+  // replays out.
+  const since = Math.floor(Date.now() / 1000) - 172_800
+  const events = await getPool().querySync(
+    relays,
+    { kinds: [1059], '#p': [owner.pubkey], since },
+    { maxWait: 8000 },
+  )
+  let redeemedTotal = 0
+  let redeemedCount = 0
+  for (const event of events) {
+    if (processedRequestPayments.has(event.id)) continue
+    let rumor
+    try { rumor = nip59.unwrap(event, secretKey) } catch { continue }
+    if (rumor?.kind !== 14 || !looksLikePaymentPayload(rumor.content)) continue
+    const payload = parsePaymentPayload(rumor.content)
+    if (!payload.valid) continue
+    if (requestId && payload.id && payload.id !== requestId) continue
+    // Never contact a mint this wallet does not use without the user
+    // seeing it first.
+    if (!(wallet.mints || []).includes(payload.mint)) {
+      if (redeemAll) continue
+      if (processedRequestPayments.size > 500) processedRequestPayments.clear()
+      processedRequestPayments.add(event.id)
+      return {
+        received: true,
+        needsReview: true,
+        token: payloadToToken(payload),
+        amountSats: payload.amountSats,
+        mint: payload.mint,
+        mintHost: payload.mintHost,
+      }
+    }
+    if (processedRequestPayments.size > 500) processedRequestPayments.clear()
+    processedRequestPayments.add(event.id)
+    try {
+      await recoverCashuState(wallet)
+      const result = await receiveEcashToken(
+        payloadToToken(payload),
+        wallet.id,
+        _cachedPassword,
+        await getCashuSeed(wallet),
+        wallet.cashuPrivkey,
+      )
+      await recordCashuTx(wallet.id, {
+        direction: 'in', amount: result.amountSats,
+        description: payload.memo || 'Payment request', state: 'settled',
+      }, _cachedPassword).catch(err => log.warn('cashu', 'TX_RECORD_FAILED', { err: err?.message }))
+      syncCashuToRelays(wallet, 'in', result.amountSats).catch(err =>
+        log.warn('cashu', 'RELAY_SYNC_FAILED', { err: err?.message })
+      )
+      redeemedTotal += result.amountSats
+      redeemedCount += 1
+      if (!redeemAll) return { received: true, amountSats: result.amountSats }
+    } catch (err) {
+      // Leave the event unprocessed so a later scan can retry.
+      processedRequestPayments.delete(event.id)
+      log.warn('cashu', 'REQUEST_PAYMENT_REDEEM_FAILED', { err: err?.message })
+    }
+  }
+  return { received: redeemedCount > 0, count: redeemedCount, amountSats: redeemedTotal }
+}
+
+// Sweep at most every 5 minutes; the wallet-open status call triggers it.
+let _lastRequestPaymentSweep = 0
+function sweepRequestPaymentsSoon(wallet) {
+  const now = Date.now()
+  if (now - _lastRequestPaymentSweep < 300_000) return
+  _lastRequestPaymentSweep = now
+  getCashuOwner(wallet)
+    .then(owner => owner?.secretHex
+      ? scanIncomingRequestPayments(wallet, owner, { redeemAll: true })
+      : null)
+    .then(result => {
+      if (result?.count > 0) {
+        log.info('cashu', 'REQUEST_PAYMENTS_SWEPT', { count: result.count, amount: result.amountSats })
+        // Notify only after the mint verified and we actually redeemed the
+        // proofs, so the amount shown is real money, not a spoofable claim.
+        notifyPayment(result.amountSats).catch(() => {})
+      }
+    })
+    .catch(err => log.debug('cashu', 'REQUEST_SWEEP_FAILED', { err: err?.message }))
+}
+
+/**
+ * Publish the NUT-27 mint list backup for this wallet (fire and forget).
+ * Reads the wallet fresh so the just-updated mint list is what gets saved.
+ */
+async function syncMintBackup(wallet) {
+  try {
+    const owner = await getCashuOwner(wallet)
+    const seed = await getCashuSeed(wallet)
+    if (!owner?.pubkey || !seed) return
+    const current = await getActiveWallet(_cachedPassword)
+    if (!current || current.id !== wallet.id) return
+    await publishMintBackupEvent(seed, current.mints || [], owner.pubkey)
+  } catch (err) {
+    log.warn('cashu', 'MINT_BACKUP_FAILED', { err: err?.message })
+  }
+}
+
+async function getCashuMintCandidates(wallet, minimumSats = 0) {
+  const sets = await getProofSets(wallet.id, _cachedPassword, getCashuMint(wallet))
+  const balances = new Map(sets.map(set => [
+    set.mint,
+    set.proofs.reduce((sum, proof) => sum + proof.amount, 0),
+  ]))
+  const all = [...new Set([...(wallet.mints || []), ...sets.map(set => set.mint)].filter(Boolean))]
+  const eligible = all.filter(mint => (balances.get(mint) || 0) >= minimumSats)
+  return eligible.length > 0 ? eligible : all.slice(0, 1)
+}
+
+async function getCashuSpendableSnapshot(wallet) {
+  const sets = await getProofSets(wallet.id, _cachedPassword, getCashuMint(wallet))
+  const pending = await readCashuMeltJournal(wallet.id, _cachedPassword)
+  const reservedSecrets = new Set(pending?.inputSecrets || [])
+  const balances = sets.map(set => ({
+    mint: set.mint,
+    balance: set.proofs.reduce((sum, proof) =>
+      sum + (reservedSecrets.has(proof.secret) ? 0 : proof.amount), 0),
+  }))
+  return {
+    balances,
+    total: balances.reduce((sum, item) => sum + item.balance, 0),
+    paymentPending: !!pending,
+  }
+}
+
+async function recoverCashuState(wallet, { throwOnPending = true } = {}) {
+  const melt = await resolvePendingCashuMelt(
+    wallet.id,
+    _cachedPassword,
+    await getCashuSeed(wallet),
+  )
+  if (melt.resolved && melt.transactionId) {
+    await updateCashuTx(wallet.id, melt.transactionId, {
+      state: melt.paid ? 'settled' : 'failed',
+      feesPaid: melt.feeSats || 0,
+    }, _cachedPassword)
+  }
+  if (melt.resolved && melt.paid) {
+    syncCashuToRelays(wallet, 'out', 0).catch(() => {})
+  }
+  if (melt.pending && throwOnPending) {
+    const error = new Error('Cashu payment is still pending')
+    error.code = 'CASHU_PAYMENT_PENDING'
+    throw error
+  }
+  const result = await recoverPendingCashuProofs(
+    wallet.id,
+    _cachedPassword,
+    await getCashuSeed(wallet),
+    wallet.cashuPrivkey,
+  )
+  if (result.recovered) {
+    if (result.mint) await addCashuMint(wallet.id, result.mint, _cachedPassword)
+    syncCashuToRelays(await getActiveWallet(_cachedPassword), 'in', result.amountSats || 0).catch(() => {})
+  }
+  return { ...result, paymentPending: !!melt.pending, paymentResolved: !!melt.resolved }
+}
+
+async function cashuQuoteTransactionId(quoteId) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(quoteId))
+  return `cashu-mint-${bytesToHex(new Uint8Array(digest))}`
+}
+
+async function recoverPendingCashuMintQuotes(wallet) {
+  const quotes = await listCashuMintQuotes(wallet.id, _cachedPassword)
+  const seed = await getCashuSeed(wallet)
+  let recoveredAmount = 0
+  let recoveredQuotes = 0
+  let needsAttention = 0
+
+  for (const quote of quotes) {
+    try {
+      const status = await checkMintQuote(
+        quote.mint, quote.quoteId, wallet.id, _cachedPassword, seed,
+      )
+      if (status.state === 'PAID' || status.paid) {
+        const minted = await mintTokens(
+          quote.mint,
+          quote.amountSats,
+          quote.quoteId,
+          wallet.id,
+          _cachedPassword,
+          seed,
+          wallet.cashuPrivkey,
+        )
+        // Proofs are durable once mintTokens returns. Clear the quote before
+        // writing optional history so a history failure cannot block the wallet.
+        await removeCashuMintQuote(wallet.id, _cachedPassword, quote.quoteId)
+        await recordCashuTx(wallet.id, {
+          direction: 'in',
+          amount: minted.amountSats,
+          description: 'Recovered Lightning deposit',
+          state: 'settled',
+          paymentHash: await cashuQuoteTransactionId(quote.quoteId),
+        }, _cachedPassword).catch(error =>
+          log.warn('cashu', 'RECOVERED_MINT_TX_RECORD_FAILED', { err: error?.message })
+        )
+        recoveredAmount += minted.amountSats
+        recoveredQuotes += 1
+        continue
+      }
+      if (status.state === 'ISSUED') {
+        if (seed) {
+          const restored = await restoreDeterministicProofs(
+            quote.mint, wallet.id, _cachedPassword, seed,
+          )
+          if (restored.proofs > 0) {
+            await removeCashuMintQuote(wallet.id, _cachedPassword, quote.quoteId)
+            recoveredAmount += restored.amountSats
+            recoveredQuotes += 1
+            continue
+          }
+        }
+        needsAttention += 1
+        continue
+      }
+      if (status.state === 'UNPAID'
+        && quote.expiry > 0
+        && quote.expiry <= Math.floor(Date.now() / 1000)) {
+        await removeCashuMintQuote(wallet.id, _cachedPassword, quote.quoteId)
+      }
+    } catch (error) {
+      log.warn('cashu', 'MINT_QUOTE_RECOVERY_FAILED', { err: error?.message })
+    }
+  }
+
+  const remaining = await listCashuMintQuotes(wallet.id, _cachedPassword)
+  if (recoveredQuotes > 0) syncCashuToRelays(wallet, 'in', recoveredAmount).catch(() => {})
+  return {
+    incomingPending: remaining.length > 0,
+    incomingQuotes: remaining.length,
+    incomingNeedsAttention: needsAttention,
+    incomingRecovered: recoveredQuotes,
+    incomingRecoveredAmount: recoveredAmount,
+  }
+}
+
 /**
  * After a Cashu proof mutation, publish updated token state to relays and record history.
  * Publishes current proofs as a new token event, records history with token event ID,
  * and optionally deletes old token events for spent proofs.
  */
-async function syncCashuToRelays(wallet, direction, amountSats, oldTokenEventIds) {
+async function syncCashuToRelays(wallet, direction, amountSats) {
   try {
-    const account = await getActiveAccount(_cachedPassword)
+    const account = await getCashuOwner(wallet)
     if (!account?.secretHex) return
     const secretKey = hexToBytes(account.secretHex)
-    const mintUrl = getCashuMint(wallet)
-
-    // Publish current proof state as a new token event
-    const currentProofs = await getCashuProofs(wallet.id, _cachedPassword)
-    const tokenEventId = currentProofs.length > 0
-      ? await publishTokenEvent(secretKey, mintUrl, currentProofs, account.pubkey, oldTokenEventIds || [])
-      : null
-
-    // Record history with the new token event ID
-    const tokenIds = tokenEventId ? [tokenEventId] : []
-    await publishHistoryEvent(secretKey, direction, amountSats, tokenIds, account.pubkey)
-
-    // Delete old spent token events from relays
-    if (oldTokenEventIds?.length > 0) {
-      await deleteTokenEvents(secretKey, oldTokenEventIds, account.pubkey)
+    await publishWalletEvent(
+      secretKey,
+      wallet.cashuPrivkey,
+      wallet.mints || [],
+      account.pubkey,
+    )
+    const proofSets = await getProofSets(wallet.id, _cachedPassword, getCashuMint(wallet))
+    const relayStates = await getRelayMintStates(wallet.id, _cachedPassword)
+    const proofsByMint = new Map(proofSets.map(set => [set.mint, set.proofs]))
+    const mints = new Set([
+      ...proofSets.map(set => set.mint),
+      ...relayStates.map(state => state.mint),
+    ])
+    const tokenIds = []
+    for (const mint of mints) {
+      const proofs = proofsByMint.get(mint) || []
+      const oldIds = await getRelayEventIds(wallet.id, _cachedPassword, mint)
+      const tokenEventId = proofs.length > 0
+        ? await publishTokenEvent(secretKey, mint, proofs, account.pubkey, oldIds)
+        : null
+      if (tokenEventId) {
+        tokenIds.push(tokenEventId)
+        await setRelayEventIds(wallet.id, _cachedPassword, mint, [tokenEventId])
+        if (oldIds.length > 0) await deleteTokenEvents(secretKey, oldIds, account.pubkey)
+      } else if (proofs.length === 0 && oldIds.length > 0) {
+        const deleted = await deleteTokenEvents(secretKey, oldIds, account.pubkey)
+        if (deleted) await setRelayEventIds(wallet.id, _cachedPassword, mint, [])
+      }
     }
+    await publishHistoryEvent(secretKey, direction, amountSats, tokenIds, account.pubkey)
   } catch (err) {
     log.warn('cashu', 'RELAY_SYNC_FAILED', { direction, err: err?.message })
   }
@@ -457,25 +962,117 @@ function getCashuMint(wallet) {
   return wallet.mints[0]
 }
 
+function normalizeCashuMintList(candidates) {
+  const mints = []
+  for (const candidate of candidates || []) {
+    try {
+      const mint = requireSecureUrl(candidate, { allowLoopback: true }).toString().replace(/\/$/, '')
+      if (!mints.includes(mint) && mints.length < 20) mints.push(mint)
+    } catch { /* ignore invalid external mint metadata */ }
+  }
+  return mints
+}
+
+function isValidCashuPrivkey(value) {
+  if (!/^[0-9a-f]{64}$/i.test(value || '')) return false
+  const secretKey = hexToBytes(value)
+  try {
+    getPublicKey(secretKey)
+    return true
+  } catch {
+    return false
+  } finally {
+    secretKey.fill(0)
+  }
+}
+
+async function adoptRestoredCashuPrivkey(wallet, restoredPrivkey) {
+  if (!restoredPrivkey || restoredPrivkey === wallet.cashuPrivkey) return false
+  if (!isValidCashuPrivkey(restoredPrivkey)) throw new Error('Invalid Cashu receiving key')
+  const localBalance = await getCashuBalance(wallet.id, _cachedPassword, wallet.mints?.[0])
+  const hasLocalState = localBalance > 0
+    || hasVolatileCashuRecovery(wallet.id)
+    || await hasCashuRecovery(wallet.id)
+    || await hasCashuMeltJournal(wallet.id)
+    || await hasCashuMintJournal(wallet.id)
+  if (hasLocalState) {
+    const error = new Error('Cashu receiving key restore conflicts with local wallet state')
+    error.code = 'CASHU_RESTORE_CONFLICT'
+    throw error
+  }
+  const normalizedKey = await setCashuWalletPrivkey(wallet.id, restoredPrivkey, _cachedPassword)
+  wallet.cashuPrivkey = normalizedKey
+  return true
+}
+
+function requireConfiguredCashuMint(wallet, mintUrl) {
+  const normalized = requireSecureUrl(mintUrl, { allowLoopback: true }).toString().replace(/\/$/, '')
+  const configured = new Set((wallet.mints || []).map(mint =>
+    requireSecureUrl(mint, { allowLoopback: true }).toString().replace(/\/$/, '')
+  ))
+  if (!configured.has(normalized)) {
+    const error = new Error('Cashu mint is not configured for this wallet')
+    error.code = 'INVALID_REQUEST'
+    throw error
+  }
+  return normalized
+}
+
 async function walletPayInvoice(invoice, amountSats) {
+  const validatedInvoice = validatePaymentInvoice(invoice, amountSats)
   const wallet = await getActiveWallet(_cachedPassword)
   if (!wallet) throw new Error('No wallet connected')
   if (wallet.type === 'lnbits') {
-    return await lnbitsPayInvoice(wallet.apiUrl, wallet.adminKey, invoice)
+    return await lnbitsPayInvoice(
+      wallet.apiUrl,
+      wallet.adminKey,
+      invoice,
+      validatedInvoice.decoded.amountMsat == null ? validatedInvoice.amountSats : undefined,
+    )
   }
   if (wallet.type === 'cashu') {
-    const mintUrl = getCashuMint(wallet)
-    const amount = amountSats || 0
+    await recoverCashuState(wallet)
+    const decodedInvoice = validatedInvoice.decoded
+    const amount = validatedInvoice.amountSats
+    const seed = await getCashuSeed(wallet)
+    const mintCandidates = await getCashuMintCandidates(wallet, amount)
 
     // Record pending tx BEFORE attempting payment
+    const paymentHash = decodedInvoice?.paymentHash || ''
+    if (paymentHash && (await getCashuTx(wallet.id, paymentHash, _cachedPassword))?.state === 'settled') {
+      const error = new Error('This Lightning invoice was already paid')
+      error.code = 'INVOICE_ALREADY_PAID'
+      throw error
+    }
     const txId = await recordCashuTx(wallet.id, {
-      direction: 'out', amount, description: 'Lightning payment', state: 'pending',
-    })
+      direction: 'out', amount, description: 'Lightning payment', state: 'pending', paymentHash,
+    }, _cachedPassword)
 
     try {
-      const result = await meltTokens(mintUrl, invoice, wallet.id, _cachedPassword)
+      let result
+      let lastBalanceError
+      for (const mintUrl of mintCandidates) {
+        try {
+          result = await meltTokens(
+            mintUrl,
+            invoice,
+            wallet.id,
+            _cachedPassword,
+            seed,
+            { transactionId: txId },
+          )
+          break
+        } catch (error) {
+          if (error?.code !== 'CASHU_MINT_BALANCE') throw error
+          lastBalanceError = error
+        }
+      }
+      if (!result) throw lastBalanceError || new Error('No Cashu mint can cover this payment')
       // Mark settled on success
-      await updateCashuTx(wallet.id, txId, { state: 'settled' }).catch(err =>
+      await updateCashuTx(wallet.id, txId, {
+        state: 'settled',
+        feesPaid: result.feeSats || 0,
+      }, _cachedPassword).catch(err =>
         log.warn('cashu', 'TX_UPDATE_FAILED', { txId, err: err?.message })
       )
       // Sync proof state to relays (fire-and-forget)
@@ -484,14 +1081,21 @@ async function walletPayInvoice(invoice, amountSats) {
       )
       return result
     } catch (err) {
-      // Mark failed so user sees it in history
-      await updateCashuTx(wallet.id, txId, { state: 'failed' }).catch(updErr =>
+      // A storage recovery error can happen after the mint paid the invoice.
+      // Keep that transaction pending instead of presenting a false failure.
+      const state = ['CASHU_RECOVERY_REQUIRED', 'CASHU_STORAGE_FATAL', 'CASHU_PAYMENT_PENDING'].includes(err?.code)
+        ? 'pending'
+        : 'failed'
+      await updateCashuTx(wallet.id, txId, { state }, _cachedPassword).catch(updErr =>
         log.warn('cashu', 'TX_UPDATE_FAILED', { txId, err: updErr?.message })
       )
       throw err
     }
   }
-  return await withNwcRetry(nwc => nwc.payInvoice(invoice, amountSats ? amountSats * 1000 : undefined))
+  return await withNwcRetry(nwc => nwc.payInvoice(
+    invoice,
+    validatedInvoice.decoded.amountMsat == null ? validatedInvoice.amountMsat : undefined,
+  ))
 }
 
 async function walletMakeInvoice(amountSats, description) {
@@ -502,8 +1106,21 @@ async function walletMakeInvoice(amountSats, description) {
   }
   if (wallet.type === 'cashu') {
     const mintUrl = getCashuMint(wallet)
-    const q = await createMintQuote(mintUrl, amountSats)
-    return { invoice: q.request, quoteId: q.quote, expiry: q.expiry }
+    const q = await createMintQuote(
+      mintUrl,
+      amountSats,
+      wallet.id,
+      _cachedPassword,
+      await getCashuSeed(wallet),
+      wallet.cashuPrivkey,
+    )
+    await saveCashuMintQuote(wallet.id, _cachedPassword, {
+      mint: mintUrl,
+      quoteId: q.quote,
+      amountSats,
+      expiry: Number(q.expiry) || 0,
+    })
+    return { invoice: q.request, quoteId: q.quote, expiry: q.expiry, mintUrl }
   }
   return await withNwcRetry(nwc => nwc.makeInvoice({ amount: amountSats * 1000, description: description || '' }))
 }
@@ -511,7 +1128,7 @@ async function walletMakeInvoice(amountSats, description) {
 async function walletGetBalance() {
   const wallet = await getActiveWallet(_cachedPassword)
   if (!wallet) return 0
-  if (wallet.type === 'cashu') return await getCashuBalance(wallet.id, _cachedPassword)
+  if (wallet.type === 'cashu') return (await getCashuSpendableSnapshot(wallet)).total
   if (wallet.type === 'lnbits') return await lnbitsGetBalance(wallet.apiUrl, wallet.adminKey)
   const bal = await withNwcRetry(nwc => nwc.getBalance())
   return Math.floor(bal.balance / 1000)
@@ -523,6 +1140,7 @@ async function ensureNWC() {
   if (nwcClient?.connected) return nwcClient
   const wallet = await getActiveWallet(_cachedPassword)
   if (!wallet?.connectionUri) throw new Error('No wallet connected')
+  validateNwcConnectionUri(wallet.connectionUri)
   teardownNwc()
   nwcClient = new NWC(wallet.connectionUri)
   await nwcClient.connect()
@@ -604,9 +1222,9 @@ function subscribeNwcNotifications() {
 }
 
 async function handleWeblnEnable(sender) {
-  const host = new URL(sender.url).hostname
-  await requireUnlocked(host)
-  const allowed = await requestPermission(host, 'weblnEnable', null, null, getSiteMeta(sender))
+  const origin = getSenderOrigin(sender)
+  await requireUnlocked(origin)
+  const { allowed } = await requestPermission(origin, 'weblnEnable', null, null, getSiteMeta(sender))
   if (!allowed) return { error: 'PERMISSION_DENIED' }
   try {
     const wType = await getActiveWalletType()
@@ -616,9 +1234,17 @@ async function handleWeblnEnable(sender) {
   } catch (err) { return { error: classifyError(err) } }
 }
 
+async function requireWeblnEnabled(sender) {
+  const origin = getSenderOrigin(sender)
+  await requireUnlocked(origin)
+  const { allowed } = await requestPermission(origin, 'weblnEnable', null, null, getSiteMeta(sender))
+  if (!allowed) return null
+  return origin
+}
+
 async function handleWeblnGetInfo(sender) {
-  const host = sender?.url ? new URL(sender.url).hostname : null
-  await requireUnlocked(host)
+  const origin = await requireWeblnEnabled(sender)
+  if (!origin) return { error: 'PERMISSION_DENIED' }
   try {
     const wType = await getActiveWalletType()
     if (wType === 'cashu') {
@@ -635,46 +1261,54 @@ async function handleWeblnGetInfo(sender) {
 }
 
 async function handleWeblnSendPayment(params, sender) {
-  const host = new URL(sender.url).hostname
-  await requireUnlocked(host)
+  const origin = await requireWeblnEnabled(sender)
+  if (!origin) return { error: 'PERMISSION_DENIED' }
 
-  const invoice = params[0]
+  const invoice = validateInvoice(params[0])
+  if (!safeDecode11(invoice)) return { error: 'INVALID_REQUEST' }
   const amountSats = parseBolt11Amount(invoice)
-  if (amountSats && await checkBudget(host, amountSats)) {
+  const reservation = amountSats ? await reserveSpend(origin, amountSats) : null
+  if (reservation) {
     try {
       const result = await walletPayInvoice(invoice, amountSats)
-      const updated = await recordSpend(host, amountSats)
-      if (updated) notifyBudgetSpend(host, amountSats, updated.budget - updated.spent).catch(() => {})
+      const updated = reservation.entry
+      notifyBudgetSpend(origin, amountSats, updated.budget - updated.spent).catch(() => {})
       return { result: { preimage: result.preimage } }
-    } catch (err) { return { error: classifyError(err) } }
+    } catch (err) {
+      await refundSpend(origin, reservation.reservationId).catch(() => {})
+      return { error: classifyError(err) }
+    }
   }
 
-  const allowance = await getAllowance(host)
+  const allowance = await getAllowance(origin)
   const paymentMeta = { amountSats, budgetSats: allowance?.budget || null, spentSats: allowance?.spent || 0 }
-  const allowed = await requestPermission(host, 'weblnSendPayment', null, paymentMeta, getSiteMeta(sender))
+  const { allowed } = await requestPermission(origin, 'weblnSendPayment', null, paymentMeta, getSiteMeta(sender))
   if (!allowed) return { error: 'PERMISSION_DENIED' }
   try {
     const result = await walletPayInvoice(invoice, amountSats)
-    if (amountSats) await recordSpend(host, amountSats)
+    if (amountSats) await recordSpend(origin, amountSats)
     return { result: { preimage: result.preimage } }
   } catch (err) { return { error: classifyError(err) } }
 }
 
 async function handleWeblnMakeInvoice(params, sender) {
-  const host = sender?.url ? new URL(sender.url).hostname : null
-  await requireUnlocked(host)
+  const origin = await requireWeblnEnabled(sender)
+  if (!origin) return { error: 'PERMISSION_DENIED' }
   try {
     const args = params[0]
-    const amount = typeof args === 'number' ? args : args?.amount
+    const amount = validateSats(typeof args === 'number' ? args : args?.amount)
     const description = typeof args === 'object' ? args?.defaultMemo || '' : ''
+    if (typeof description !== 'string' || new TextEncoder().encode(description).byteLength > 4096) {
+      return { error: 'INVALID_REQUEST' }
+    }
     const inv = await walletMakeInvoice(amount, description)
     return { result: { paymentRequest: inv.invoice } }
   } catch (err) { return { error: classifyError(err) } }
 }
 
 async function handleWeblnGetBalance(sender) {
-  const host = sender?.url ? new URL(sender.url).hostname : null
-  await requireUnlocked(host)
+  const origin = await requireWeblnEnabled(sender)
+  if (!origin) return { error: 'PERMISSION_DENIED' }
   try {
     const balance = await walletGetBalance()
     return { result: { balance } }
@@ -682,33 +1316,32 @@ async function handleWeblnGetBalance(sender) {
 }
 
 async function handleWeblnKeysend(params, sender) {
-  const host = new URL(sender.url).hostname
-  await requireUnlocked(host)
+  const origin = await requireWeblnEnabled(sender)
+  if (!origin) return { error: 'PERMISSION_DENIED' }
 
-  const args = params[0] || {}
-  const { destination, amount, customRecords } = args
-  if (!destination || !amount) return { error: 'Missing destination or amount' }
-
-  const amountSats = typeof amount === 'string' ? parseInt(amount, 10) : amount
-  if (!amountSats || amountSats <= 0) return { error: 'Invalid amount' }
+  const { destination, amount: amountSats, customRecords } = validateKeysend(params[0])
 
   // Permission check + budget (same flow as sendPayment)
-  if (await checkBudget(host, amountSats)) {
+  const reservation = await reserveSpend(origin, amountSats)
+  if (reservation) {
     try {
       const result = await walletKeysend(destination, amountSats, customRecords)
-      const updated = await recordSpend(host, amountSats)
-      if (updated) notifyBudgetSpend(host, amountSats, updated.budget - updated.spent).catch(() => {})
+      const updated = reservation.entry
+      notifyBudgetSpend(origin, amountSats, updated.budget - updated.spent).catch(() => {})
       return { result }
-    } catch (err) { return { error: classifyError(err) } }
+    } catch (err) {
+      await refundSpend(origin, reservation.reservationId).catch(() => {})
+      return { error: classifyError(err) }
+    }
   }
 
-  const allowance = await getAllowance(host)
+  const allowance = await getAllowance(origin)
   const paymentMeta = { amountSats, budgetSats: allowance?.budget || null, spentSats: allowance?.spent || 0 }
-  const allowed = await requestPermission(host, 'weblnKeysend', null, paymentMeta, getSiteMeta(sender))
+  const { allowed } = await requestPermission(origin, 'weblnKeysend', null, paymentMeta, getSiteMeta(sender))
   if (!allowed) return { error: 'PERMISSION_DENIED' }
   try {
     const result = await walletKeysend(destination, amountSats, customRecords)
-    if (amountSats) await recordSpend(host, amountSats)
+    if (amountSats) await recordSpend(origin, amountSats)
     return { result }
   } catch (err) { return { error: classifyError(err) } }
 }
@@ -748,16 +1381,6 @@ const PUBLIC_HANDLERS = {
   WEBLN_MAKE_INVOICE: (params, sender) => handleWeblnMakeInvoice(params, sender),
   WEBLN_GET_BALANCE: (params, sender) => handleWeblnGetBalance(sender),
   WEBLN_KEYSEND: (params, sender) => handleWeblnKeysend(params, sender),
-  NOSTR_CONNECT_LINK: async (params) => {
-    // Intercepted nostrconnect: link from a web page — open popup or handle directly
-    const [href] = params
-    if (!href) return { error: 'No URI provided' }
-    // Store the URI so the popup can pick it up
-    await chrome.storage.local.set({ pendingNostrConnect: href })
-    // Open the popup (not all browsers support this — fallback to notification)
-    try { await chrome.action.openPopup() } catch {}
-    return { result: { received: true } }
-  },
 }
 
 // ── NIP-46 reconnection state (visible to popup) ────────────────
@@ -770,7 +1393,7 @@ async function proactiveReconnect() {
   const account = await getActiveAccount(_cachedPassword)
   if (!account || account.mode !== 'nip46') return
   if (!account.nip46Session?.bunkerUri || !account.nip46ClientSecretHex) return
-  if (remoteSigner?.connected) return
+  if (remoteSigner?.connected && remoteSignerAccountId === account.id) return
 
   nip46Reconnecting = true
   try {
@@ -778,19 +1401,47 @@ async function proactiveReconnect() {
       account.nip46Session.bunkerUri,
       account.nip46ClientSecretHex
     )
+    remoteSignerAccountId = account.id
   } catch (err) {
     log.warn('nip46', 'PROACTIVE_RECONNECT_FAILED', { err: err?.message })
     remoteSigner = null
+    remoteSignerAccountId = null
   } finally {
     nip46Reconnecting = false
   }
 }
 
 export default defineBackground(() => {
-  // Sweep stale prompt_event_* entries from previous sessions
-  chrome.storage.local.get(null).then((all) => {
-    const staleKeys = Object.keys(all).filter(k => k.startsWith(PROMPT_EVENT_PREFIX))
-    if (staleKeys.length) chrome.storage.local.remove(staleKeys)
+  // Content scripts never need direct vault access. Restrict both persistent
+  // and session storage to extension pages/workers wherever the browser offers
+  // the access-level API.
+  chrome.storage.local.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' }).catch(() => {})
+  chrome.storage.session.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' }).catch(() => {})
+  // Older versions could persist an unlock fallback containing the master
+  // password. It is no longer supported; remove it immediately on upgrade.
+  chrome.storage.local.remove('_sessionFallback').catch(() => {})
+
+  // Sweep abandoned prompt data without deleting a still-open prompt after an
+  // MV3 worker restart. Context lives in memory-only session storage.
+  Promise.all([chrome.storage.local.get(null), chrome.storage.session.get(null)]).then(([local, session]) => {
+    const now = Date.now()
+    const liveIds = new Set()
+    const staleContexts = []
+    for (const [key, context] of Object.entries(session)) {
+      if (!key.startsWith(PROMPT_CONTEXT_PREFIX)) continue
+      const requestId = key.slice(PROMPT_CONTEXT_PREFIX.length)
+      if (Number.isFinite(context?.createdAt) && now - context.createdAt <= 5 * 60 * 1000) liveIds.add(requestId)
+      else staleContexts.push(key)
+    }
+    const staleEvents = Object.keys(session).filter(key =>
+      key.startsWith(PROMPT_EVENT_PREFIX)
+      && !liveIds.has(key.slice(PROMPT_EVENT_PREFIX.length)),
+    )
+    const staleSessionKeys = [...staleContexts, ...staleEvents]
+    if (staleSessionKeys.length) chrome.storage.session.remove(staleSessionKeys)
+    // Remove prompt payloads left on disk by pre-hardening releases.
+    const legacyEvents = Object.keys(local).filter(key => key.startsWith(PROMPT_EVENT_PREFIX))
+    if (legacyEvents.length) chrome.storage.local.remove(legacyEvents)
   })
 
   // Startup integrity check — verify encrypted stores can be read
@@ -835,11 +1486,11 @@ export default defineBackground(() => {
     try {
       const tab = await chrome.tabs.get(tabId)
       if (!tab?.url) { chrome.action.setBadgeText({ tabId, text: '' }); return }
-      const host = new URL(tab.url).hostname
-      if (!host) { chrome.action.setBadgeText({ tabId, text: '' }); return }
+      const origin = normalizeWebOrigin(tab.url)
+      if (!origin) { chrome.action.setBadgeText({ tabId, text: '' }); return }
       const activeId = await getActiveAccountId()
       const perms = await getPermissions(activeId)
-      const hostPerms = perms[host]
+      const hostPerms = perms[origin]
       if (!hostPerms || Object.keys(hostPerms).length === 0) {
         chrome.action.setBadgeText({ tabId, text: '' })
       } else {
@@ -856,6 +1507,14 @@ export default defineBackground(() => {
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (changeInfo.url || changeInfo.status === 'complete') updateBadgeForTab(tabId)
   })
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    permissionSession.clearTab(tabId)
+    requestCoordinator.resolveWhere(
+      context => context?.tabId === tabId,
+      false,
+      { removeEventData: true, closePrompt: true },
+    ).catch(() => {})
+  })
 
   // ── Prompt keepalive ports ──
   // Each open prompt window holds a Port named `prompt:<requestId>`. While the
@@ -867,11 +1526,22 @@ export default defineBackground(() => {
   // Registered synchronously so a connect that respawns the worker is caught.
   chrome.runtime.onConnect.addListener((port) => {
     if (!port.name?.startsWith('prompt:')) return
+    let trustedPrompt = false
+    try {
+      const senderUrl = new URL(port.sender?.url || '')
+      trustedPrompt = port.sender?.id === chrome.runtime.id
+        && senderUrl.origin === new URL(chrome.runtime.getURL('/')).origin
+        && senderUrl.pathname.endsWith('/prompt.html')
+    } catch { /* untrusted */ }
+    if (!trustedPrompt) {
+      port.disconnect()
+      return
+    }
     const requestId = port.name.slice('prompt:'.length)
     port.onMessage.addListener(() => {}) // no-op; page pings reset the idle timer
     port.onDisconnect.addListener(() => {
       if (requestCoordinator.has(requestId)) {
-        requestCoordinator.resolve(requestId, false).catch(() => {})
+        requestCoordinator.resolve(requestId, false, { removeEventData: true }).catch(() => {})
       }
     })
   })
@@ -881,12 +1551,23 @@ export default defineBackground(() => {
 
     const handle = async () => {
       try {
+        const extensionOrigin = new URL(chrome.runtime.getURL('/')).origin
+        const messageOrigin = (() => {
+          try { return sender?.url ? new URL(sender.url).origin : null } catch { return null }
+        })()
+        const fromThisExtension = sender?.id === chrome.runtime.id
+        const fromExtensionPage = fromThisExtension && messageOrigin === extensionOrigin
+        const fromContentScript = fromThisExtension
+          && !!sender?.tab?.id
+          && !!normalizeWebOrigin(sender?.url || sender?.tab?.url || '')
+
         // ── Public routes (from content scripts) ──
         if (type === 'PUBLIC') {
+          if (!fromContentScript) return { error: 'UNAUTHORIZED_SENDER' }
           const { action, params: publicParams } = params?.[0] || {}
 
           // Anti-spam: reject if origin was previously denied
-          const origin = sender.tab?.url ? new URL(sender.tab.url).origin : null
+          const origin = getSenderOrigin(sender)
           if (origin && rejectedOrigins.has(origin)) {
             return { error: 'Access denied. Reload the page to try again.' }
           }
@@ -905,6 +1586,18 @@ export default defineBackground(() => {
           }
         }
 
+        // The injection probe is the only non-PUBLIC message accepted from a
+        // content script. The claimed host must match the sender frame.
+        if (type === 'SHOULD_INJECT') {
+          if (!fromContentScript) return { error: 'UNAUTHORIZED_SENDER', inject: false }
+          const requestedHost = message.host || ''
+          const actualHost = new URL(sender.url || sender.tab.url).hostname
+          if (!requestedHost || requestedHost !== actualHost) return { error: 'INVALID_REQUEST', inject: false }
+          return { inject: !(await isBlocked(actualHost)) }
+        }
+
+        if (!fromExtensionPage) return { error: 'UNAUTHORIZED_SENDER' }
+
         // ── Internal routes (from popup / options / prompt) ──
         switch (type) {
 
@@ -916,57 +1609,69 @@ export default defineBackground(() => {
           }
           case 'SETUP_PASSWORD': {
             const pw = params?.[0]
-            if (!pw || pw.length < 8) return { error: 'Password must be at least 8 characters' }
+            const passwordError = validateNewPassword(pw)
+            if (passwordError) return { error: passwordError }
+            if (await isPasswordSet()) return { error: 'PASSWORD_ALREADY_SET' }
             await setupPassword(pw)
+            await clearPasswordFailures()
             _cachedPassword = pw
             await saveSession({ password: pw, unlockedAt: Date.now() })
             return { result: { ok: true } }
           }
           case 'UNLOCK': {
             const pw = params?.[0]
-            const valid = await verifyPassword(pw)
-            if (!valid) throw new Error('Wrong password')
+            const authentication = await authenticateMasterPassword(pw)
+            if (!authentication.valid) return { error: authentication.error }
             _cachedPassword = pw
             await saveSession({ password: pw, unlockedAt: Date.now() })
             rejectedOrigins.clear()
             return { result: { ok: true } }
           }
           case 'LOCK':
-            _cachedPassword = null
-            await clearSession()
-            teardownNwc()
-            teardownCashu()
-            if (remoteSigner) { try { remoteSigner.close() } catch {} remoteSigner = null }
+            await clearUnlockedSessionState()
             return { result: { ok: true } }
           case 'CHANGE_PASSWORD': {
             const [oldPw, newPw] = params || []
+            const passwordError = validateNewPassword(newPw)
+            if (passwordError) return { error: passwordError }
             // Verify old password first
-            const valid = await verifyPassword(oldPw)
-            if (!valid) return { error: 'WRONG_PASSWORD' }
+            const authentication = await authenticateMasterPassword(oldPw)
+            if (!authentication.valid) return { error: authentication.error }
             // Re-encrypt data BEFORE updating the password hash.
             // If re-encryption fails, data stays accessible with the old password.
             // Collect Cashu wallet IDs BEFORE re-encryption (using old password)
-            const cashuWalletIds = (await getWalletSummaries(oldPw))
-              .filter(w => w.type === 'cashu').map(w => w.id)
-            await reEncryptAccounts(oldPw, newPw)
-            await reEncryptWallets(oldPw, newPw)
-            // Re-encrypt Cashu proof stores (still encrypted with old password)
-            for (const wId of cashuWalletIds) {
-              await reEncryptProofStore(wId, oldPw, newPw)
-            }
-            // Now safe to update the hash — data already uses new password
-            await changePassword(oldPw, newPw)
+            const cashuWallets = (await getWalletSummaries(oldPw))
+              .filter(w => w.type === 'cashu')
+            const migrationKeys = [
+              'accounts', 'walletConfigs', 'transactionMetadata',
+              'passwordHash', 'passwordSalt', 'passwordKdf',
+              ...cashuWallets.flatMap(wallet => [
+                `cashuProofs_${wallet.id}`,
+                `cashuTxHistory_${wallet.id}`,
+                cashuRecoveryKey(wallet.id),
+                cashuMeltJournalKey(wallet.id),
+                cashuMintJournalKey(wallet.id),
+              ]),
+            ]
+            await withStorageRollback(chrome.storage.local, migrationKeys, async () => {
+              await reEncryptAccounts(oldPw, newPw)
+              await reEncryptWallets(oldPw, newPw)
+              await reEncryptTransactionMetadata(oldPw, newPw)
+              for (const wallet of cashuWallets) {
+                await reEncryptProofStore(wallet.id, oldPw, newPw, wallet.mints?.[0])
+                await reEncryptCashuTxHistory(wallet.id, oldPw, newPw)
+                await reEncryptCashuRecovery(wallet.id, oldPw, newPw)
+                await reEncryptCashuMeltJournal(wallet.id, oldPw, newPw)
+                await reEncryptCashuMintJournal(wallet.id, oldPw, newPw)
+              }
+              // The verifier changes last, after every vault can use newPw.
+              await changePassword(oldPw, newPw)
+            })
+            // Cached Cashu counter sources still reference the old password.
+            teardownCashu()
             _cachedPassword = newPw
             await saveSession({ password: newPw, unlockedAt: Date.now() })
             return { result: { ok: true } }
-          }
-
-          // ── Injection check ──
-          case 'SHOULD_INJECT': {
-            const host = message.host || ''
-            if (!host) return { inject: false }
-            const blocked = await isBlocked(host)
-            return { inject: !blocked }
           }
 
           // ── Blocklist ──
@@ -985,7 +1690,9 @@ export default defineBackground(() => {
             return { result: { autoLockMinutes: data.autoLockMinutes ?? 0, theme: data.theme, mode: data.mode } }
           }
           case 'SET_AUTO_LOCK': {
-            await chrome.storage.local.set({ autoLockMinutes: params?.[0] ?? 0 })
+            const minutes = Number(params?.[0])
+            if (![0, 1, 5, 15, 30].includes(minutes)) return { error: 'INVALID_REQUEST' }
+            await chrome.storage.local.set({ autoLockMinutes: minutes })
             // Refresh session timestamp so new timeout applies from now
             if (isUnlocked()) {
               await saveSession({ password: _cachedPassword, unlockedAt: Date.now() })
@@ -1029,7 +1736,7 @@ export default defineBackground(() => {
 
           // ── Account management ──
           case 'GET_ACTIVE_ACCOUNT':
-            return { result: await getActiveAccount(_cachedPassword) }
+            return { result: await getActiveAccountForClient(_cachedPassword) }
           case 'GET_ACCOUNTS':
             return { result: await getAccountSummaries(_cachedPassword) }
           case 'CREATE_ACCOUNT':
@@ -1038,13 +1745,80 @@ export default defineBackground(() => {
             return { result: await createAccountWithMnemonic(_cachedPassword, params?.[0]) }
           case 'IMPORT_ACCOUNT':
             return { result: await importAccount(_cachedPassword, params?.[0], params?.[1]) }
+          case 'DISCOVER_MNEMONIC_IDENTITIES':
+            return { result: await discoverNip06Identities(params?.[0]) }
           case 'IMPORT_FROM_MNEMONIC':
-            return { result: await importFromMnemonic(_cachedPassword, params?.[0], params?.[1]) }
+            return { result: await importFromMnemonic(_cachedPassword, params?.[0], params?.[1], params?.[2] ?? 0) }
+          case 'PERFORM_LIGHTNING_LOGIN': {
+            const account = await getActiveAccount(_cachedPassword)
+            if (!account) return { error: 'NO_ACCOUNT' }
+            if (!account.identitySeed?.mnemonic) {
+              return {
+                error: account.mode === 'nip46'
+                  ? 'LIGHTNING_LOGIN_REMOTE_SIGNER'
+                  : 'LIGHTNING_LOGIN_RECOVERY_WORDS_REQUIRED',
+              }
+            }
+
+            const proof = proveLightningLogin(account.identitySeed.mnemonic, params?.[0])
+            const result = await submitLightningLogin(proof.callbackUrl)
+            if (result.ok || result.requestSent) {
+              const now = Math.floor(Date.now() / 1000)
+              const sites = Array.isArray(account.lightningLoginSites)
+                ? account.lightningLoginSites.filter((site) => (site?.origin || `https://${site?.domain}`) !== proof.challenge.origin)
+                : []
+              const previous = account.lightningLoginSites?.find((site) =>
+                (site?.origin || `https://${site?.domain}`) === proof.challenge.origin
+              )
+              sites.unshift({
+                domain: proof.challenge.domain,
+                origin: proof.challenge.origin,
+                firstLoginAt: previous?.firstLoginAt || now,
+                lastLoginAt: now,
+                loginCount: (previous?.loginCount || 0) + 1,
+                lastAction: proof.challenge.action,
+                linkingPubkey: proof.linkingPubkey,
+              })
+              await updateAccount(_cachedPassword, account.id, { lightningLoginSites: sites.slice(0, 100) })
+            }
+            return {
+              result: {
+                ...result,
+                domain: proof.challenge.domain,
+                action: proof.challenge.action,
+              },
+            }
+          }
+          case 'GET_LIGHTNING_LOGIN_SITES': {
+            const account = await getActiveAccount(_cachedPassword)
+            const sites = Array.isArray(account?.lightningLoginSites) ? account.lightningLoginSites : []
+            return { result: sites.slice(0, 100).map(site => ({
+              origin: site.origin || (site.domain ? `https://${site.domain}` : ''),
+              domain: site.domain || '',
+              firstLoginAt: site.firstLoginAt || 0,
+              lastLoginAt: site.lastLoginAt || 0,
+              loginCount: site.loginCount || 0,
+              lastAction: site.lastAction || 'login',
+            })).filter(site => normalizeWebOrigin(site.origin)) }
+          }
+          case 'CLEAR_LIGHTNING_LOGIN_SITES': {
+            const account = await getActiveAccount(_cachedPassword)
+            if (!account) return { error: 'NO_ACCOUNT' }
+            await updateAccount(_cachedPassword, account.id, { lightningLoginSites: [] })
+            return { result: { cleared: true } }
+          }
           case 'CREATE_NIP46_ACCOUNT':
             return { result: await createNip46Account(_cachedPassword, params?.[0]) }
           case 'SWITCH_ACCOUNT': {
             _accountSwitching = true
             try {
+              const previousAccountId = await getActiveAccountId()
+              permissionSession.clear()
+              await requestCoordinator.resolveWhere(
+                context => context?.profileId === previousAccountId,
+                false,
+                { removeEventData: true, closePrompt: true },
+              )
               teardownCashu()
               const cleaned = await performAccountSwitch(params?.[0], {
                 nwcClient, nwcNotifUnsub, remoteSigner,
@@ -1052,23 +1826,106 @@ export default defineBackground(() => {
               nwcClient = cleaned.nwcClient
               nwcNotifUnsub = cleaned.nwcNotifUnsub
               remoteSigner = cleaned.remoteSigner
+              remoteSignerAccountId = null
               return { result: { switched: true } }
             } finally {
               _accountSwitching = false
             }
           }
-          case 'REMOVE_ACCOUNT':
-            await removeAccount(_cachedPassword, params?.[0])
+          case 'REMOVE_ACCOUNT': {
+            const accountId = params?.[0]
+            const ownedCashuWallets = (await getWalletSummaries(_cachedPassword))
+              .filter(wallet => wallet.type === 'cashu' && wallet.ownerAccountId === accountId)
+            for (const wallet of ownedCashuWallets) {
+              if (hasVolatileCashuRecovery(wallet.id) || await hasCashuRecovery(wallet.id)) {
+                return { error: 'CASHU_RECOVERY_REQUIRED' }
+              }
+              if (await hasCashuMeltJournal(wallet.id)) return { error: 'CASHU_PAYMENT_PENDING' }
+              if (await hasCashuMintJournal(wallet.id)) return { error: 'CASHU_INVOICE_PENDING' }
+              const balance = await getCashuBalance(wallet.id, _cachedPassword, wallet.mints?.[0])
+              if (balance > 0) return { error: 'CASHU_BALANCE_REMAINS' }
+            }
+            await requestCoordinator.resolveWhere(
+              context => context?.profileId === accountId,
+              false,
+              { removeEventData: true, closePrompt: true },
+            )
+            permissionSession.clearProfile(accountId)
+            await removeAccountTransactionMetadata(_cachedPassword, accountId)
+            await clearAllPermissions(accountId)
+            await chrome.storage.local.remove(`backupExported_${accountId}`)
+            for (const wallet of ownedCashuWallets) {
+              await clearProofStore(wallet.id)
+              await clearCashuTxHistory(wallet.id)
+              await clearCashuRecovery(wallet.id)
+              await clearCashuMeltJournal(wallet.id)
+              await clearCashuMintJournal(wallet.id)
+              await removeWalletTransactionMetadataEverywhere(_cachedPassword, wallet.id)
+              await removeWallet(wallet.id, _cachedPassword)
+            }
+            await removeAccount(_cachedPassword, accountId)
             if (remoteSigner) { await remoteSigner.disconnect(); remoteSigner = null }
+            remoteSignerAccountId = null
             return { result: { removed: true } }
+          }
           case 'EXPORT_NSEC': {
+            const password = params?.[0]
+            const authentication = await authenticateMasterPassword(password)
+            if (!authentication.valid) return { error: authentication.error }
             const acct = await getActiveAccount(_cachedPassword)
             if (!acct || acct.mode !== 'local' || !acct.secretHex) {
               return { error: 'No local key to export' }
             }
-            // Track export for backup reminder
-            await chrome.storage.local.set({ [`backupExported_${acct.id}`]: Date.now() })
             return { result: { nsec: nip19.nsecEncode(hexToBytes(acct.secretHex)) } }
+          }
+          case 'EXPORT_IDENTITY_BACKUP': {
+            const password = params?.[0]
+            const authentication = await authenticateMasterPassword(password)
+            if (!authentication.valid) return { error: authentication.error }
+            const acct = await getActiveAccount(_cachedPassword)
+            if (!acct || acct.mode !== 'local') return { error: 'No local identity to export' }
+            if (acct.identitySeed?.mnemonic) {
+              const value = acct.identitySeed.mnemonic
+              return { result: {
+                kind: 'mnemonic',
+                value,
+                accountId: acct.id,
+                challenge: await createBackupChallenge(acct, value, 'mnemonic'),
+              } }
+            }
+            if (!acct.secretHex) return { error: 'No recovery key available' }
+            const value = nip19.nsecEncode(hexToBytes(acct.secretHex))
+            return { result: {
+              kind: 'nsec',
+              value,
+              accountId: acct.id,
+              challenge: await createBackupChallenge(acct, value, 'nsec'),
+            } }
+          }
+          case 'BEGIN_IDENTITY_BACKUP_VERIFICATION': {
+            const accountId = params?.[0]
+            const acct = (await getAccounts(_cachedPassword))[accountId]
+            if (!acct || acct.mode !== 'local') return { error: 'Local identity not found' }
+            const kind = acct.identitySeed?.mnemonic ? 'mnemonic' : 'nsec'
+            const value = kind === 'mnemonic'
+              ? acct.identitySeed.mnemonic
+              : nip19.nsecEncode(hexToBytes(acct.secretHex))
+            return { result: await createBackupChallenge(acct, value, kind) }
+          }
+          case 'CONFIRM_IDENTITY_BACKUP': {
+            const [accountId, token, answers] = params || []
+            const acct = (await getAccounts(_cachedPassword))[accountId]
+            if (!acct || acct.mode !== 'local') return { error: 'Local identity not found' }
+            if (!(await confirmBackupChallenge(accountId, token, answers))) {
+              return { error: 'BACKUP_VERIFICATION_FAILED' }
+            }
+            if (acct.identitySeed?.mnemonic) {
+              await updateAccount(_cachedPassword, accountId, {
+                identitySeed: { ...acct.identitySeed, backupConfirmed: true },
+              })
+            }
+            await chrome.storage.local.set({ [`backupExported_${accountId}`]: Date.now() })
+            return { result: { confirmed: true } }
           }
           case 'CHECK_BACKUP_STATUS': {
             const acct = await getActiveAccount(_cachedPassword)
@@ -1088,11 +1945,13 @@ export default defineBackground(() => {
             try {
               // Gracefully disconnect any existing remote signer before connecting
               if (remoteSigner) { try { await remoteSigner.disconnect() } catch {} remoteSigner = null }
+              remoteSignerAccountId = null
               const parsed = parseConnectionURI(bunkerUri)
               const clientSecret = (await getAccounts(_cachedPassword))[accountId]?.nip46ClientSecretHex
               if (!clientSecret) return { error: 'Account missing client secret key' }
               const signer = await connectBunker(bunkerUri, clientSecret)
               remoteSigner = signer
+              remoteSignerAccountId = accountId
               const pubkey = await signer.getPublicKey()
               const updates = {
                 pubkey,
@@ -1125,6 +1984,7 @@ export default defineBackground(() => {
           }
           case 'DISCONNECT_NIP46':
             if (remoteSigner) { await remoteSigner.disconnect(); remoteSigner = null }
+            remoteSignerAccountId = null
             if (_nostrConnectAbort) { _nostrConnectAbort.abort(); _nostrConnectAbort = null }
             return { result: { disconnected: true } }
 
@@ -1158,6 +2018,7 @@ export default defineBackground(() => {
                 signal: abortController.signal,
               }).then(async ({ signer, remotePubkey, relayUrl: connectedRelay }) => {
                 remoteSigner = signer
+                remoteSignerAccountId = accountId
                 _nostrConnectAbort = null
                 const pubkey = await signer.getPublicKey()
                 const updates = { pubkey, nip46Session: {
@@ -1193,7 +2054,7 @@ export default defineBackground(() => {
 
           // ── Profile ──
           case 'PUBLISH_PROFILE': {
-            const [profileData] = params
+            const profileData = sanitizeProfileInput(params?.[0])
             const account = await getActiveAccount(_cachedPassword)
             if (!account || account.mode !== 'local') return { error: 'Local account required to publish profile' }
             const relays = account.pubkey ? await getPoolRelays(account.pubkey, 'account') : undefined
@@ -1212,65 +2073,25 @@ export default defineBackground(() => {
 
           // ── Wallet ──
           case 'NUTBITS_CONNECT': {
-            // Open NUTbits deep link — intercept callback redirect asynchronously.
-            // NUTbits API serves GET /connect (animated HTML page) which POSTs to
-            // create a dedicated NWC connection, then redirects to our callback URL.
-            // Chrome blocks web→chrome-extension:// redirects, so we use a dummy
-            // HTTP callback with a per-session token and intercept via tabs.onUpdated.
-            const expectedCallback = getCallbackUrl()
             const deepLink = buildNutbitsDeepLink()
-            const tab = await chrome.tabs.create({ url: deepLink })
-
-            const cleanup = () => {
-              chrome.tabs.onUpdated.removeListener(onUpdated)
-              chrome.tabs.onRemoved.removeListener(onRemoved)
-              clearTimeout(timeoutId)
-              rotateCallbackToken() // ensure one-time use
-            }
-
-            const onUpdated = async (tabId, changeInfo) => {
-              if (tabId !== tab.id || !changeInfo.url) return
-              if (!changeInfo.url.startsWith(expectedCallback)) return
-              cleanup()
-              try {
-                const url = new URL(changeInfo.url)
-                const raw = url.searchParams.get('value')
-                if (!raw) {
-                  chrome.tabs.update(tabId, { url: chrome.runtime.getURL('nwc-callback.html?error=no_value') })
-                  return
-                }
-                const nwcString = decodeURIComponent(raw)
-                if (!nwcString.startsWith('nostr+walletconnect://')) {
-                  chrome.tabs.update(tabId, { url: chrome.runtime.getURL('nwc-callback.html?error=invalid') })
-                  return
-                }
-                const walletId = await addWallet(nwcString, 'NUTbits', _cachedPassword)
-                teardownNwc()
-                try {
-                  await ensureNWC()
-                } catch (connErr) {
-                  // Connection test failed — rollback the stored wallet
-                  await removeWallet(walletId, _cachedPassword).catch(() => {})
-                  throw connErr
-                }
-                chrome.tabs.update(tabId, { url: chrome.runtime.getURL('nwc-callback.html?success=1') })
-              } catch (err) {
-                console.error('NUTbits connect failed:', err)
-                chrome.tabs.update(tabId, { url: chrome.runtime.getURL('nwc-callback.html?error=connect_failed') })
-              }
-            }
-
-            const onRemoved = (tabId) => {
-              if (tabId !== tab.id) return
-              cleanup()
-            }
-
-            // Safety: clean up listeners after 2 minutes if nothing happened
-            const timeoutId = setTimeout(cleanup, 120_000)
-
-            chrome.tabs.onUpdated.addListener(onUpdated)
-            chrome.tabs.onRemoved.addListener(onRemoved)
+            await chrome.tabs.create({ url: deepLink })
             return { result: { opened: true } }
+          }
+          case 'NUTBITS_CALLBACK': {
+            const [{ value, token } = {}] = params || []
+            if (!verifyCallbackToken(token)) return { error: 'INVALID_REQUEST' }
+            rotateCallbackToken()
+            if (typeof value !== 'string' || !value) return { error: 'No wallet connection was returned' }
+            const nwcString = decodeURIComponent(value)
+            const walletId = await addWallet(nwcString, 'NUTbits', _cachedPassword)
+            teardownNwc()
+            try {
+              await ensureNWC()
+            } catch (error) {
+              await removeWallet(walletId, _cachedPassword).catch(() => {})
+              throw error
+            }
+            return { result: { connected: true } }
           }
           case 'NWC_DEEPLINK_CONNECT':
           case 'CONNECT_WALLET': {
@@ -1293,6 +2114,28 @@ export default defineBackground(() => {
           }
           case 'DISCONNECT_WALLET': {
             const [walletId] = params || []
+            const storedWallets = await getWalletSummaries(_cachedPassword)
+            const cashuTargets = walletId
+              ? storedWallets.filter(wallet => wallet.id === walletId && wallet.type === 'cashu')
+              : storedWallets.filter(wallet => wallet.type === 'cashu')
+            for (const cashuWallet of cashuTargets) {
+              if (hasVolatileCashuRecovery(cashuWallet.id)
+                || await hasCashuRecovery(cashuWallet.id)) {
+                return { error: 'CASHU_RECOVERY_REQUIRED' }
+              }
+              if (await hasCashuMeltJournal(cashuWallet.id)) {
+                return { error: 'CASHU_PAYMENT_PENDING' }
+              }
+              if (await hasCashuMintJournal(cashuWallet.id)) {
+                return { error: 'CASHU_INVOICE_PENDING' }
+              }
+              const balance = await getCashuBalance(
+                cashuWallet.id,
+                _cachedPassword,
+                cashuWallet.mints?.[0],
+              )
+              if (balance > 0) return { error: 'CASHU_BALANCE_REMAINS' }
+            }
             teardownNwc()
             teardownCashu()
             teardownLnbitsWs()
@@ -1303,9 +2146,23 @@ export default defineBackground(() => {
               if (w?.type === 'cashu') {
                 await clearProofStore(walletId)
                 await clearCashuTxHistory(walletId)
+                await clearCashuRecovery(walletId)
+                await clearCashuMeltJournal(walletId)
+                await clearCashuMintJournal(walletId)
               }
+              await removeWalletTransactionMetadataEverywhere(_cachedPassword, walletId)
               await removeWallet(walletId, _cachedPassword)
             } else {
+              const wallets = await getWalletSummaries(_cachedPassword)
+              for (const wallet of wallets) {
+                if (wallet.type !== 'cashu') continue
+                await clearProofStore(wallet.id)
+                await clearCashuTxHistory(wallet.id)
+                await clearCashuRecovery(wallet.id)
+                await clearCashuMeltJournal(wallet.id)
+                await clearCashuMintJournal(wallet.id)
+              }
+              await clearAllTransactionMetadata()
               await clearAllWallets()
             }
             // Reconnect to next active wallet if one exists
@@ -1322,8 +2179,21 @@ export default defineBackground(() => {
               : null
             try {
               if (wallet?.type === 'cashu') {
-                const balance = await getCashuBalance(wallet.id, _cachedPassword)
-                return { result: { connected: true, balance, activeWallet } }
+                // Catch request payments that arrived while the wallet was
+                // closed (fire and forget, throttled inside).
+                sweepRequestPaymentsSoon(wallet)
+                const snapshot = await getCashuSpendableSnapshot(wallet)
+                const recoveryPending = hasVolatileCashuRecovery(wallet.id)
+                  || await hasCashuRecovery(wallet.id)
+                const incomingPending = await hasCashuMintJournal(wallet.id)
+                return { result: {
+                  connected: true,
+                  balance: snapshot.total,
+                  activeWallet,
+                  recoveryPending,
+                  paymentPending: snapshot.paymentPending,
+                  incomingPending,
+                } }
               }
               if (wallet?.type === 'lnbits') {
                 if (!lnbitsWsHandle) connectLnbitsWs(wallet) // Reconnect WS if needed
@@ -1338,7 +2208,10 @@ export default defineBackground(() => {
                   activeWallet,
                 } }
               }
-            } catch (err) { log.debug('wallet', 'STATUS_CHECK_FAILED', { err: err?.message }) }
+            } catch (err) {
+              if (err?.code === 'VAULT_INTEGRITY') throw err
+              log.debug('wallet', 'STATUS_CHECK_FAILED', { err: err?.message })
+            }
             // Keep the wallet identity on transient failures so the UI shows a
             // reconnecting state instead of the "no wallet" empty screen.
             return { result: { connected: false, balance: null, activeWallet } }
@@ -1403,7 +2276,13 @@ export default defineBackground(() => {
             const wType = await getActiveWalletType()
             if (wType === 'cashu' && lookupParams?.quoteId) {
               const w = await getActiveWallet(_cachedPassword)
-              return { result: await checkMintQuote(getCashuMint(w), lookupParams.quoteId) }
+              return { result: await checkMintQuote(
+                getCashuMint(w),
+                lookupParams.quoteId,
+                w.id,
+                _cachedPassword,
+                await getCashuSeed(w),
+              ) }
             }
             if (wType === 'lnbits' && lookupParams?.payment_hash) {
               const w = await getActiveWallet(_cachedPassword)
@@ -1415,9 +2294,14 @@ export default defineBackground(() => {
           case 'WALLET_LIST_TRANSACTIONS': {
             const [txParams] = params || []
             const wType = await getActiveWalletType()
+            const accountId = await getActiveAccountId()
             if (wType === 'cashu') {
               const w = await getActiveWallet(_cachedPassword)
-              return { result: await getCashuTransactions(w.id, txParams || {}) }
+              const result = await getCashuTransactions(w.id, txParams || {}, _cachedPassword)
+              result.transactions = await enrichTransactionsWithMetadata(
+                _cachedPassword, accountId, w.id, result.transactions,
+              )
+              return { result }
             }
             if (wType === 'lnbits') {
               const w = await getActiveWallet(_cachedPassword)
@@ -1434,10 +2318,36 @@ export default defineBackground(() => {
                 payment_hash: p.checking_id || p.payment_hash,
                 state: p.status === 'success' ? 'settled' : (p.status === 'failed' ? 'failed' : 'pending'),
               }))
-              return { result: { transactions: txs } }
+              return { result: { transactions: await enrichTransactionsWithMetadata(
+                _cachedPassword, accountId, w.id, txs,
+              ) } }
             }
-            const txs = await withNwcRetry(nwc => nwc.listTransactions(txParams || {}))
-            return { result: txs }
+            const wallet = await getActiveWallet(_cachedPassword)
+            const result = await withNwcRetry(nwc => nwc.listTransactions(txParams || {}))
+            if (Array.isArray(result?.transactions)) {
+              result.transactions = await enrichTransactionsWithMetadata(
+                _cachedPassword, accountId, wallet?.id, result.transactions,
+              )
+            }
+            return { result }
+          }
+          case 'SAVE_TRANSACTION_METADATA': {
+            const [transactionId, metadata] = params || []
+            const accountId = await getActiveAccountId()
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!accountId || !wallet?.id) return { error: 'NO_WALLET' }
+            return { result: await saveTransactionMetadata(
+              _cachedPassword, accountId, wallet.id, transactionId, metadata,
+            ) }
+          }
+          case 'GET_TRANSACTION_METADATA': {
+            const [transactionId] = params || []
+            const accountId = await getActiveAccountId()
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!accountId || !wallet?.id) return { result: null }
+            return { result: await getTransactionMetadata(
+              _cachedPassword, accountId, wallet.id, transactionId,
+            ) }
           }
           case 'WALLET_PAY_KEYSEND': {
             const [keysendParams] = params || []
@@ -1457,27 +2367,58 @@ export default defineBackground(() => {
           // ── Cashu-specific handlers ──
           case 'AUTO_CREATE_CASHU_WALLET': {
             const store = await getWalletSummaries(_cachedPassword)
-            if (store.some(w => w.type === 'cashu')) return { result: { skipped: true } }
-            const walletId = await addCashuWallet(DEFAULT_WALLET_NAME, [DEFAULT_MINT], _cachedPassword)
-            // Publish wallet event to relays (non-blocking)
             const account = await getActiveAccount(_cachedPassword)
-            if (account?.secretHex) {
-              const walletPrivkey = bytesToHex(randomBytes(32))
-              publishWalletEvent(
-                hexToBytes(account.secretHex), walletPrivkey, [DEFAULT_MINT], account.pubkey,
-              ).catch(err => log.warn('cashu', 'WALLET_EVENT_PUBLISH_FAILED', { err: err?.message }))
+            if (!account) return { error: 'NO_ACCOUNT' }
+            if (store.some(w => w.type === 'cashu' && w.ownerAccountId === account.id)) {
+              return { result: { skipped: true } }
             }
+            let restoredWallet = null
+            if (account.secretHex) {
+              try {
+                restoredWallet = (await restoreFromRelays(
+                  hexToBytes(account.secretHex), account.pubkey,
+                )).walletData
+              } catch (error) {
+                log.warn('cashu', 'AUTO_RESTORE_FAILED', { err: error?.message })
+              }
+            }
+            const restoredMints = normalizeCashuMintList(restoredWallet?.mints)
+            const restoredPrivkey = isValidCashuPrivkey(restoredWallet?.privkey)
+              ? restoredWallet.privkey
+              : null
+            const walletId = await addCashuWallet(
+              DEFAULT_WALLET_NAME,
+              restoredMints.length > 0 ? restoredMints : [DEFAULT_MINT],
+              _cachedPassword,
+              account.id,
+              restoredPrivkey,
+            )
             log.info('cashu', 'AUTO_CREATED', { walletId })
-            return { result: { walletId } }
+            return { result: { walletId, restoredWalletState: !!restoredPrivkey } }
           }
           case 'CASHU_MINT_TOKENS': {
             const [mintUrl, amountSats, quoteId] = params || []
             const wallet = await getActiveWallet(_cachedPassword)
             if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
-            const result = await mintTokens(mintUrl, amountSats, quoteId, wallet.id, _cachedPassword)
+            await recoverCashuState(wallet)
+            const configuredMint = requireConfiguredCashuMint(wallet, mintUrl)
+            const result = await mintTokens(
+              configuredMint,
+              amountSats,
+              quoteId,
+              wallet.id,
+              _cachedPassword,
+              await getCashuSeed(wallet),
+              wallet.cashuPrivkey,
+            )
+            // mintTokens returns only after the proofs are stored safely.
+            await removeCashuMintQuote(wallet.id, _cachedPassword, quoteId)
             await recordCashuTx(wallet.id, {
               direction: 'in', amount: result.amountSats, description: 'Received via Lightning', state: 'settled',
-            }).catch(err => log.warn('cashu', 'TX_RECORD_FAILED', { err: err?.message }))
+              paymentHash: await cashuQuoteTransactionId(quoteId),
+            }, _cachedPassword).catch(err =>
+              log.warn('cashu', 'TX_RECORD_FAILED', { err: err?.message })
+            )
             syncCashuToRelays(wallet, 'in', result.amountSats).catch(err =>
               log.warn('cashu', 'RELAY_SYNC_FAILED', { err: err?.message })
             )
@@ -1485,17 +2426,53 @@ export default defineBackground(() => {
           }
           case 'CASHU_CHECK_MINT_QUOTE': {
             const [mintUrl, quoteId] = params || []
-            const result = await checkMintQuote(mintUrl, quoteId)
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            const configuredMint = requireConfiguredCashuMint(wallet, mintUrl)
+            const result = await checkMintQuote(
+              configuredMint,
+              quoteId,
+              wallet.id,
+              _cachedPassword,
+              await getCashuSeed(wallet),
+            )
             return { result }
+          }
+          case 'CASHU_WAIT_MINT_QUOTE': {
+            const [mintUrl, quoteId] = params || []
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            const configuredMint = requireConfiguredCashuMint(wallet, mintUrl)
+            return { result: await waitForMintQuote(
+              configuredMint,
+              quoteId,
+              wallet.id,
+              _cachedPassword,
+              await getCashuSeed(wallet),
+            ) }
           }
           case 'CASHU_CREATE_TOKEN': {
             const [amountSats, memo] = params || []
             const wallet = await getActiveWallet(_cachedPassword)
             if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
-            const result = await createEcashToken(getCashuMint(wallet), amountSats, wallet.id, _cachedPassword, memo)
+            await recoverCashuState(wallet)
+            const seed = await getCashuSeed(wallet)
+            const candidates = await getCashuMintCandidates(wallet, Number(amountSats))
+            let result
+            let lastBalanceError
+            for (const mintUrl of candidates) {
+              try {
+                result = await createEcashToken(mintUrl, amountSats, wallet.id, _cachedPassword, memo, seed)
+                break
+              } catch (error) {
+                if (error?.code !== 'CASHU_MINT_BALANCE') throw error
+                lastBalanceError = error
+              }
+            }
+            if (!result) throw lastBalanceError || new Error('No Cashu mint can cover this token')
             await recordCashuTx(wallet.id, {
               direction: 'out', amount: result.amountSats, description: memo || 'Sent token', state: 'settled',
-            }).catch(err => log.warn('cashu', 'TX_RECORD_FAILED', { err: err?.message }))
+            }, _cachedPassword).catch(err => log.warn('cashu', 'TX_RECORD_FAILED', { err: err?.message }))
             syncCashuToRelays(wallet, 'out', result.amountSats).catch(err =>
               log.warn('cashu', 'RELAY_SYNC_FAILED', { err: err?.message })
             )
@@ -1505,13 +2482,22 @@ export default defineBackground(() => {
             const [tokenStr] = params || []
             const wallet = await getActiveWallet(_cachedPassword)
             if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
-            const result = await receiveEcashToken(tokenStr, wallet.id, _cachedPassword)
+            await recoverCashuState(wallet)
+            const result = await receiveEcashToken(
+              tokenStr,
+              wallet.id,
+              _cachedPassword,
+              await getCashuSeed(wallet),
+              wallet.cashuPrivkey,
+            )
+            await addCashuMint(wallet.id, result.mint, _cachedPassword)
             await recordCashuTx(wallet.id, {
               direction: 'in', amount: result.amountSats, description: 'Redeemed token', state: 'settled',
-            }).catch(err => log.warn('cashu', 'TX_RECORD_FAILED', { err: err?.message }))
+            }, _cachedPassword).catch(err => log.warn('cashu', 'TX_RECORD_FAILED', { err: err?.message }))
             syncCashuToRelays(wallet, 'in', result.amountSats).catch(err =>
               log.warn('cashu', 'RELAY_SYNC_FAILED', { err: err?.message })
             )
+            syncMintBackup(wallet)
             return { result }
           }
           case 'CASHU_GET_MINT_INFO': {
@@ -1525,25 +2511,157 @@ export default defineBackground(() => {
             const backup = await exportCashuBackup(wallet.id, _cachedPassword)
             return { result: backup }
           }
-          case 'CASHU_IMPORT_BACKUP': {
-            const [encryptedData] = params || []
-            const parsed = await importCashuBackup(encryptedData, _cachedPassword)
-            // Merge imported proofs into active wallet
-            const wallet = await getActiveWallet(_cachedPassword)
-            if (wallet?.type === 'cashu') {
-              await addCashuProofs(wallet.id, parsed.proofs, _cachedPassword)
+          case 'CASHU_PREVIEW_IMPORT_BACKUP': {
+            const [encryptedData, backupPassword] = params || []
+            if (typeof encryptedData !== 'string' || encryptedData.length > 15_000_000) {
+              return { error: 'INVALID_REQUEST' }
             }
-            return { result: { imported: parsed.proofs.length, mints: parsed.mints } }
+            if (backupPassword != null
+              && (typeof backupPassword !== 'string' || !backupPassword || backupPassword.length > 1024)) {
+              return { error: 'INVALID_REQUEST' }
+            }
+            const parsed = await importCashuBackup(encryptedData, backupPassword || _cachedPassword)
+            return { result: {
+              mints: [...new Set([
+                ...parsed.mints,
+                ...parsed.proofSets.map(set => set.mint),
+              ])],
+              proofCount: parsed.proofSets.reduce((sum, set) => sum + set.proofs.length, 0),
+              exportedAt: parsed.exportedAt,
+              hasReceivingKey: !!parsed.cashuPrivkey,
+            } }
           }
-          case 'CASHU_RESTORE_FROM_RELAY': {
-            const account = await getActiveAccount(_cachedPassword)
+          case 'CASHU_IMPORT_BACKUP': {
+            const [encryptedData, backupPassword] = params || []
+            if (typeof encryptedData !== 'string' || encryptedData.length > 15_000_000) {
+              return { error: 'INVALID_REQUEST' }
+            }
+            if (backupPassword != null
+              && (typeof backupPassword !== 'string' || !backupPassword || backupPassword.length > 1024)) {
+              return { error: 'INVALID_REQUEST' }
+            }
+            const parsed = await importCashuBackup(encryptedData, backupPassword || _cachedPassword)
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            const receivingKeyRestored = await adoptRestoredCashuPrivkey(
+              wallet, parsed.cashuPrivkey,
+            )
+            const seed = await getCashuSeed(wallet)
+            await mergeCashuCounters(wallet.id, _cachedPassword, parsed.counters)
+            let imported = 0
+            for (const set of parsed.proofSets) {
+              const recovered = await recoverExternalProofs(
+                set.mint,
+                set.proofs,
+                wallet.id,
+                _cachedPassword,
+                seed,
+                wallet.cashuPrivkey,
+              )
+              imported += recovered.proofs
+              await addCashuMint(wallet.id, set.mint, _cachedPassword)
+            }
+            for (const mint of parsed.mints) await addCashuMint(wallet.id, mint, _cachedPassword)
+            if (imported > 0) syncCashuToRelays(await getActiveWallet(_cachedPassword), 'in', 0).catch(() => {})
+            return { result: { imported, mints: parsed.mints, receivingKeyRestored } }
+          }
+          case 'CASHU_PREVIEW_RELAY_RESTORE': {
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            const account = await getCashuOwner(wallet)
             if (!account?.secretHex) return { error: 'LOCAL_ACCOUNT_REQUIRED' }
             const restored = await restoreFromRelays(hexToBytes(account.secretHex), account.pubkey)
+            const mints = normalizeCashuMintList([
+              ...(Array.isArray(restored.walletData?.mints) ? restored.walletData.mints : []),
+              ...restored.proofSets.map(set => set.mint),
+            ])
+            return { result: {
+              mints,
+              proofCount: restored.proofSets.reduce((sum, set) => sum + set.proofs.length, 0),
+              hasReceivingKey: isValidCashuPrivkey(restored.walletData?.privkey),
+            } }
+          }
+          case 'CASHU_RESTORE_FROM_RELAY': {
             const wallet = await getActiveWallet(_cachedPassword)
-            if (wallet?.type === 'cashu' && restored.proofs.length > 0) {
-              await addCashuProofs(wallet.id, restored.proofs, _cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            const account = await getCashuOwner(wallet)
+            if (!account?.secretHex) return { error: 'LOCAL_ACCOUNT_REQUIRED' }
+            const restored = await restoreFromRelays(hexToBytes(account.secretHex), account.pubkey)
+            const restoredPrivkey = isValidCashuPrivkey(restored.walletData?.privkey)
+              ? restored.walletData.privkey.toLowerCase()
+              : null
+            const receivingKeyRestored = await adoptRestoredCashuPrivkey(wallet, restoredPrivkey)
+            const seed = await getCashuSeed(wallet)
+            let proofCount = 0
+            for (const set of restored.proofSets) {
+              const recovered = await recoverExternalProofs(
+                set.mint,
+                set.proofs,
+                wallet.id,
+                _cachedPassword,
+                seed,
+                wallet.cashuPrivkey,
+              )
+              proofCount += recovered.proofs
+              await addCashuMint(wallet.id, set.mint, _cachedPassword)
             }
-            return { result: { proofCount: restored.proofs.length, mints: restored.walletData?.mints || [] } }
+            const restoredMints = normalizeCashuMintList(restored.walletData?.mints)
+            for (const candidate of restoredMints) {
+              await addCashuMint(wallet.id, candidate, _cachedPassword)
+            }
+            syncMintBackup(wallet)
+            return { result: { proofCount, mints: restoredMints, receivingKeyRestored } }
+          }
+          case 'CASHU_PREVIEW_MINT_BACKUP': {
+            // NUT-27: look up the mint list saved under this wallet's
+            // recovery words and report mints not configured locally yet.
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            const owner = await getCashuOwner(wallet)
+            const seed = await getCashuSeed(wallet)
+            if (!seed) return { error: 'CASHU_SEED_REQUIRED' }
+            const backup = await fetchMintBackup(seed, owner?.pubkey).catch(() => null)
+            const configured = new Set(wallet.mints || [])
+            return { result: {
+              mints: (backup?.mints || []).filter(mint => !configured.has(mint)),
+              savedAt: backup?.timestamp || 0,
+            } }
+          }
+          case 'CASHU_RESTORE_DETERMINISTIC': {
+            const [extraMints] = params || []
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            const seed = await getCashuSeed(wallet)
+            if (!seed) return { error: 'CASHU_SEED_REQUIRED' }
+            // Mints the user chose to bring back from the NUT-27 backup.
+            if (Array.isArray(extraMints)) {
+              for (const candidate of extraMints.slice(0, 20)) {
+                await addCashuMint(wallet.id, candidate, _cachedPassword)
+              }
+            }
+            const current = await getActiveWallet(_cachedPassword)
+            let proofCount = 0
+            let amountSats = 0
+            for (const mint of current?.mints || []) {
+              const restored = await restoreDeterministicProofs(
+                mint,
+                wallet.id,
+                _cachedPassword,
+                seed,
+              )
+              proofCount += restored.proofs
+              amountSats += restored.amountSats
+            }
+            if (proofCount > 0) syncCashuToRelays(wallet, 'in', amountSats).catch(() => {})
+            if (Array.isArray(extraMints) && extraMints.length > 0) syncMintBackup(wallet)
+            return { result: { proofCount, amountSats } }
+          }
+          case 'CASHU_RECOVER_PENDING': {
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            const proofRecovery = await recoverCashuState(wallet, { throwOnPending: false })
+            const incomingRecovery = await recoverPendingCashuMintQuotes(wallet)
+            return { result: { ...proofRecovery, ...incomingRecovery } }
           }
           case 'GET_CASHU_MINT_URL': {
             const wallet = await getActiveWallet(_cachedPassword)
@@ -1552,25 +2670,212 @@ export default defineBackground(() => {
             }
             return { result: null }
           }
+          case 'CASHU_GET_MINT_BALANCES': {
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            const snapshot = await getCashuSpendableSnapshot(wallet)
+            const balances = new Map(snapshot.balances.map(set => [set.mint, set.balance]))
+            const mints = [...new Set([...(wallet.mints || []), ...snapshot.balances.map(set => set.mint)])]
+            return { result: mints.map((mint, index) => ({
+              mint,
+              balance: balances.get(mint) || 0,
+              preferred: index === 0,
+            })) }
+          }
           case 'CASHU_UPDATE_MINTS': {
             const [walletId, mints] = params || []
-            await updateCashuMints(walletId, mints, _cachedPassword)
-            return { result: { ok: true } }
+            if (!Array.isArray(mints) || mints.length !== 1) return { error: 'INVALID_REQUEST' }
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu' || wallet.id !== walletId) return { error: 'NO_WALLET' }
+            const updatedMints = await addCashuMint(walletId, mints[0], _cachedPassword, { preferred: true })
+            const owner = await getCashuOwner(wallet)
+            const updatedWallet = await getActiveWallet(_cachedPassword)
+            if (owner?.secretHex) {
+              publishWalletEvent(
+                hexToBytes(owner.secretHex),
+                updatedWallet.cashuPrivkey,
+                updatedMints,
+                owner.pubkey,
+              ).catch(() => {})
+            }
+            syncMintBackup(wallet)
+            return { result: { ok: true, mints: updatedMints } }
+          }
+
+          // ── Cashu payment requests (NUT-18 / NUT-26) ──
+          case 'CASHU_CREATE_PAYMENT_REQUEST': {
+            const [amountSats, memo] = params || []
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            const owner = await getCashuOwner(wallet)
+            if (!owner?.secretHex) return { error: 'LOCAL_ACCOUNT_REQUIRED' }
+            if (amountSats != null && (!Number.isSafeInteger(amountSats) || amountSats <= 0)) {
+              return { error: 'INVALID_REQUEST' }
+            }
+            // 140 matches the payload memo cap so nothing is silently cut off.
+            if (memo != null && (typeof memo !== 'string' || memo.length > 140)) {
+              return { error: 'INVALID_REQUEST' }
+            }
+            const relays = (await getPoolRelays(owner.pubkey, 'chat').catch(() => [])).slice(0, 3)
+            const id = makePaymentRequestId()
+            const encoded = buildPaymentRequest({
+              id,
+              amountSats: amountSats ?? null,
+              description: memo || '',
+              mints: wallet.mints || [],
+              nprofile: nip19.nprofileEncode({ pubkey: owner.pubkey, relays }),
+            })
+            return { result: { encoded, id } }
+          }
+          case 'CASHU_CHECK_REQUEST_PAYMENT': {
+            const [requestId] = params || []
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            const owner = await getCashuOwner(wallet)
+            if (!owner?.secretHex) return { error: 'LOCAL_ACCOUNT_REQUIRED' }
+            return { result: await scanIncomingRequestPayments(wallet, owner, { requestId }) }
+          }
+          case 'CASHU_PAY_REQUEST': {
+            const [encoded, chosenAmountSats, memo] = params || []
+            const wallet = await getActiveWallet(_cachedPassword)
+            if (!wallet || wallet.type !== 'cashu') return { error: 'NO_WALLET' }
+            // 140 matches the payload memo cap so nothing is silently cut off.
+            if (memo != null && (typeof memo !== 'string' || memo.length > 140)) {
+              return { error: 'INVALID_REQUEST' }
+            }
+            const info = decodePaymentRequestInfo(encoded)
+            if (!info.valid || info.locked) return { error: 'INVALID_REQUEST' }
+            const amountSats = info.amountSats ?? Number(chosenAmountSats)
+            if (!Number.isSafeInteger(amountSats) || amountSats <= 0) return { error: 'INVALID_REQUEST' }
+
+            // Everything that can refuse the payment runs before any money moves.
+            const transport = info.transports.find(entry => entry.type === 'nostr')
+              || info.transports.find(entry => entry.type === 'post')
+            if (!transport) return { error: 'REQUEST_NO_TRANSPORT' }
+            const owner = await getCashuOwner(wallet)
+            if (transport.type === 'nostr' && !owner?.secretHex) {
+              return { error: 'LOCAL_ACCOUNT_REQUIRED' }
+            }
+            await recoverCashuState(wallet)
+            const snapshot = await getCashuSpendableSnapshot(wallet)
+            const balances = new Map(snapshot.balances.map(entry => [entry.mint, entry.balance]))
+            // The request's mint list is strict (NUT-18): only pay from one
+            // of those mints. Without a list, any funded mint works.
+            const accepted = info.mints.length
+              ? info.mints
+              : [...new Set([...(wallet.mints || []), ...balances.keys()])]
+            if (info.mints.length && !accepted.some(mint => (balances.get(mint) || 0) > 0)) {
+              return { error: 'REQUEST_MINT_MISMATCH' }
+            }
+            const mintUrl = accepted.find(mint => (balances.get(mint) || 0) >= amountSats)
+            if (!mintUrl) {
+              const error = new Error('Insufficient balance at the accepted mints')
+              error.code = 'CASHU_MINT_BALANCE'
+              throw error
+            }
+
+            const seed = await getCashuSeed(wallet)
+            // includeFees: the receiver must net the requested amount (NUT-18).
+            const created = await createEcashToken(
+              mintUrl, amountSats, wallet.id, _cachedPassword, memo, seed, { includeFees: true },
+            )
+            const payloadJson = JSON.stringify(buildPaymentPayload({
+              id: info.id,
+              memo,
+              mint: mintUrl,
+              proofs: getDecodedToken(created.token).proofs,
+            }))
+
+            let delivered = false
+            let deliveryError = ''
+            if (transport.type === 'post') {
+              try {
+                const response = await fetch(transport.url, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: payloadJson,
+                  signal: AbortSignal.timeout(15_000),
+                })
+                delivered = response.ok
+                if (!response.ok) deliveryError = `HTTP ${response.status}`
+              } catch (err) {
+                deliveryError = err?.message || 'Network error'
+              }
+            } else {
+              const secretKey = hexToBytes(owner.secretHex)
+              const rumor = nip59.createRumor({
+                kind: 14,
+                content: payloadJson,
+                tags: [['p', transport.pubkey]],
+                created_at: Math.floor(Date.now() / 1000),
+              }, owner.pubkey)
+              const seal = nip59.createSeal(rumor, secretKey, transport.pubkey)
+              const wrap = nip59.createWrap(seal, transport.pubkey)
+              // No self-copy on purpose: the payload is wallet plumbing, not
+              // a chat message the payer should see in their own thread.
+              const ownRelays = await getPoolRelays(owner.pubkey, 'chat').catch(() => [])
+              const relays = [...new Set([...(transport.relays || []), ...ownRelays])]
+                .filter(url => typeof url === 'string' && url.startsWith('wss://'))
+                .slice(0, 8)
+              const pool = getPool()
+              const results = await Promise.allSettled(relays.map(url => pool.publish([url], wrap)))
+              delivered = results.some(entry => entry.status === 'fulfilled')
+              if (!delivered) deliveryError = 'No relay accepted the message'
+            }
+
+            await recordCashuTx(wallet.id, {
+              direction: 'out', amount: created.amountSats,
+              description: memo || info.description || 'Payment request', state: 'settled',
+            }, _cachedPassword).catch(err => log.warn('cashu', 'TX_RECORD_FAILED', { err: err?.message }))
+            syncCashuToRelays(wallet, 'out', created.amountSats).catch(err =>
+              log.warn('cashu', 'RELAY_SYNC_FAILED', { err: err?.message })
+            )
+            if (delivered) {
+              return { result: { delivered: true, amountSats: created.amountSats } }
+            }
+            // The sats already left this wallet as the token below. Hand it
+            // back so the user can share it manually or redeem it again.
+            return { result: {
+              delivered: false,
+              token: created.token,
+              amountSats: created.amountSats,
+              deliveryError,
+            } }
           }
 
           // ── Zaps (NIP-57) ──
           case 'SEND_ZAP': {
-            const { recipientPubkey, amountSats, lightningAddress, content } = params?.[0] || {}
-            if (!lightningAddress || !amountSats) return { error: 'Missing zap parameters' }
+            const { recipientPubkey, amountSats, lightningAddress, content, payRequest } = params?.[0] || {}
+            const addressMatch = typeof lightningAddress === 'string'
+              ? lightningAddress.trim().match(/^([a-z0-9._-]+)@([a-z0-9.-]+\.[a-z]{2,})$/i)
+              : null
+            if (!/^[0-9a-f]{64}$/i.test(recipientPubkey || '')
+              || !addressMatch
+              || !Number.isSafeInteger(amountSats) || amountSats <= 0 || amountSats > 100_000_000
+              || typeof content !== 'undefined' && (typeof content !== 'string' || content.length > 500)) {
+              return { error: 'INVALID_REQUEST' }
+            }
             const account = await getActiveAccount(_cachedPassword)
             const amountMsats = amountSats * 1000
 
             // Try NIP-57 for local accounts
             if (account?.secretHex) {
               try {
-                const [name, domain] = lightningAddress.split('@')
+                const [, name, domain] = addressMatch
                 const lnurlPayUrl = `https://${domain}/.well-known/lnurlp/${name}`
-                const payReq = await fetchPayRequest(lnurlPayUrl)
+                let payReq = payRequest
+                if (payReq) {
+                  const callback = requireSecureUrl(payReq.callback).toString()
+                  if (payReq.tag !== 'payRequest'
+                    || !Number.isSafeInteger(payReq.minSendable)
+                    || !Number.isSafeInteger(payReq.maxSendable)
+                    || amountMsats < payReq.minSendable || amountMsats > payReq.maxSendable) {
+                    throw new Error('Invalid LNURL pay request')
+                  }
+                  payReq = { ...payReq, callback }
+                } else {
+                  payReq = await fetchPayRequest(lnurlPayUrl)
+                }
                 if (payReq.allowsNostr && payReq.nostrPubkey) {
                   const relays = await getPoolRelays(account.pubkey, 'account')
                   const zapReq = nip57.createZapRequestEvent({
@@ -1653,8 +2958,8 @@ export default defineBackground(() => {
               return { result: null }
             }
             try {
-              const { hostname } = new URL(tab.url)
-              return { result: { host: hostname, title: tab.title, favIconUrl: tab.favIconUrl } }
+              const url = new URL(tab.url)
+              return { result: { origin: url.origin, host: url.host, title: tab.title, favIconUrl: tab.favIconUrl } }
             } catch { return { result: null } }
           }
 
@@ -1662,6 +2967,19 @@ export default defineBackground(() => {
           case 'GET_PERMISSIONS': {
             const activeId = await getActiveAccountId()
             return { result: await getPermissions(activeId) }
+          }
+          case 'GET_SESSION_PERMISSIONS': {
+            const activeId = await getActiveAccountId()
+            return { result: permissionSession.listGrants(activeId) }
+          }
+          case 'REVOKE_SESSION_PERMISSION':
+            return { result: { removed: permissionSession.revoke(params?.[0]) } }
+          case 'CLEAR_SESSION_PERMISSIONS': {
+            const activeId = await getActiveAccountId()
+            const origin = params?.[0]
+            if (origin) permissionSession.clearOrigin(activeId, origin)
+            else permissionSession.clear()
+            return { result: { removed: true } }
           }
           case 'REMOVE_PERMISSION': {
             const activeId = await getActiveAccountId()
@@ -1671,6 +2989,7 @@ export default defineBackground(() => {
           case 'REMOVE_DOMAIN_PERMISSIONS': {
             const activeId = await getActiveAccountId()
             await removeDomainPermissions(params?.[0], activeId)
+            permissionSession.clearOrigin(activeId, params?.[0])
             return { result: { removed: true } }
           }
 
@@ -1904,8 +3223,8 @@ export default defineBackground(() => {
           case 'UNLOCK_RESPONSE': {
             const { requestId: unlockReqId, password } = params?.[0] || {}
             try {
-              const valid = await verifyPassword(password)
-              if (!valid) return { error: 'WRONG_PASSWORD' }
+              const authentication = await authenticateMasterPassword(password)
+              if (!authentication.valid) return { error: authentication.error }
               _cachedPassword = password
               await saveSession({ password, unlockedAt: Date.now() })
               rejectedOrigins.clear()
@@ -1924,41 +3243,60 @@ export default defineBackground(() => {
 
           // ── Permission prompt response ──
           case 'PERMISSION_RESPONSE': {
-            const { requestId, decision, host, method, kind, setBudget } = params?.[0] || {}
-            // Persist the user's decision below even if the original request's
-            // coordinator entry did not survive a worker restart, so a dApp retry
-            // is auto-answered. resolve() is a no-op when the entry is gone.
-            await requestCoordinator.clearEventData(requestId)
-            const activeId = await getActiveAccountId()
+            const payload = params?.[0] || {}
+            const { requestId, decision, setBudget } = payload
+            const validDecisions = new Set([
+              'allow_session', 'allow_once', 'deny_once',
+              'allow_always', 'deny_always', 'allow_all', 'deny_all',
+            ])
+            if (!requestId || !validDecisions.has(decision)) return { error: 'INVALID_PERMISSION_RESPONSE' }
+
+            // Never trust scope fields from the prompt URL or response. This
+            // context was created by the background and persisted in memory-only
+            // session storage so it survives an MV3 worker restart.
+            const scope = requestCoordinator.getContext(requestId)
+              || await requestCoordinator.getPersistedContext(requestId)
+            if (!scope || Date.now() - scope.createdAt > 5 * 60 * 1000) {
+              await requestCoordinator.clearPromptData(requestId)
+              return { error: 'EXPIRED_PERMISSION_REQUEST' }
+            }
+            const { profileId, origin, method, kind } = scope
+            if (!profileId || !origin || !method) return { error: 'INVALID_PERMISSION_SCOPE' }
+
+            // Persist a user-selected budget before waking the payment handler,
+            // so its just-approved payment is counted against the new limit.
+            if (setBudget && decision.startsWith('allow')) {
+              try {
+                const safeBudget = validateSats(setBudget)
+                await setAllowance(origin, safeBudget)
+                log.info('permissions', 'BUDGET_SET_FROM_PROMPT', { origin, budget: safeBudget })
+              } catch (err) {
+                log.warn('permissions', 'BUDGET_SET_FAILED', { origin, err: err?.message })
+              }
+            }
 
             if (decision === 'allow_all') {
-              // Grant all standard permissions for this host (never includes weblnSendPayment)
+              // Grant all standard permissions for this exact origin.
               for (const m of ALL_PERMISSION_METHODS) {
-                await setPermission(host, m, 'allow', null, activeId)
+                await setPermission(origin, m, 'allow', null, profileId)
               }
               await requestCoordinator.resolve(requestId, true)
             } else if (decision === 'deny_all') {
-              // Block all methods for this host
               for (const m of [...ALL_PERMISSION_METHODS, ...PAYMENT_METHODS]) {
-                await setPermission(host, m, 'deny', null, activeId)
+                await setPermission(origin, m, 'deny', null, profileId)
               }
               await requestCoordinator.resolve(requestId, false)
+            } else if (decision === 'allow_session') {
+              if (!scope.isPayment) permissionSession.grant(scope)
+              await requestCoordinator.resolve(requestId, true)
             } else if (decision === 'allow_always' || decision === 'deny_always') {
-              await setPermission(host, method, decision === 'allow_always' ? 'allow' : 'deny', kind || null, activeId)
+              await setPermission(origin, method, decision === 'allow_always' ? 'allow' : 'deny', kind ?? null, profileId)
               await requestCoordinator.resolve(requestId, decision === 'allow_always')
             } else {
               await requestCoordinator.resolve(requestId, decision === 'allow_once')
             }
 
-            // Set budget if user opted in during payment approval
-            if (setBudget && setBudget > 0 && host && decision.startsWith('allow')) {
-              try {
-                await setAllowance(host, setBudget)
-                log.info('permissions', 'BUDGET_SET_FROM_PROMPT', { host, budget: setBudget })
-              } catch (err) {
-                log.warn('permissions', 'BUDGET_SET_FAILED', { host, err: err?.message })
-              }
-            }
+            await requestCoordinator.clearPromptData(requestId)
 
             return { result: { ok: true } }
           }

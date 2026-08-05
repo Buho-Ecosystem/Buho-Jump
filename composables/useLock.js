@@ -82,6 +82,11 @@ export function useLock() {
     await send('CHANGE_PASSWORD', oldPassword, newPassword)
   }
 
+  async function setAutoLock(minutes) {
+    await send('SET_AUTO_LOCK', minutes)
+    startAutoLock()
+  }
+
   // Auto-lock timer — show countdown 30s before lock
   const WARNING_SECONDS = 30
 
@@ -161,6 +166,7 @@ export function useLock() {
     unlock,
     lock,
     changePassword,
+    setAutoLock,
     resetAutoLock,
   }
 }

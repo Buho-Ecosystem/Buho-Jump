@@ -144,7 +144,7 @@ function truncateNpub(pubkey) {
         </div>
       </div>
       <div v-else class="bg-surface-card rounded-3xl border border-border p-8 text-center">
-        <MessageSquare class="w-6 h-6 text-text-muted mx-auto mb-2" />
+        <img src="/Onboarding%20wizard/storyset-online-friends-bro.svg" alt="" class="w-40 h-28 object-contain mx-auto -mt-3 mb-1" />
         <p class="text-xs text-text-muted">{{ t('chat.emptyTitle') }}</p>
       </div>
     </template>

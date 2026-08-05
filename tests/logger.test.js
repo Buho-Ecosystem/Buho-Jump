@@ -111,4 +111,17 @@ describe('log — adversarial context data', () => {
     const entries = await getLogEntries()
     expect(entries).toHaveLength(2)
   })
+
+  it('redacts secret fields and wallet strings before persistence', async () => {
+    log.error('wallet', 'FAILED', {
+      adminKey: 'super-secret',
+      err: `Could not open nostr+walletconnect://${'a'.repeat(64)}?secret=${'b'.repeat(64)}`,
+      nested: { mnemonic: 'legal winner thank year' },
+    })
+    await flushLog()
+    const serialized = JSON.stringify(await getLogEntries())
+    expect(serialized).not.toContain('super-secret')
+    expect(serialized).not.toContain('walletconnect')
+    expect(serialized).not.toContain('legal winner')
+  })
 })

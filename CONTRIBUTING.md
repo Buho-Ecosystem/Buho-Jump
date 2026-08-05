@@ -13,7 +13,7 @@ Use Buho Jump in your daily workflow and let us know what breaks or feels off. O
 - Steps to reproduce (if possible)
 
 ### Translate
-Buho Jump supports 15 languages - and most of them need help. Translation files live in `locales/`. To add or improve a language:
+Buho Jump supports 17 languages - and most of them need help. Translation files live in `locales/`. To add or improve a language:
 1. Copy `locales/en.json` to your locale code (e.g. `locales/pt.json`)
 2. Translate the values (not the keys)
 3. Open a PR
@@ -75,6 +75,8 @@ Then go to `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-o
 |---------|--------|
 | `npm run build` | `.output/chrome-mv3` |
 | `npm run build:firefox` | `.output/firefox-mv3` |
+
+**Tests:** run the unit test suite with `npm test` (Vitest).
 
 ### Code style
 

@@ -6,22 +6,24 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePermissions } from '../composables/usePermissions.js'
+import { eventKindLabel } from '../lib/eventKinds.js'
 import { useMessaging } from '../composables/useMessaging.js'
 import { useAllowanceSync } from '../composables/useAllowanceSync.js'
 import { useFiat } from '../composables/useFiat.js'
 import { useToast } from '../composables/useToast.js'
 import BottomSheet from './BottomSheet.vue'
 import {
-  ArrowLeft, Globe, ShieldCheck, Wallet, Trash2,
+  ArrowLeft, Wallet, Trash2,
   Check, X, Loader2, AlertTriangle, RotateCcw, Clock,
 } from 'lucide-vue-next'
 
 const props = defineProps({
   host: { type: String, required: true },
   methods: { type: Object, default: () => ({}) },
+  sessionGrants: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['back', 'revoked'])
+const emit = defineEmits(['back', 'revoked', 'changed'])
 
 const { t } = useI18n()
 const { revokeDomain, revokeMethod } = usePermissions()
@@ -44,6 +46,12 @@ const revokingAll = ref(false)
 const revokingMethod = ref(null)
 
 function methodLabel(method) {
+  // Per-kind rules are stored as "signEvent:{kind}"; render the kind's
+  // human name instead of the raw storage key.
+  const kindMatch = /^signEvent:(\d+)$/.exec(method)
+  if (kindMatch) {
+    return t('sites.methodLabel_signEventKind', { kind: eventKindLabel(kindMatch[1], t) })
+  }
   const key = `sites.methodLabel_${method}`
   const translated = t(key)
   // If no translation found, fall back to the raw method name
@@ -72,12 +80,14 @@ const recentPayments = computed(() => {
   return [...allowance.value.payments].reverse()
 })
 
-const faviconUrl = computed(() => {
-  try {
-    return `https://www.google.com/s2/favicons?domain=${props.host}&sz=64`
-  } catch { return '' }
+const siteInitial = computed(() => {
+  try { return new URL(props.host).hostname.charAt(0).toUpperCase() || '?' } catch { return '?' }
 })
-const faviconFailed = ref(false)
+const siteColor = computed(() => {
+  let hash = 0
+  for (const character of props.host) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0
+  return `hsl(${Math.abs(hash) % 360} 55% 45%)`
+})
 
 onMounted(() => {
   if (allowance.value) budgetInput.value = String(allowance.value.budget)
@@ -153,6 +163,16 @@ async function handleRevokeMethod(method) {
   }
 }
 
+async function handleRevokeSession(key) {
+  revokingMethod.value = key
+  try {
+    await send('REVOKE_SESSION_PERMISSION', key)
+    emit('changed')
+  } finally {
+    revokingMethod.value = null
+  }
+}
+
 async function handleRevokeAll() {
   revokingAll.value = true
   try {
@@ -179,13 +199,31 @@ async function handleRevokeAll() {
 
     <!-- Site identity -->
     <div class="flex items-center gap-3 px-3 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
-      <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
-        <img v-if="!faviconFailed" :src="faviconUrl" @error="faviconFailed = true" class="w-5 h-5" alt="" />
-        <Globe v-else class="w-4 h-4 text-text-muted" />
+      <div class="w-10 h-10 rounded-[10px] border border-border flex items-center justify-center shrink-0 text-white font-extrabold"
+        :style="{ backgroundColor: siteColor }">
+        {{ siteInitial }}
       </div>
       <div>
         <div class="text-sm font-extrabold">{{ host }}</div>
-        <div class="text-[10px] text-text-muted">{{ Object.keys(methods).length }} {{ t('sites.permissionsGranted') }}</div>
+        <div class="text-[10px] text-text-muted">{{ Object.keys(methods).length + sessionGrants.length }} {{ t('sites.permissionsGranted') }}</div>
+      </div>
+    </div>
+
+    <div v-if="sessionGrants.length" class="space-y-1.5">
+      <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('sites.sessionPermissions') }}</p>
+      <div v-for="grant in sessionGrants" :key="grant.key"
+        class="flex items-center justify-between px-3 py-2 bg-brand/5 rounded-2xl border border-brand/15">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-[9px] px-1.5 py-px rounded-full font-medium bg-brand/10 text-brand">{{ t('sites.thisVisit') }}</span>
+          <span class="text-xs font-medium truncate">{{ methodLabel(grant.method) }}</span>
+          <span v-if="grant.kind != null" class="text-[9px] text-text-muted">kind {{ grant.kind }}</span>
+        </div>
+        <button @click="handleRevokeSession(grant.key)" :disabled="revokingMethod === grant.key"
+          :aria-label="t('sites.revokeSession')"
+          class="text-text-muted hover:text-error p-1 disabled:opacity-40">
+          <Loader2 v-if="revokingMethod === grant.key" class="w-3 h-3 animate-spin" />
+          <X v-else class="w-3 h-3" />
+        </button>
       </div>
     </div>
 
@@ -322,7 +360,7 @@ async function handleRevokeAll() {
     </div>
 
     <!-- Revoke all (only if there's something to revoke) -->
-    <button v-if="Object.keys(methods).length || allowance" @click="confirmRevokeAll = true"
+    <button v-if="Object.keys(methods).length || sessionGrants.length || allowance" @click="confirmRevokeAll = true"
       class="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-text-muted hover:text-error transition-all duration-200">
       <Trash2 class="w-3 h-3" />
       {{ t('sites.revokeAll') }}
