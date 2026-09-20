@@ -41,7 +41,7 @@ Pick your browser and follow the matching section.
 These all use the same engine, so the steps are identical. The address differs
 per browser (shown below).
 
-1. **Unzip** the chrome package (for example `buho-jump-1.0.0-chrome.zip`). This
+1. **Unzip** the chrome package (for example `buho-jump-1.0.1-chrome.zip`). This
    creates a folder. Keep this folder somewhere permanent. The browser
    loads the extension live from it, so if you delete or move it, the extension
    stops working.
@@ -64,7 +64,7 @@ per browser (shown below).
 
 ### Firefox
 
-1. **Unzip** the firefox package (for example `buho-jump-1.0.0-firefox.zip`).
+1. **Unzip** the firefox package (for example `buho-jump-1.0.1-firefox.zip`).
 2. In the address bar, go to `about:debugging#/runtime/this-firefox`.
 3. Click **Load Temporary Add-on...**
 4. In the file picker, open the unzipped folder and select the **`manifest.json`**
@@ -103,7 +103,7 @@ Firefox steps above).
 
 Dev mode rebuilds and reloads automatically when you edit a file. To produce
 store style packages instead, run `npm run zip:all`, which writes
-`.output/buho-jump-1.0.0-{chrome,edge,firefox}.zip`.
+`.output/buho-jump-1.0.1-{chrome,edge,firefox}.zip`.
 
 Full developer setup lives in [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -141,7 +141,7 @@ When you receive a newer package:
   **Load Temporary Add-on**.
 
 To check which version you are running, open the extension's details and look at
-the version number (the current package is `1.0.0`).
+the version number (the current package is `1.0.1`).
 
 ---
 
