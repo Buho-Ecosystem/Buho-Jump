@@ -1,4 +1,5 @@
 <script setup>
+import BackButton from '../BackButton.vue'
 /**
  * Contact picker — unified search for starting new chats.
  *
@@ -171,9 +172,9 @@ onBeforeUnmount(() => {
 function truncateNpub(pubkey) {
   try {
     const npub = nip19.npubEncode(pubkey)
-    return 'User ' + npub.slice(5, 9) + '...' + npub.slice(-4)
+    return t('chat.unknownUser')
   } catch {
-    return 'User ' + pubkey.slice(0, 6) + '...'
+    return t('chat.unknownUser')
   }
 }
 </script>
@@ -182,9 +183,7 @@ function truncateNpub(pubkey) {
   <div class="animate-slide-in-right flex flex-col h-full">
     <!-- Header -->
     <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-border shrink-0">
-      <button @click="emit('back')" class="p-1 rounded-full hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.back')">
-        <ArrowLeft class="w-5 h-5 text-text-secondary" />
-      </button>
+      <BackButton @click="emit('back')" />
       <span class="text-[14px] font-semibold">{{ t('chat.newChat') }}</span>
     </div>
 
@@ -193,7 +192,7 @@ function truncateNpub(pubkey) {
       <div class="relative mb-3">
         <UserSearch class="w-4 h-4 text-brand absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         <input
-          v-model="input"
+          v-model="input" :aria-label="t('chat.inputHint')"
           :placeholder="t('chat.inputHint')"
           class="chat-input-pill w-full pl-10 pr-4"
           autofocus
@@ -227,10 +226,10 @@ function truncateNpub(pubkey) {
           <div class="text-[13px] font-semibold truncate">
             {{ resolvedProfile?.display_name || resolvedProfile?.name || truncateNpub(resolvedPubkey) }}
           </div>
-          <div v-if="resolvedProfile?.nip05" class="text-[11px] text-brand truncate">{{ resolvedProfile.nip05 }}</div>
-          <div v-else class="text-[11px] text-text-muted truncate">{{ truncateNpub(resolvedPubkey) }}</div>
+          <div v-if="resolvedProfile?.nip05" class="text-xs text-brand truncate">{{ resolvedProfile.nip05 }}</div>
+          <div v-else class="text-xs text-text-muted truncate">{{ truncateNpub(resolvedPubkey) }}</div>
         </div>
-        <span class="text-[11px] text-brand font-semibold shrink-0">{{ t('chat.openChat') }}</span>
+        <span class="text-xs text-brand font-semibold shrink-0">{{ t('chat.openChat') }}</span>
       </button>
 
       <!-- Follow list -->
@@ -238,13 +237,13 @@ function truncateNpub(pubkey) {
         <div class="flex items-center justify-between px-1 mb-2">
           <div class="flex items-center gap-1.5">
             <Users class="w-3.5 h-3.5 text-text-muted" />
-            <span class="text-[11px] uppercase tracking-widest text-text-muted font-semibold">
+            <span class="text-xs uppercase tracking-widest text-text-muted font-semibold">
               {{ t('chat.contacts') }}
               <span v-if="contacts.length > 0" class="normal-case tracking-normal">({{ contacts.length }})</span>
             </span>
           </div>
           <button v-if="!loading" @click="handleRetryContacts"
-            class="p-1 rounded-lg hover:bg-surface-elevated transition-colors" :title="t('wallet.failedRefresh')">
+            class="p-1 rounded-lg hover:bg-surface-elevated transition-colors min-w-8 min-h-8" :title="t('wallet.failedRefresh')">
             <RefreshCw class="w-3 h-3 text-text-muted" />
           </button>
         </div>
@@ -285,17 +284,17 @@ function truncateNpub(pubkey) {
             </div>
             <div class="min-w-0 flex-1">
               <div class="text-[13px] font-medium truncate">{{ c.profile?.display_name || c.profile?.name || truncateNpub(c.pubkey) }}</div>
-              <div v-if="c.profile?.nip05" class="text-[11px] text-brand truncate">{{ c.profile.nip05 }}</div>
-              <div v-else class="text-[11px] text-text-muted truncate">{{ truncateNpub(c.pubkey) }}</div>
+              <div v-if="c.profile?.nip05" class="text-xs text-brand truncate">{{ c.profile.nip05 }}</div>
+              <div v-else class="text-xs text-text-muted truncate">{{ truncateNpub(c.pubkey) }}</div>
             </div>
           </button>
         </div>
 
         <!-- Show more contacts -->
         <button v-if="hasMoreContacts" @click="contactVisibleCount += PAGE_SIZE"
-          class="w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] text-text-muted hover:text-brand font-semibold transition-all duration-200">
+          class="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs text-text-muted hover:text-brand font-semibold transition-all duration-200">
           <span>{{ t('common.showMore') }}</span>
-          <span class="text-[10px] opacity-60">({{ t('common.showingOf', { shown: paginatedContacts.length, total: filteredContacts.length }) }})</span>
+          <span class="text-xs opacity-60">({{ t('common.showingOf', { shown: paginatedContacts.length, total: filteredContacts.length }) }})</span>
           <ChevronRight class="w-3 h-3" />
         </button>
 
@@ -305,7 +304,7 @@ function truncateNpub(pubkey) {
           <p class="text-xs text-text-muted leading-relaxed px-4">
             {{ t('chat.noContactsGuide') }}
           </p>
-          <p class="text-[10px] text-text-muted px-4">
+          <p class="text-xs text-text-muted px-4">
             {{ t('chat.noContactsFormats') }}
           </p>
         </div>
@@ -320,7 +319,7 @@ function truncateNpub(pubkey) {
       <div v-if="relaySearchResults.length > 0 && !resolvedPubkey" class="mt-3 pt-3 border-t border-border">
         <div class="flex items-center gap-1.5 px-1 mb-2">
           <Globe class="w-3 h-3 text-text-muted" />
-          <span class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+          <span class="text-xs uppercase tracking-widest text-text-muted font-semibold">
             {{ t('chat.nostrResults') }} ({{ relaySearchResults.length }})
           </span>
         </div>
@@ -338,8 +337,8 @@ function truncateNpub(pubkey) {
             </div>
             <div class="min-w-0 flex-1">
               <div class="text-[13px] font-medium truncate">{{ r.profile?.display_name || r.profile?.name || truncateNpub(r.pubkey) }}</div>
-              <div v-if="r.profile?.nip05" class="text-[11px] text-brand truncate">{{ r.profile.nip05 }}</div>
-              <div v-else class="text-[11px] text-text-muted truncate">{{ truncateNpub(r.pubkey) }}</div>
+              <div v-if="r.profile?.nip05" class="text-xs text-brand truncate">{{ r.profile.nip05 }}</div>
+              <div v-else class="text-xs text-text-muted truncate">{{ truncateNpub(r.pubkey) }}</div>
             </div>
           </button>
         </div>

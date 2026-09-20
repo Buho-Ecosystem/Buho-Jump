@@ -33,7 +33,6 @@ onMounted(async () => {
     })
     if (response?.error) throw new Error(response.error)
     phase.value = 'success'
-    setTimeout(() => window.close(), 3000)
   } catch {
     phase.value = 'error'
     errorMsg.value = t('nutbits.callbackConnectFailed')
@@ -76,10 +75,7 @@ function closeTab() {
           <p class="text-sm text-text-muted leading-relaxed">{{ t('nutbits.callbackSuccessDesc') }}</p>
         </div>
 
-        <div class="mx-auto w-48 h-1 rounded-full bg-surface-card overflow-hidden">
-          <div class="h-full bg-success rounded-full animate-shrink" />
-        </div>
-        <p class="text-[10px] text-text-muted">{{ t('nutbits.callbackClosing') }}</p>
+        <button @click="closeTab" class="min-h-11 px-8 py-2.5 rounded-xl bg-brand text-surface-base text-sm font-semibold">{{ t('common.done') }}</button>
       </template>
 
       <!-- Error -->
@@ -113,13 +109,3 @@ function closeTab() {
     </div>
   </div>
 </template>
-
-<style>
-@keyframes shrink {
-  from { width: 100%; }
-  to { width: 0%; }
-}
-.animate-shrink {
-  animation: shrink 3s linear forwards;
-}
-</style>

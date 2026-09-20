@@ -49,7 +49,7 @@ function finishPaymentFlow() {
         <h1 class="text-lg font-extrabold">{{ t('options.activity') }}</h1>
         <p class="text-xs text-text-muted mt-0.5">{{ t('options.activityDesc') }}</p>
       </div>
-      <select v-if="wallets.length > 1" :value="status.activeWallet?.id" @change="selectWallet"
+      <select :aria-label="t('tabs.wallet')" v-if="wallets.length > 1" :value="status.activeWallet?.id" @change="selectWallet"
         class="bg-surface-card border border-border rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:border-brand">
         <option v-for="wallet in wallets" :key="wallet.id" :value="wallet.id">{{ wallet.name }}</option>
       </select>

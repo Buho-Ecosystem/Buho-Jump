@@ -18,7 +18,7 @@ import {
   Unlink, ChevronRight, Wallet, Loader2, AlertTriangle,
 } from 'lucide-vue-next'
 
-const emit = defineEmits(['send', 'receive', 'history', 'detail', 'disconnect'])
+const emit = defineEmits(['send', 'receive', 'history', 'detail'])
 
 const {
   status, walletType, getBalance, getBudget, getInfo, listTransactions,
@@ -55,8 +55,6 @@ const loadingTxs = ref(false)
 const refreshing = ref(false)
 const walletBudget = ref(null)
 const nwcConnected = ref(true)
-const confirmDisconnect = ref(false)
-const disconnecting = ref(false)
 const recoveringProofs = ref(false)
 
 async function recoverProtectedProofs() {
@@ -111,16 +109,6 @@ async function refresh() {
   }
 }
 
-async function handleDisconnect() {
-  disconnecting.value = true
-  try {
-    emit('disconnect')
-  } finally {
-    disconnecting.value = false
-    confirmDisconnect.value = false
-  }
-}
-
 let nwcPollTimer = null
 
 onMounted(() => {
@@ -162,7 +150,7 @@ onBeforeUnmount(() => {
           <div class="flex items-center gap-1.5">
             <div class="w-1.5 h-1.5 rounded-full transition-colors"
               :class="nwcConnected ? 'bg-success' : 'bg-warning animate-pulse'" />
-            <span class="text-[9px] font-semibold uppercase tracking-wider text-text-muted">
+            <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">
               {{ nwcConnected ? t('wallet.balance') : t('wallet.reconnecting') }}
             </span>
           </div>
@@ -170,7 +158,7 @@ onBeforeUnmount(() => {
             @click="refresh"
             :disabled="refreshing"
             :aria-label="t('wallet.refresh')"
-            class="p-1 rounded-lg hover:bg-surface-elevated transition-all duration-200"
+            class="p-1 rounded-lg hover:bg-surface-elevated transition-all duration-200 min-w-8 min-h-8"
           >
             <RefreshCw
               class="w-3 h-3 text-text-muted"
@@ -193,7 +181,7 @@ onBeforeUnmount(() => {
               <span class="text-sm font-medium text-text-muted">{{ t('wallet.sats') }}</span>
             </div>
             <!-- Secondary: fiat — in brand green -->
-            <div v-if="fiatBalance" class="text-[11px] text-brand mt-1 font-medium">≈ {{ fiatBalance }}</div>
+            <div v-if="fiatBalance" class="text-xs text-brand mt-1 font-medium">≈ {{ fiatBalance }}</div>
           </template>
 
           <template v-else>
@@ -202,21 +190,21 @@ onBeforeUnmount(() => {
               {{ fiatBalance || '—' }}
             </div>
             <!-- Secondary: sats — in brand green -->
-            <div v-if="status.balance != null" class="text-[11px] text-brand mt-1 font-medium">
+            <div v-if="status.balance != null" class="text-xs text-brand mt-1 font-medium">
               ≈ {{ formatSats(status.balance) }} {{ t('wallet.sats') }}
             </div>
           </template>
 
           <!-- Toggle hint on hover -->
-          <div class="flex items-center justify-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div class="flex items-center justify-center gap-1 mt-1 opacity-100 transition-opacity">
             <ArrowLeftRight class="w-2.5 h-2.5 text-text-muted" />
-            <span class="text-[8px] text-text-muted">{{ denomination === 'sats' ? currency.toUpperCase() : t('wallet.sats') }}</span>
+            <span class="text-xs text-text-muted">{{ denomination === 'sats' ? currency.toUpperCase() : t('wallet.sats') }}</span>
           </div>
         </button>
 
         <!-- Wallet-side budget (NWC only) -->
         <div v-if="walletType === 'nwc' && walletBudget?.used_budget != null" class="text-center mb-1">
-          <span class="text-[9px] text-text-muted">
+          <span class="text-xs text-text-muted">
             {{ t('wallet.nwcBudget', {
               used: formatSats(Math.floor((walletBudget.used_budget || 0) / 1000)),
               total: formatSats(Math.floor((walletBudget.total_budget || 0) / 1000)),
@@ -253,13 +241,13 @@ onBeforeUnmount(() => {
         <p class="text-xs font-bold text-warning">
           {{ t(cashuAttention.title) }}
         </p>
-        <p class="text-[11px] text-text-secondary leading-relaxed mt-1">
+        <p class="text-xs text-text-secondary leading-relaxed mt-1">
           {{ t(cashuAttention.description) }}
         </p>
         <button
           @click="recoverProtectedProofs"
           :disabled="recoveringProofs"
-          class="mt-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-warning text-white text-[11px] font-bold disabled:opacity-60"
+          class="mt-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-warning text-white text-xs font-bold disabled:opacity-60"
         >
           <Loader2 v-if="recoveringProofs" class="w-3 h-3 animate-spin" />
           <RefreshCw v-else class="w-3 h-3" />
@@ -271,11 +259,11 @@ onBeforeUnmount(() => {
     <!-- Recent transactions -->
     <div class="space-y-2">
       <div class="flex items-center justify-between px-1">
-        <span class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">{{ t('wallet.recent') }}</span>
+        <span class="text-xs uppercase tracking-widest text-text-muted font-semibold">{{ t('wallet.recent') }}</span>
         <button
           v-if="recentTxs.length > 0"
           @click="emit('history')"
-          class="flex items-center gap-0.5 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium"
+          class="flex items-center gap-0.5 text-xs text-text-muted hover:text-brand transition-all duration-200 font-medium"
         >
           {{ t('wallet.viewAll') }} <ChevronRight class="w-3 h-3" />
         </button>
@@ -297,35 +285,10 @@ onBeforeUnmount(() => {
       <div v-else class="bg-surface-card rounded-3xl border border-border p-6 text-center shadow-sm">
         <img src="/Onboarding%20wizard/storyset-receipt-bro.svg" alt="" class="w-28 h-20 object-contain mx-auto -mt-2 mb-1" />
         <p class="text-xs text-text-muted">{{ t('wallet.noTransactions') }}</p>
-        <p class="text-[10px] text-text-muted mt-0.5">{{ t('wallet.noTransactionsHint') }}</p>
+        <p class="text-xs text-text-muted mt-0.5">{{ t('wallet.noTransactionsHint') }}</p>
       </div>
     </div>
 
-    <!-- Disconnect -->
-    <button
-      @click="confirmDisconnect = true"
-      class="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-text-muted hover:text-error transition-all duration-200"
-    >
-      <Unlink class="w-3 h-3" />
-      {{ t('wallet.disconnectWallet') }}
-    </button>
 
-    <BottomSheet :open="confirmDisconnect" variant="danger" @close="confirmDisconnect = false">
-      <template #icon><AlertTriangle class="w-4 h-4 text-warning" /></template>
-      <template #title>{{ t('wallet.disconnectTitle') }}</template>
-      <template #description>{{ t('wallet.disconnectDesc') }}</template>
-      <template #actions>
-        <button @click="confirmDisconnect = false"
-          class="py-2 text-xs rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold">
-          {{ t('common.cancel') }}
-        </button>
-        <button @click="handleDisconnect"
-          :disabled="disconnecting"
-          class="py-2 text-xs rounded-2xl bg-error text-white hover:bg-error/90 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
-          <Loader2 v-if="disconnecting" class="w-3 h-3 animate-spin" />
-          {{ disconnecting ? t('wallet.disconnecting') : t('wallet.disconnect') }}
-        </button>
-      </template>
-    </BottomSheet>
   </div>
 </template>

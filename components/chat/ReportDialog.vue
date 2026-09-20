@@ -18,6 +18,7 @@ const { mute } = useMuteList()
 const props = defineProps({
   pubkey: { type: String, required: true },
   messageId: { type: String, default: '' },
+  embedded: Boolean,
 })
 
 const emit = defineEmits(['close'])
@@ -36,12 +37,13 @@ const reportTypes = computed(() => [
 ])
 
 async function submit() {
+  if (submitting.value) return
   submitting.value = true
   try {
     await send('REPORT_EVENT', props.messageId || null, props.pubkey, reportType.value, reason.value.trim())
 
     if (alsoBlock.value) {
-      mute(props.pubkey)
+      await mute(props.pubkey)
     }
 
     toast.success(t('chat.reportSent'))
@@ -56,26 +58,27 @@ async function submit() {
 
 <template>
   <div class="animate-fade-in-up space-y-3">
-    <div class="flex items-center justify-between">
+    <div v-if="!embedded" class="flex items-center justify-between">
       <div class="flex items-center gap-2">
         <Flag class="w-4 h-4 text-warning" />
         <h3 class="text-sm font-extrabold">{{ t('chat.reportTitle') }}</h3>
       </div>
       <button @click="emit('close')" :aria-label="t('common.close')"
-        class="p-1 rounded-md hover:bg-surface-elevated transition-colors">
+        class="p-1 rounded-md hover:bg-surface-elevated transition-colors min-w-8 min-h-8">
         <X class="w-4 h-4 text-text-muted" />
       </button>
     </div>
 
+    <p class="text-sm text-text-secondary">{{ t('chat.reportPublicNotice') }}</p>
     <!-- Report type -->
     <div class="space-y-1.5">
-      <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+      <label class="text-xs uppercase tracking-widest text-text-muted font-semibold">
         {{ t('chat.reportType') }}
       </label>
       <div class="grid grid-cols-2 gap-1.5">
         <button
           v-for="rt in reportTypes" :key="rt.value"
-          @click="reportType = rt.value"
+          @click="reportType = rt.value" :aria-pressed="reportType === rt.value"
           class="px-3 py-2 rounded-xl text-xs font-medium transition-all text-left"
           :class="reportType === rt.value
             ? 'bg-warning/10 border border-warning/30 text-warning'
@@ -88,12 +91,12 @@ async function submit() {
 
     <!-- Reason -->
     <div class="space-y-1.5">
-      <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
-        {{ t('chat.reportReason') }} <span class="normal-case tracking-normal text-text-muted/60">{{ t('common.optional') }}</span>
+      <label class="text-xs uppercase tracking-widest text-text-muted font-semibold">
+        {{ t('chat.reportReason') }} <span class="normal-case tracking-normal text-text-muted">{{ t('common.optional') }}</span>
       </label>
-      <textarea v-model="reason" rows="2" maxlength="500"
+      <textarea v-model="reason" :aria-label="t('chat.reportReason')" rows="2" maxlength="500"
         :placeholder="t('chat.reportReasonPlaceholder')"
-        class="w-full bg-surface-base border border-border rounded-xl px-3 py-2 text-xs outline-none focus:border-warning transition-colors resize-none placeholder:text-text-muted/50" />
+        class="w-full bg-surface-base border border-border rounded-xl px-3 py-2 text-xs outline-none focus:border-warning transition-colors resize-none placeholder:text-text-muted" />
     </div>
 
     <!-- Block toggle -->
@@ -102,7 +105,7 @@ async function submit() {
         class="w-4 h-4 rounded border-border text-warning accent-[var(--semantic-warning)]" />
       <div>
         <span class="text-xs font-semibold">{{ t('chat.alsoBlock') }}</span>
-        <p class="text-[10px] text-text-muted">{{ t('chat.alsoBlockDesc') }}</p>
+        <p class="text-xs text-text-muted">{{ t('chat.alsoBlockDesc') }}</p>
       </div>
     </label>
 

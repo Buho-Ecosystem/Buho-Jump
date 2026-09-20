@@ -102,3 +102,15 @@ Please **do not** open a public issue for security vulnerabilities. See [SECURIT
 ## License
 
 By contributing, you agree that your contributions will be licensed under [AGPL-3.0](LICENSE).
+
+## UI size and language contract
+
+Compare UI decisions with [Apple’s HIG](https://developer.apple.com/design/human-interface-guidelines) and use [Nostr Design](https://nostrdesign.org/) for protocol-specific questions. See [the review decisions](docs/UX_DECISIONS.md).
+
+Permission windows request 420×680 outer pixels, bounded to the requesting browser window where its geometry is available. Window decorations reduce the viewport. Their content scrolls independently of the decision footer; Sign in/Allow, site trust, and Not now must fit at 420×492. Payment prompts do not offer site-wide payment approval. Unlock uses the same fixed action pattern. Firefox prompts also support the full-tab fallback.
+
+The toolbar popup is 380px wide and at most 600px high. Keep common actions within its initial viewport, preserve the tab bar, and scroll content inside the surface. Bottom-sheet content may use up to 70vh. Panel dismissal must consult a flow before discarding payment state.
+
+Use a 12px minimum caption, 14px body, and larger title text. No explicit `text-[…px]` below 12 is allowed. Test both themes, keyboard focus, and touch targets. Protocol names and raw data belong behind Details. Use “account” for what people add/switch/remove and “profile” for public information.
+
+Before changing or releasing these surfaces run `npm test`, `npm run locales:check`, `npm run build`, and `npm run test:ui`. The locale check rejects missing keys, copied multi-word English, and altered interpolation variables; synchronization adds empty entries instead of disguising missing translations with English. Translate new strings in every locale and preserve amounts, names, and plural variables.

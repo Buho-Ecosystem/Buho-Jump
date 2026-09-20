@@ -1,4 +1,5 @@
 <script setup>
+import BackButton from '../BackButton.vue'
 /**
  * Full transaction history — filter tabs (All/Sent/Received),
  * date grouping with collapsible sections, paginated load-more.
@@ -109,12 +110,10 @@ onMounted(() => load())
   <div class="animate-fade-in-up" :class="fullPage ? 'max-w-2xl mx-auto' : ''">
     <!-- Header -->
     <div class="flex items-center gap-2 mb-3">
-      <button v-if="!fullPage" @click="emit('back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.back')">
-        <ArrowLeft class="w-4 h-4 text-text-muted" />
-      </button>
+      <BackButton v-if="!fullPage" @click="emit('back')" />
       <span class="text-sm font-extrabold">{{ t('wallet.historyTitle') }}</span>
       <div class="ml-auto flex items-center gap-1">
-        <button @click="load(0)" :disabled="loading" class="p-1.5 rounded-lg text-text-muted hover:text-brand hover:bg-surface-elevated" :title="t('wallet.refresh')">
+        <button @click="load(0)" :disabled="loading" class="p-1.5 rounded-lg text-text-muted hover:text-brand hover:bg-surface-elevated min-w-8 min-h-8" :title="t('wallet.refresh')">
           <RefreshCw class="w-3.5 h-3.5" :class="loading ? 'animate-spin' : ''" />
         </button>
         <OpenInBrowserButton v-if="!fullPage" page="activity" />
@@ -127,7 +126,7 @@ onMounted(() => load())
         v-for="f in filters"
         :key="f.id"
         @click="setFilter(f.id)"
-        class="flex-1 py-1.5 text-[10px] font-semibold rounded-md transition-all duration-200"
+        class="flex-1 py-1.5 text-xs font-semibold rounded-md transition-all duration-200"
         :class="activeFilter === f.id
           ? 'bg-surface-card text-text-primary shadow-sm'
           : 'text-text-muted hover:text-text-secondary'"
@@ -149,12 +148,12 @@ onMounted(() => load())
           @click="toggleGroup(group.date)"
           class="w-full flex items-center justify-between px-2 py-1 mb-1"
         >
-          <span class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+          <span class="text-xs uppercase tracking-widest text-text-muted font-semibold">
             {{ group.label }}
           </span>
           <div class="flex items-center gap-1.5">
-            <span class="text-[10px] text-text-muted font-medium">
-              {{ group.transactions.length }} tx
+            <span class="text-xs text-text-muted font-medium">
+              {{ group.transactions.length }}
             </span>
             <ChevronDown
               class="w-3 h-3 text-text-muted transition-transform duration-200"

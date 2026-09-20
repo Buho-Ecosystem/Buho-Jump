@@ -38,7 +38,8 @@
     "locales:sync": "node scripts/locales.mjs",
     "test:cashu-live": "node scripts/check-cashu-mint.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:ui": "node scripts/check-prompt-layout.mjs"
   },
   "dependencies": {
     "@branta-ops/branta": "3.1.3",
@@ -60,10 +61,11 @@
     "vue-sonner": "^2.0.9"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.2.0",
     "@wxt-dev/module-vue": "^1.0.3",
     "tailwindcss": "^4.2.0",
-    "vitest": "^4.1.0",
+    "vitest": "^4.1.11",
     "wxt": "^0.21.3"
   },
   "overrides": {

@@ -26,7 +26,7 @@ async function pick(code) {
   <div :class="compact ? 'space-y-0.5' : 'space-y-3'">
     <div v-if="!compact" class="text-center space-y-0.5">
       <p class="text-xs text-text-muted">{{ t('settings.language') }}</p>
-      <p class="text-[10px] text-text-muted/70">{{ t('settings.languageHint') }}</p>
+      <p class="text-xs text-text-muted">{{ t('settings.languageHint') }}</p>
     </div>
 
     <div :class="compact

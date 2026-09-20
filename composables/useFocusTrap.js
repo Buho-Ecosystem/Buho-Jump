@@ -17,6 +17,9 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ')
 
+// Only the topmost sheet handles keys when a confirmation covers a flow.
+const trapStack = []
+
 /**
  * @param {import('vue').Ref<HTMLElement|null>} containerRef — ref to the trap container
  * @param {object} [options]
@@ -25,13 +28,15 @@ const FOCUSABLE = [
  */
 export function useFocusTrap(containerRef, options = {}) {
   let previouslyFocused = null
+  const token = Symbol('focus-trap')
 
   function getFocusable() {
     if (!containerRef.value) return []
-    return [...containerRef.value.querySelectorAll(FOCUSABLE)]
+    return [...containerRef.value.querySelectorAll(FOCUSABLE)].filter(el => el.getClientRects().length > 0)
   }
 
   function handleKeydown(e) {
+    if (trapStack.at(-1) !== token) return
     if (e.key === 'Escape' && options.onEscape) {
       e.preventDefault()
       options.onEscape()
@@ -47,12 +52,12 @@ export function useFocusTrap(containerRef, options = {}) {
     const last = focusable[focusable.length - 1]
 
     if (e.shiftKey) {
-      if (document.activeElement === first) {
+      if (document.activeElement === first || !containerRef.value?.contains(document.activeElement)) {
         e.preventDefault()
         last.focus()
       }
     } else {
-      if (document.activeElement === last) {
+      if (document.activeElement === last || !containerRef.value?.contains(document.activeElement)) {
         e.preventDefault()
         first.focus()
       }
@@ -60,10 +65,13 @@ export function useFocusTrap(containerRef, options = {}) {
   }
 
   function activate() {
+    if (trapStack.includes(token)) return
+    trapStack.push(token)
     previouslyFocused = document.activeElement
     document.addEventListener('keydown', handleKeydown, true)
     // Focus first focusable element after a tick
     requestAnimationFrame(() => {
+      if (trapStack.at(-1) !== token) return
       const focusable = getFocusable()
       if (focusable.length > 0) focusable[0].focus()
     })
@@ -71,7 +79,10 @@ export function useFocusTrap(containerRef, options = {}) {
 
   function deactivate() {
     document.removeEventListener('keydown', handleKeydown, true)
-    if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+    const index = trapStack.indexOf(token)
+    const wasTop = index >= 0 && index === trapStack.length - 1
+    if (index >= 0) trapStack.splice(index, 1)
+    if (wasTop && previouslyFocused?.isConnected && typeof previouslyFocused.focus === 'function') {
       previouslyFocused.focus()
     }
     previouslyFocused = null

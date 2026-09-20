@@ -93,8 +93,9 @@ export function useContacts() {
    * Batch-fetch kind 0 profiles, cache results.
    * Uses provided relays or falls back to account defaults.
    */
-  async function fetchProfiles(pubkeys, relays) {
-    const missing = pubkeys.filter(pk => !profileCache.has(pk))
+  async function fetchProfiles(pubkeys, relays, { refresh = false } = {}) {
+    await loadProfileCache()
+    const missing = [...new Set(pubkeys)].filter(pk => refresh || !profileCache.has(pk))
     if (missing.length === 0) return
 
     const useRelays = relays || DEFAULT_ACCOUNT_RELAYS
@@ -107,6 +108,7 @@ export function useContacts() {
 
       const latest = {}
       for (const e of events) {
+        if (!missing.includes(e.pubkey)) continue
         if (!latest[e.pubkey] || e.created_at > latest[e.pubkey].created_at) {
           latest[e.pubkey] = e
         }
@@ -221,6 +223,7 @@ export function useContacts() {
     loadFollowList,
     fetchProfile,
     fetchProfiles,
+    loadCachedProfiles: loadProfileCache,
     getCachedProfile,
     resolveInput,
     searchContacts,

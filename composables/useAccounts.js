@@ -4,9 +4,12 @@
  */
 
 import { ref, computed } from 'vue'
+import { useContacts } from './useContacts.js'
+import { accountProfile } from '../lib/accountProfile.js'
 import { useMessaging } from './useMessaging.js'
 
 const accounts = ref([])
+let loadId = 0
 const nip46Status = ref({ connected: false, reconnecting: false })
 const { send } = useMessaging()
 
@@ -14,7 +17,20 @@ export function useAccounts() {
   const activeAccount = computed(() => accounts.value.find((a) => a.isActive) || null)
 
   async function load() {
-    accounts.value = await send('GET_ACCOUNTS') || []
+    const generation = ++loadId
+    const list = await send('GET_ACCOUNTS') || []
+    if (generation !== loadId) return
+    const { fetchProfiles, getCachedProfile, loadCachedProfiles } = useContacts()
+    const enrich = () => list.map(account => ({ ...account, profile: accountProfile(getCachedProfile(account.pubkey)) }))
+    accounts.value = enrich()
+    await loadCachedProfiles()
+    if (generation !== loadId) return
+    accounts.value = enrich()
+    // Names are usable immediately; fetching all public profiles never blocks
+    // opening the account switcher or a sign-in request.
+    fetchProfiles(list.map(a => a.pubkey).filter(Boolean), undefined, { refresh: true }).then(() => {
+      if (generation === loadId) accounts.value = enrich()
+    }).catch(() => {})
   }
 
   async function create(name) {

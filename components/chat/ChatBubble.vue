@@ -140,9 +140,10 @@ const spacerWidth = computed(() => {
         isLastInGroup && !isZap && !isSent ? 'chat-tail-received' : '',
       ]"
     >
+      <button v-if="!deleted" @click.stop="showActions = true" :aria-label="t('common.more')" class="float-right w-8 h-8 rounded-lg text-text-secondary">…</button>
       <!-- Deleted message -->
       <template v-if="deleted">
-        <span class="inline-flex items-center gap-1 text-text-muted/60 italic text-xs">
+        <span class="inline-flex items-center gap-1 text-text-muted italic text-xs">
           <AlertTriangle class="w-3 h-3" />
           {{ t('chat.messageDeletedLabel') }}
           <span class="inline-block w-[52px]" />
@@ -152,7 +153,7 @@ const spacerWidth = computed(() => {
       <template v-else>
 
       <!-- Reply preview (if this message is a reply) -->
-      <div v-if="message.replyTo" class="text-[10px] text-text-muted/70 border-l-2 border-brand/40 pl-1.5 mb-1 truncate italic">
+      <div v-if="message.replyTo" class="text-xs text-text-muted border-l-2 border-brand/40 pl-1.5 mb-1 truncate italic">
         {{ message.replyTo.content?.slice(0, 60) || t('chat.reply') }}
       </div>
 
@@ -165,11 +166,11 @@ const spacerWidth = computed(() => {
       </span>
 
       <!-- Content warning gate (NIP-36) -->
-      <span v-else-if="contentWarning && !cwRevealed" class="inline-flex items-center gap-1.5 cursor-pointer" @click="cwRevealed = true">
+      <button type="button" v-else-if="contentWarning && !cwRevealed" class="inline-flex items-center gap-1.5 cursor-pointer" @click="cwRevealed = true">
         <AlertTriangle class="w-3 h-3 text-warning shrink-0" />
         <span class="text-warning text-xs italic">{{ contentWarning || t('chat.contentWarning') }}</span>
         <span class="inline-block" :class="spacerWidth" />
-      </span>
+      </button>
 
       <!-- Regular message content + inline timestamp spacer -->
       <span v-else-if="enrichedContent">
@@ -194,14 +195,14 @@ const spacerWidth = computed(() => {
 
       <!-- Timestamp + status (floating bottom-right inside bubble, Telegram-style) -->
       <span class="float-right relative top-[4px] ml-2 flex items-center gap-0.5 select-none">
-        <span class="text-[10px] opacity-50 tabular-nums">{{ timeStr }}</span>
+        <span class="text-xs text-text-secondary tabular-nums">{{ timeStr }}</span>
         <!-- Status indicators for sent messages -->
         <template v-if="isSent">
-          <Loader2 v-if="isSending" class="w-[12px] h-[12px] opacity-40 animate-spin" />
+          <Loader2 v-if="isSending" class="w-[12px] h-[12px]  animate-spin" />
           <button
             v-else-if="isFailed"
             @click.stop="emit('retry', message.id)"
-            class="inline-flex items-center gap-0.5 text-error opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
+            class="inline-flex items-center gap-0.5 text-error  transition-opacity cursor-pointer"
             :title="t('chat.tapToRetry')"
           >
             <AlertCircle class="w-[13px] h-[13px]" />
@@ -210,13 +211,12 @@ const spacerWidth = computed(() => {
           <button
             v-else-if="relayCount > 0"
             @click.stop="showRelayList = !showRelayList"
-            class="inline-flex items-center gap-[2px] px-[5px] py-[1px] rounded-full bg-white/10 text-[8px] font-bold opacity-50 hover:opacity-80 transition-opacity cursor-pointer tabular-nums"
+            class="inline-flex items-center gap-[2px] px-[5px] py-[1px] rounded-full bg-white/10 text-xs font-bold  transition-opacity cursor-pointer tabular-nums"
             :title="t('chat.publishedTo', { count: relayCount })"
           >
             <Check class="w-[10px] h-[10px]" />
-            {{ relayCount }}
           </button>
-          <Check v-else class="w-[14px] h-[14px] opacity-40" />
+          <Check v-else class="w-[14px] h-[14px] " />
         </template>
       </span>
     </div>
@@ -229,7 +229,7 @@ const spacerWidth = computed(() => {
   >
     <span
       v-for="r in groupedReactions" :key="r.emoji"
-      class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] border transition-colors cursor-default"
+      class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs border transition-colors cursor-default"
       :class="r.hasMine
         ? 'bg-brand/10 border-brand/20 text-brand'
         : 'bg-surface-elevated border-border text-text-secondary'"
@@ -242,11 +242,11 @@ const spacerWidth = computed(() => {
   <!-- Relay list popup -->
   <div v-if="showRelayList && relayCount > 0" class="flex justify-end mt-0.5 px-2 animate-fade-in">
     <div class="bg-surface-card rounded-xl border border-border shadow-md p-2 max-w-[240px]">
-      <p class="text-[9px] text-text-muted font-semibold uppercase tracking-wider mb-1">
+      <p class="text-xs text-text-muted font-semibold uppercase tracking-wider mb-1">
         {{ t('chat.publishedTo', { count: relayCount }) }}
       </p>
       <div v-for="url in message.publishedRelays" :key="url"
-        class="text-[10px] text-text-secondary font-mono truncate py-0.5">
+        class="text-xs text-text-secondary font-mono truncate py-0.5">
         {{ url.replace('wss://', '') }}
       </div>
     </div>
@@ -256,7 +256,7 @@ const spacerWidth = computed(() => {
   <div v-if="isFailed" class="flex justify-end mt-0.5 mb-1 px-2">
     <button
       @click="emit('retry', message.id)"
-      class="text-[10px] text-error/70 hover:text-error transition-colors"
+      class="text-xs text-error/70 hover:text-error transition-colors"
     >
       {{ t('chat.tapToRetry') }}
     </button>

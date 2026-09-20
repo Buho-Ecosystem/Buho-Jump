@@ -1,4 +1,5 @@
 <script setup>
+import BackButton from '../BackButton.vue'
 /**
  * Receive flow — unified input for Lightning invoice creation and ecash token redemption.
  *
@@ -19,6 +20,7 @@ import { formatSats } from '../../lib/utils.js'
 import { getTokenMetadata } from '@cashu/cashu-ts'
 import { requestOriginAccess } from '../../lib/browser/hostPermissions.js'
 import { requireSecureUrl } from '../../lib/origins.js'
+import BottomSheet from '../BottomSheet.vue'
 import SatButtons from './SatButtons.vue'
 import QrDisplay from '../QrDisplay.vue'
 import {
@@ -44,6 +46,8 @@ const amountFiat = ref('')
 const inputMode = ref('sats') // 'sats' | 'fiat'
 const memo = ref('')
 const creating = ref(false)
+const confirmClose = ref(false)
+const closeEntirePanel = ref(false)
 const error = ref('')
 const invoice = ref('')
 const copied = ref(false)
@@ -475,6 +479,20 @@ function reset() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
 
+function requestClose(entirePanel = true) {
+  if (creating.value || redeeming.value || claiming.value) return
+  closeEntirePanel.value = entirePanel
+  if (step.value === 'invoice' || step.value === 'request') { confirmClose.value = true; return }
+  if (entirePanel || step.value === 'form') emit('back')
+  else reset()
+}
+function finishClose() {
+  confirmClose.value = false
+  if (closeEntirePanel.value) emit('back')
+  else reset()
+}
+defineExpose({ requestClose })
+
 onBeforeUnmount(() => {
   clearTimeout(fiatDebounce)
   stopRequestPoll()
@@ -483,17 +501,21 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <BottomSheet :open="confirmClose" @close="confirmClose = false">
+    <template #title>{{ t('wallet.closeReceiveTitle') }}</template>
+    <template #description>{{ t('wallet.closeReceiveDescription') }}</template>
+    <template #actions>
+      <button @click="confirmClose = false" class="min-h-11 rounded-xl bg-brand text-surface-base">{{ t('common.cancel') }}</button>
+      <button @click="finishClose" class="min-h-11 rounded-xl bg-surface-elevated">{{ t('common.close') }}</button>
+    </template>
+  </BottomSheet>
   <div class="p-4 animate-fade-in-up">
 
     <!-- Header -->
     <div class="flex items-center gap-3 mb-5">
-      <button
-        @click="step === 'form' ? emit('back') : reset()"
-        :aria-label="t('common.back')"
-        class="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-surface-elevated transition-all duration-200"
-      >
-        <ArrowLeft class="w-4 h-4 text-text-muted" />
-      </button>
+      <BackButton
+        @click="requestClose(false)"
+       />
       <div>
         <h1 class="text-[15px] font-extrabold leading-tight">
           {{ step === 'invoice' ? t('wallet.shareInvoice')
@@ -501,7 +523,7 @@ onBeforeUnmount(() => {
             : step === 'success' ? t('wallet.statusReceived')
             : t('wallet.receiveTitle') }}
         </h1>
-        <p v-if="step === 'form'" class="text-[10px] text-text-muted mt-0.5">
+        <p v-if="step === 'form'" class="text-xs text-text-muted mt-0.5">
           {{ !isCashu ? t('wallet.receiveHintNwc')
             : receiveMode === 'ecash' ? t('wallet.receiveHintEcash')
             : t('wallet.receiveHintCashu') }}
@@ -544,12 +566,12 @@ onBeforeUnmount(() => {
       <!-- Amount input area -->
       <div class="bg-surface-card rounded-2xl border border-border p-4 space-y-3">
         <div class="flex items-center justify-between">
-          <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+          <label class="text-xs uppercase tracking-widest text-text-muted font-semibold">
             {{ inputMode === 'sats' ? t('wallet.amountSats') : t('wallet.amountFiat', { currency: currency.toUpperCase() }) }}
           </label>
           <button
             @click="toggleInputMode"
-            class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium"
+            class="flex items-center gap-1 text-xs text-text-muted hover:text-brand transition-all duration-200 font-medium"
           >
             <ArrowLeftRight class="w-3 h-3" />
             {{ inputMode === 'sats' ? currency.toUpperCase() : 'SATS' }}
@@ -560,24 +582,24 @@ onBeforeUnmount(() => {
         <div class="text-center">
           <input
             v-if="inputMode === 'sats'"
-            v-model="amountSats"
+            v-model="amountSats" :aria-label="t('wallet.amountSats')"
             type="number"
             min="1"
             placeholder="0"
             autofocus
-            class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
           <input
             v-else
-            v-model="amountFiat"
+            v-model="amountFiat" :aria-label="t('wallet.amountFiat', { currency: currency.toUpperCase() })"
             type="number"
             min="0.01"
             step="0.01"
             placeholder="0.00"
             autofocus
-            class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
-          <p v-if="conversionHint" class="text-[11px] text-text-muted mt-1 font-medium">{{ conversionHint }}</p>
+          <p v-if="conversionHint" class="text-xs text-text-muted mt-1 font-medium">{{ conversionHint }}</p>
         </div>
 
         <!-- SatButtons -->
@@ -587,11 +609,11 @@ onBeforeUnmount(() => {
       <!-- Memo -->
       <div class="relative">
         <input
-          v-model="memo"
+          v-model="memo" :aria-label="t('wallet.memo')"
           :placeholder="t('wallet.memoPlaceholder')"
           class="w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted"
         />
-        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-text-muted/60 font-medium pointer-events-none">
+        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted font-medium pointer-events-none">
           {{ t('common.optional') }}
         </span>
       </div>
@@ -610,7 +632,7 @@ onBeforeUnmount(() => {
 
       <!-- Create request button (Ecash mode) -->
       <template v-else>
-        <p v-if="!effectiveSats" class="text-[10px] text-text-muted text-center -mt-2">
+        <p v-if="!effectiveSats" class="text-xs text-text-muted text-center -mt-2">
           {{ t('wallet.requestAmountOptional') }}
         </p>
         <button
@@ -629,7 +651,7 @@ onBeforeUnmount(() => {
         <div class="relative">
           <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-border" /></div>
           <div class="relative flex justify-center">
-            <span class="bg-surface-base px-3 text-[9px] text-text-muted uppercase tracking-widest font-semibold">
+            <span class="bg-surface-base px-3 text-xs text-text-muted uppercase tracking-widest font-semibold">
               {{ t('wallet.orRedeemToken') }}
             </span>
           </div>
@@ -638,7 +660,7 @@ onBeforeUnmount(() => {
         <div class="mt-3 space-y-2">
           <div class="relative">
             <textarea
-              v-model="tokenInput"
+              v-model="tokenInput" :aria-label="t('wallet.pasteTokenPlaceholder')"
               :placeholder="t('wallet.pasteTokenPlaceholder')"
               rows="2"
               class="w-full bg-surface-card border border-border rounded-xl pl-3.5 pr-10 py-2.5 text-xs outline-none focus:border-brand transition-colors font-mono placeholder:text-text-muted resize-none"
@@ -647,7 +669,7 @@ onBeforeUnmount(() => {
               type="button"
               @click="pasteFromClipboard"
               :title="t('wallet.pasteToken')"
-              class="absolute top-2.5 right-2.5 p-1 rounded-md text-text-muted hover:text-brand hover:bg-brand/10 transition-all duration-150"
+              class="absolute top-2.5 right-2.5 p-1 rounded-md text-text-muted hover:text-brand hover:bg-brand/10 transition-all duration-150 min-w-8 min-h-8"
             >
               <Clipboard class="w-3.5 h-3.5" />
             </button>
@@ -655,25 +677,25 @@ onBeforeUnmount(() => {
 
           <!-- Token detected indicator -->
           <div v-if="tokenDetected" class="rounded-xl border border-success/20 bg-success/8 p-3 animate-fade-in">
-            <div class="flex items-center gap-2 text-[11px] font-bold text-success">
+            <div class="flex items-center gap-2 text-xs font-bold text-success">
               <Check class="w-3 h-3" />
               {{ t('wallet.ecashTokenDetected') }}
             </div>
             <div class="mt-2 flex items-center justify-between gap-3">
               <span class="text-sm font-extrabold">{{ t('wallet.ecashTokenAmount', { amount: formatSats(tokenPreview.amount) }) }}</span>
-              <span class="text-[10px] text-text-muted truncate">{{ tokenPreview.mintHost }}</span>
+              <span class="text-xs text-text-muted truncate">{{ tokenPreview.mintHost }}</span>
             </div>
-            <p v-if="tokenPreview.memo" class="text-[10px] text-text-secondary mt-1.5 break-words">
+            <p v-if="tokenPreview.memo" class="text-xs text-text-secondary mt-1.5 break-words">
               {{ tokenPreview.memo }}
             </p>
           </div>
 
-          <div v-else-if="tokenLooksLikeCashu" class="flex items-start gap-2 px-3 py-2 rounded-lg text-[11px] text-error bg-error/10 animate-fade-in">
+          <div v-else-if="tokenLooksLikeCashu" class="flex items-start gap-2 px-3 py-2 rounded-lg text-xs text-error bg-error/10 animate-fade-in">
             <AlertTriangle class="w-3 h-3 shrink-0 mt-0.5" />
             {{ t('wallet.invalidEcashToken') }}
           </div>
 
-          <p v-else-if="tokenInput.trim()" class="px-3 py-1 text-[10px] text-text-muted animate-fade-in">
+          <p v-else-if="tokenInput.trim()" class="px-3 py-1 text-xs text-text-muted animate-fade-in">
             {{ t('wallet.tokenNotRecognized') }}
           </p>
 
@@ -709,12 +731,12 @@ onBeforeUnmount(() => {
       <div class="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm">
         <!-- Amount header -->
         <div class="px-4 pt-4 pb-2 text-center">
-          <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider">{{ t('wallet.requesting') }}</p>
+          <p class="text-xs text-text-muted font-medium uppercase tracking-wider">{{ t('wallet.requesting') }}</p>
           <div class="flex items-baseline justify-center gap-1.5 mt-1">
             <span class="text-2xl font-extrabold tracking-tight">{{ formatSats(effectiveSats) }}</span>
             <span class="text-xs font-medium text-text-muted">{{ t('wallet.sats') }}</span>
           </div>
-          <p v-if="toFiat(effectiveSats)" class="text-[11px] text-brand mt-0.5 font-medium">≈ {{ toFiat(effectiveSats) }}</p>
+          <p v-if="toFiat(effectiveSats)" class="text-xs text-brand mt-0.5 font-medium">≈ {{ toFiat(effectiveSats) }}</p>
         </div>
 
         <!-- QR Code -->
@@ -729,7 +751,7 @@ onBeforeUnmount(() => {
 
         <!-- Memo -->
         <div v-if="memo" class="px-4 pb-3 text-center">
-          <p class="text-[11px] text-text-muted italic">{{ memo }}</p>
+          <p class="text-xs text-text-muted italic">{{ memo }}</p>
         </div>
 
         <!-- Waiting indicator -->
@@ -761,10 +783,10 @@ onBeforeUnmount(() => {
       <!-- Invoice text + copy -->
       <div class="relative group">
         <button
-          @click="copyInvoice"
+          @click="copyInvoice" data-copy-invoice :aria-label="t('common.copy')"
           class="w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-left hover:border-brand/40 transition-all duration-200 cursor-pointer"
         >
-          <div class="text-[9px] font-mono text-text-muted break-all line-clamp-2 leading-relaxed pr-8">
+          <div class="text-xs font-mono text-text-muted break-all line-clamp-2 leading-relaxed pr-8">
             {{ invoice }}
           </div>
           <div class="absolute top-1/2 -translate-y-1/2 right-3 p-1 rounded-md transition-colors"
@@ -779,14 +801,14 @@ onBeforeUnmount(() => {
       <!-- Actions -->
       <div class="grid grid-cols-2 gap-2.5">
         <button
-          @click="reset"
+          @click="requestClose(false)"
           class="py-2.5 text-sm rounded-2xl bg-surface-card border border-border text-text-secondary hover:bg-surface-elevated transition-all duration-200 font-semibold flex items-center justify-center gap-1.5"
         >
           <RefreshCw class="w-3.5 h-3.5" />
           {{ t('wallet.newInvoice') }}
         </button>
         <button
-          @click="copyInvoice"
+          @click="copyInvoice" data-copy-invoice :aria-label="t('common.copy')"
           class="py-2.5 text-sm rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all duration-200 font-bold btn-primary flex items-center justify-center gap-1.5"
         >
           <Check v-if="copied" class="w-4 h-4" />
@@ -805,13 +827,13 @@ onBeforeUnmount(() => {
       <div class="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm">
         <!-- Amount header -->
         <div class="px-4 pt-4 pb-2 text-center">
-          <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider">{{ t('wallet.requesting') }}</p>
+          <p class="text-xs text-text-muted font-medium uppercase tracking-wider">{{ t('wallet.requesting') }}</p>
           <div v-if="effectiveSats" class="flex items-baseline justify-center gap-1.5 mt-1">
             <span class="text-2xl font-extrabold tracking-tight">{{ formatSats(effectiveSats) }}</span>
             <span class="text-xs font-medium text-text-muted">{{ t('wallet.sats') }}</span>
           </div>
           <p v-else class="text-sm font-bold mt-1">{{ t('wallet.requestAnyAmount') }}</p>
-          <p v-if="effectiveSats && toFiat(effectiveSats)" class="text-[11px] text-brand mt-0.5 font-medium">≈ {{ toFiat(effectiveSats) }}</p>
+          <p v-if="effectiveSats && toFiat(effectiveSats)" class="text-xs text-brand mt-0.5 font-medium">≈ {{ toFiat(effectiveSats) }}</p>
         </div>
 
         <!-- QR code (always one static image so every wallet can scan it) -->
@@ -821,7 +843,7 @@ onBeforeUnmount(() => {
 
         <!-- Memo -->
         <div v-if="memo" class="px-4 pb-3 text-center">
-          <p class="text-[11px] text-text-muted italic">{{ memo }}</p>
+          <p class="text-xs text-text-muted italic">{{ memo }}</p>
         </div>
 
         <!-- Waiting indicator -->
@@ -835,15 +857,15 @@ onBeforeUnmount(() => {
         <!-- Payment arrived from a mint this wallet has not used yet -->
         <div v-if="reviewPayment" class="px-4 pb-4">
           <div class="rounded-xl border border-warning/25 bg-warning/8 p-3 space-y-2">
-            <div class="flex items-center gap-2 text-[11px] font-bold text-warning">
+            <div class="flex items-center gap-2 text-xs font-bold text-warning">
               <AlertTriangle class="w-3 h-3" />
               {{ t('wallet.requestReceivedNewMint') }}
             </div>
             <div class="flex items-center justify-between gap-3">
               <span class="text-sm font-extrabold">{{ t('wallet.ecashTokenAmount', { amount: formatSats(reviewPayment.amountSats) }) }}</span>
-              <span class="text-[10px] text-text-muted truncate">{{ reviewPayment.mintHost }}</span>
+              <span class="text-xs text-text-muted truncate">{{ reviewPayment.mintHost }}</span>
             </div>
-            <p class="text-[10px] text-text-secondary">{{ t('wallet.requestReviewHint', { host: reviewPayment.mintHost }) }}</p>
+            <p class="text-xs text-text-secondary">{{ t('wallet.requestReviewHint', { host: reviewPayment.mintHost }) }}</p>
             <button
               @click="redeemReviewPayment"
               :disabled="redeeming"
@@ -869,7 +891,7 @@ onBeforeUnmount(() => {
           @click="copyRequest"
           class="w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-left hover:border-brand/40 transition-all duration-200 cursor-pointer"
         >
-          <div class="text-[9px] font-mono text-text-muted break-all line-clamp-2 leading-relaxed pr-8">
+          <div class="text-xs font-mono text-text-muted break-all line-clamp-2 leading-relaxed pr-8">
             {{ requestEncoded }}
           </div>
           <div class="absolute top-1/2 -translate-y-1/2 right-3 p-1 rounded-md transition-colors"
@@ -884,7 +906,7 @@ onBeforeUnmount(() => {
       <!-- Actions -->
       <div class="grid grid-cols-2 gap-2.5">
         <button
-          @click="reset"
+          @click="requestClose(false)"
           class="py-2.5 text-sm rounded-2xl bg-surface-card border border-border text-text-secondary hover:bg-surface-elevated transition-all duration-200 font-semibold flex items-center justify-center gap-1.5"
         >
           <RefreshCw class="w-3.5 h-3.5" />
@@ -912,7 +934,7 @@ onBeforeUnmount(() => {
         </div>
         <p class="text-2xl font-extrabold tracking-tight">+{{ formatSats(mintedAmount) }}</p>
         <p class="text-xs text-text-muted mt-1.5">{{ t('wallet.receivedSats', { amount: formatSats(mintedAmount) }) }}</p>
-        <p v-if="toFiat(mintedAmount)" class="text-[11px] text-brand mt-0.5 font-medium">≈ {{ toFiat(mintedAmount) }}</p>
+        <p v-if="toFiat(mintedAmount)" class="text-xs text-brand mt-0.5 font-medium">≈ {{ toFiat(mintedAmount) }}</p>
       </div>
       <button
         @click="emit('done')"

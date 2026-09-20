@@ -32,10 +32,36 @@ function mergeLocaleShape(base, current) {
   }
 
   if (current === '' || current === null || typeof current === 'undefined') {
-    return base
+    return '' // A missing translation must never be disguised as completed English copy.
   }
 
   return current
+}
+
+function flatten(object, prefix = '') {
+  return Object.fromEntries(Object.entries(object).flatMap(([key, value]) => {
+    const name = prefix ? `${prefix}.${key}` : key
+    return isPlainObject(value) ? Object.entries(flatten(value, name)) : [[name, value]]
+  }))
+}
+
+// Product names and locale-independent formats are intentional, not translations.
+const sharedText = new Set(['Lightning Login', 'Nostr Wallet Connect', 'Buho Jump', 'Buho Jump v{version}', 'Version {version}'])
+function copiedEnglish(base, current) {
+  return Object.entries(flatten(base)).filter(([key, value]) => {
+    if (flattenedValue(current, key) !== value || sharedText.has(value)) return false
+    const words = value.replace(/\{[^}]*\}/g, '').match(/[A-Za-z]+/g) || []
+    return words.length > 1
+  }).map(([key]) => key)
+}
+function flattenedValue(object, key) {
+  return key.split('.').reduce((value, part) => value?.[part], object)
+}
+function placeholderErrors(base, current) {
+  const placeholders = value => [...new Set(String(value).match(/\{\w+\}/g) || [])].sort().join(',')
+  return Object.entries(flatten(base)).filter(([key, value]) =>
+    placeholders(value) !== placeholders(flattenedValue(current, key)),
+  ).map(([key]) => key)
 }
 
 function collectDiff(base, current, prefix = '', diff = { missing: [], empty: [] }) {
@@ -81,12 +107,16 @@ async function main() {
     const filePath = path.join(localesDir, file)
     const locale = await readJson(filePath)
     const diff = collectDiff(baseLocale, locale)
-    const issueCount = diff.missing.length + diff.empty.length
+    const copied = copiedEnglish(baseLocale, locale)
+    const placeholders = placeholderErrors(baseLocale, locale)
+    const issueCount = diff.missing.length + diff.empty.length + copied.length + placeholders.length
 
     if (issueCount === 0) continue
 
     failing = true
-    console.log(`${file}: ${diff.missing.length} missing, ${diff.empty.length} empty`)
+    console.log(`${file}: ${diff.missing.length} missing, ${diff.empty.length} empty, ${copied.length} copied English, ${placeholders.length} placeholder errors`)
+    if (copied.length) console.log(`  Translate: ${copied.join(', ')}`)
+    if (placeholders.length) console.log(`  Preserve variables: ${placeholders.join(', ')}`)
 
     if (checkOnly) continue
 
@@ -100,7 +130,7 @@ async function main() {
   }
 
   if (!failing) {
-    console.log('All locale files are complete.')
+    console.log('Locale keys, variables, and copied-English checks passed. Translation quality still requires language review.')
   }
 }
 

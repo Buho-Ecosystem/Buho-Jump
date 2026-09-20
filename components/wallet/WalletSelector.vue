@@ -104,13 +104,13 @@ function handleAdd() {
       <Wallet v-else class="w-3 h-3 shrink-0" :class="connected ? 'text-brand' : 'text-text-muted'" />
 
       <template v-if="connected && activeWallet">
-        <span class="text-[11px] font-semibold truncate">{{ activeWallet.name }}</span>
-        <span v-if="balance != null" class="text-[9px] text-text-muted font-mono shrink-0">
+        <span class="text-xs font-semibold truncate">{{ activeWallet.name }}</span>
+        <span v-if="balance != null" class="text-xs text-text-muted font-mono shrink-0">
           {{ formatSats(balance) }}
         </span>
       </template>
       <template v-else>
-        <span class="text-[11px] text-text-muted font-medium truncate">{{ t('wallet.connectPrompt') }}</span>
+        <span class="text-xs text-text-muted font-medium truncate">{{ t('wallet.connectPrompt') }}</span>
       </template>
 
       <ChevronDown
@@ -141,16 +141,16 @@ function handleAdd() {
                 <div class="flex items-center gap-1.5">
                   <input
                     ref="renameInput"
-                    v-model="renameValue"
+                    v-model="renameValue" :aria-label="t('wallet.walletName')"
                     @keydown.enter="confirmRename"
                     @keydown.escape="cancelRename"
                     class="flex-1 text-xs font-semibold bg-transparent border-b border-brand outline-none py-0.5 min-w-0"
                     :placeholder="t('wallet.walletName')"
                   />
-                  <button @click="confirmRename" class="p-1 rounded-lg hover:bg-brand/10 transition-colors">
+                  <button @click="confirmRename" :aria-label="t('common.save')" class="p-1 rounded-lg hover:bg-brand/10 transition-colors min-w-8 min-h-8">
                     <Check class="w-3.5 h-3.5 text-brand" />
                   </button>
-                  <button @click="cancelRename" class="p-1 rounded-lg hover:bg-surface-elevated transition-colors">
+                  <button @click="cancelRename" :aria-label="t('common.cancel')" class="p-1 rounded-lg hover:bg-surface-elevated transition-colors min-w-8 min-h-8">
                     <X class="w-3.5 h-3.5 text-text-muted" />
                   </button>
                 </div>
@@ -159,11 +159,11 @@ function handleAdd() {
               <template v-else>
                 <div class="flex items-center gap-1.5">
                   <span class="text-xs font-semibold truncate">{{ activeWallet.name }}</span>
-                  <span class="text-[8px] px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-semibold shrink-0">
+                  <span class="text-xs px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-semibold shrink-0">
                     {{ t('wallet.activeWallet') }}
                   </span>
                 </div>
-                <div v-if="balance != null" class="text-[11px] text-text-muted font-mono mt-0.5">
+                <div v-if="balance != null" class="text-xs text-text-muted font-mono mt-0.5">
                   {{ formatSats(balance) }} {{ t('wallet.sats') }}
                 </div>
               </template>
@@ -172,14 +172,14 @@ function handleAdd() {
             <div v-if="renamingId !== activeWallet.id" class="flex items-center gap-1 shrink-0">
               <button
                 @click.stop="startRename(activeWallet)"
-                class="p-1.5 rounded-lg hover:bg-brand/10 transition-colors"
+                class="p-1.5 rounded-lg hover:bg-brand/10 transition-colors min-w-8 min-h-8"
                 :title="t('wallet.renameWallet')"
               >
                 <Pencil class="w-3 h-3 text-text-muted" />
               </button>
               <button
                 @click.stop="requestRemove(activeWallet)"
-                class="p-1.5 rounded-lg hover:bg-error/10 transition-colors"
+                class="p-1.5 rounded-lg hover:bg-error/10 transition-colors min-w-8 min-h-8"
                 :title="t('wallet.removeWallet')"
               >
                 <Trash2 class="w-3 h-3 text-text-muted hover:text-error" />
@@ -189,32 +189,32 @@ function handleAdd() {
 
           <!-- Other wallets -->
           <template v-if="otherWallets.length > 0">
-            <button
+            <div
               v-for="w in otherWallets"
               :key="w.id"
-              @click="handleSwitch(w.id)"
-              :disabled="switching"
               class="w-full flex items-center gap-3 px-3 py-3 rounded-2xl hover:bg-surface-elevated transition-all duration-200 text-left group disabled:opacity-50"
             >
-              <div class="w-9 h-9 rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 overflow-hidden">
-                <Loader2 v-if="switching" class="w-4 h-4 text-text-muted animate-spin" />
-                <img v-else-if="WALLET_LOGOS[w.type]"
-                  :src="WALLET_LOGOS[w.type]"
-                  :alt="w.type"
-                  class="w-full h-full object-cover rounded-xl"
-                />
-                <Wallet v-else class="w-4 h-4 text-text-muted" />
-              </div>
-              <span class="flex-1 text-xs font-medium text-text-secondary truncate">{{ w.name }}</span>
-              <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                <button @click.stop="startRename(w)" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-colors">
+              <button @click="handleSwitch(w.id)" :disabled="switching" class="flex items-center gap-3 min-w-0 flex-1 text-left">
+                <div class="w-9 h-9 rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 overflow-hidden">
+                  <Loader2 v-if="switching" class="w-4 h-4 text-text-muted animate-spin" />
+                  <img v-else-if="WALLET_LOGOS[w.type]"
+                    :src="WALLET_LOGOS[w.type]"
+                    :alt="w.type"
+                    class="w-full h-full object-cover rounded-xl"
+                  />
+                  <Wallet v-else class="w-4 h-4 text-text-muted" />
+                </div>
+                <span class="flex-1 text-xs font-medium text-text-secondary truncate">{{ w.name }}</span>
+              </button>
+              <div class="flex items-center gap-1 opacity-100 transition-opacity shrink-0">
+                <button @click.stop="startRename(w)" :aria-label="t('wallet.renameWallet')" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-colors min-w-8 min-h-8">
                   <Pencil class="w-3 h-3 text-text-muted" />
                 </button>
-                <button @click.stop="requestRemove(w)" class="p-1.5 rounded-lg hover:bg-error/10 transition-colors">
+                <button @click.stop="requestRemove(w)" :aria-label="t('wallet.removeWallet')" class="p-1.5 rounded-lg hover:bg-error/10 transition-colors min-w-8 min-h-8">
                   <Trash2 class="w-3 h-3 text-text-muted hover:text-error" />
                 </button>
               </div>
-            </button>
+            </div>
           </template>
 
           <!-- Add wallet -->
@@ -237,7 +237,7 @@ function handleAdd() {
       <template #title>{{ t('wallet.removeWalletTitle') }}</template>
       <template #description>
         <span v-if="removingWallet" class="font-semibold">{{ removingWallet.name }}</span>
-        <br />{{ t('wallet.removeWalletDesc') }}
+        <br />{{ removingWallet?.type === 'cashu' ? t('wallet.removeWalletWarning') : t('wallet.removeWalletDesc') }}
       </template>
       <template #actions>
         <button

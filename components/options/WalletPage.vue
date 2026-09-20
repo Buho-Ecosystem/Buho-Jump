@@ -132,7 +132,7 @@ async function handleRefresh() {
       <div>
         <p class="text-sm font-bold text-error">{{ t('account.vaultProblemTitle') }}</p>
         <p class="text-xs text-text-secondary mt-1 leading-relaxed">{{ vaultError }}</p>
-        <p class="text-[10px] text-text-muted mt-2">{{ t('account.vaultProblemHint') }}</p>
+        <p class="text-xs text-text-muted mt-2">{{ t('account.vaultProblemHint') }}</p>
       </div>
     </div>
 
@@ -154,16 +154,16 @@ async function handleRefresh() {
               <div class="flex items-center gap-2">
                 <input
                   ref="renameInput"
-                  v-model="renameValue"
+                  v-model="renameValue" :aria-label="t('wallet.walletName')"
                   @keydown.enter="confirmRename"
                   @keydown.escape="cancelRename"
                   class="flex-1 text-sm font-semibold bg-transparent border-b border-brand outline-none py-0.5 min-w-0"
                   :placeholder="t('wallet.walletName')"
                 />
-                <button @click="confirmRename" class="p-1 rounded-lg hover:bg-brand/10 transition-colors">
+                <button @click="confirmRename" class="p-1 rounded-lg hover:bg-brand/10 transition-colors min-w-8 min-h-8">
                   <Check class="w-4 h-4 text-brand" />
                 </button>
-                <button @click="cancelRename" class="p-1 rounded-lg hover:bg-surface-elevated transition-colors">
+                <button @click="cancelRename" class="p-1 rounded-lg hover:bg-surface-elevated transition-colors min-w-8 min-h-8">
                   <X class="w-4 h-4 text-text-muted" />
                 </button>
               </div>
@@ -171,7 +171,7 @@ async function handleRefresh() {
             <template v-else>
               <div class="flex items-center gap-2">
                 <span class="text-sm font-extrabold truncate">{{ activeWallet.name }}</span>
-                <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-semibold shrink-0">
+                <span class="text-xs px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-semibold shrink-0">
                   {{ t('wallet.activeWallet') }}
                 </span>
               </div>
@@ -196,7 +196,7 @@ async function handleRefresh() {
 
     <!-- Other wallets -->
     <div v-if="otherWallets.length > 0" class="space-y-2">
-      <h2 class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">
+      <h2 class="text-xs uppercase tracking-widest text-text-muted font-semibold px-1">
         {{ t('wallet.walletSelector') }}
       </h2>
       <button
@@ -216,11 +216,11 @@ async function handleRefresh() {
           <Wallet v-else class="w-4 h-4 text-text-muted" />
         </div>
         <span class="flex-1 text-sm font-medium text-text-secondary truncate">{{ w.name }}</span>
-        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-          <button @click.stop="startRename(w)" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-colors">
+        <div class="flex items-center gap-1 opacity-100 transition-opacity shrink-0">
+          <button @click.stop="startRename(w)" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-colors min-w-8 min-h-8">
             <Pencil class="w-3 h-3 text-text-muted" />
           </button>
-          <button @click.stop="removingWallet = w" class="p-1.5 rounded-lg hover:bg-error/10 transition-colors">
+          <button @click.stop="removingWallet = w" class="p-1.5 rounded-lg hover:bg-error/10 transition-colors min-w-8 min-h-8">
             <Trash2 class="w-3 h-3 text-text-muted hover:text-error" />
           </button>
         </div>
@@ -263,7 +263,7 @@ async function handleRefresh() {
       <template #title>{{ t('wallet.removeWalletTitle') }}</template>
       <template #description>
         <span v-if="removingWallet" class="font-semibold">{{ removingWallet.name }}</span>
-        <br />{{ t('wallet.removeWalletDesc') }}
+        <br />{{ removingWallet?.type === 'cashu' ? t('wallet.removeWalletWarning') : t('wallet.removeWalletDesc') }}
       </template>
       <template #actions>
         <button @click="removingWallet = null"

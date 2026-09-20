@@ -23,7 +23,7 @@ useFocusTrap(panelRef, { onEscape: () => emit('close') })
       <div v-if="open" class="absolute inset-0 z-40 bg-black/40" @click="emit('close')" />
     </Transition>
     <Transition name="slide-panel">
-      <div v-if="open" ref="panelRef"
+      <div v-if="open" ref="panelRef" role="dialog" aria-modal="true"
         class="absolute inset-x-0 bottom-0 z-50 flex flex-col bg-surface-card rounded-t-3xl shadow-2xl border-t border-border overflow-hidden"
         style="max-height: 92vh">
         <!-- Drag handle -->

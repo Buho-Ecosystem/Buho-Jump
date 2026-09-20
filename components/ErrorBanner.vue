@@ -28,7 +28,7 @@ const icons = { error: XCircle, warning: AlertTriangle, info: Info }
 
 <template>
   <div
-    :class="['flex items-center gap-2 px-3 py-2 rounded-2xl border text-[11px] animate-fade-in-up', styles[type]]"
+    :class="['flex items-center gap-2 px-3 py-2 rounded-2xl border text-xs animate-fade-in-up', styles[type]]"
     role="alert"
   >
     <component :is="icons[type]" class="w-3.5 h-3.5 shrink-0" />
@@ -44,7 +44,7 @@ const icons = { error: XCircle, warning: AlertTriangle, info: Info }
     <button
       v-if="dismissable"
       @click="$emit('dismiss')"
-      class="shrink-0 p-0.5 rounded hover:bg-white/10 transition-colors"
+      class="shrink-0 p-0.5 rounded hover:bg-white/10 transition-colors min-w-8 min-h-8"
       :aria-label="'Dismiss'"
     >
       <X class="w-3 h-3" />

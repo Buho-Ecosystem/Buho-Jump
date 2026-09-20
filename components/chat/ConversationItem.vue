@@ -31,7 +31,7 @@ onMounted(async () => {
 })
 
 const displayName = computed(() =>
-  profile.value?.display_name || profile.value?.name || truncateNpub(props.pubkey)
+  profile.value?.display_name || profile.value?.name || t('chat.unknownUser')
 )
 
 const avatarLetter = computed(() => (displayName.value || '?')[0].toUpperCase())
@@ -57,9 +57,9 @@ const isZap = computed(() => props.lastMessage?.type === 'zap')
 function truncateNpub(pubkey) {
   try {
     const npub = nip19.npubEncode(pubkey)
-    return 'User ' + npub.slice(5, 9) + '...' + npub.slice(-4)
+    return t('chat.unknownUser')
   } catch {
-    return 'User ' + pubkey.slice(0, 6) + '...'
+    return t('chat.unknownUser')
   }
 }
 </script>
@@ -89,7 +89,7 @@ function truncateNpub(pubkey) {
       <!-- Top: name + time -->
       <div class="flex items-baseline justify-between gap-2">
         <span class="text-[13px] font-semibold truncate">{{ displayName }}</span>
-        <span class="text-[11px] shrink-0" :class="unread > 0 ? 'text-brand font-medium' : 'text-text-muted'">
+        <span class="text-xs shrink-0" :class="unread > 0 ? 'text-brand font-medium' : 'text-text-muted'">
           {{ time }}
         </span>
       </div>

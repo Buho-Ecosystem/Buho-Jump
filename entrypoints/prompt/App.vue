@@ -5,15 +5,16 @@
  * Minimal, trust-first layout:
  * - Site identity first (who is asking) + plain-language intent
  * - One permission summary; protocol terms live behind "Technical details"
- * - A safe visit-scoped default; permanent choices live behind "More options"
+ * - One-time approval and explicit site trust stay visible in the footer
  * - Payments always show the amount up front and never auto-approve
  * - Unlock mode shows the requesting site + password entry
  */
 import { ref, computed, onMounted } from 'vue'
+import UnlockForm from '../../components/UnlockForm.vue'
 import { useI18n } from 'vue-i18n'
 import { useTheme } from '../../composables/useTheme.js'
 import { useFiat } from '../../composables/useFiat.js'
-import { truncateKey } from '../../lib/utils.js'
+import { accountProfile } from '../../lib/accountProfile.js'
 import { eventKindLabel } from '../../lib/eventKinds.js'
 import { isLoopbackHostname, normalizeWebOrigin } from '../../lib/origins.js'
 import {
@@ -44,7 +45,6 @@ const deciding = ref('')
 const unlockPassword = ref('')
 const unlockError = ref('')
 const unlockBusy = ref(false)
-const showPassword = ref(false)
 
 // Payment methods — both require per-transaction approval + budget UI
 const PAYMENT_METHODS = ['weblnSendPayment', 'weblnKeysend']
@@ -52,12 +52,13 @@ const PAYMENT_METHODS = ['weblnSendPayment', 'weblnKeysend']
 // Budget "remember" state (payment methods only)
 const rememberBudget = ref(false)
 const budgetAmount = ref('')
+const validBudget = computed(() => Number.isSafeInteger(Number(budgetAmount.value)) && Number(budgetAmount.value) > 0)
 
 // Favicon + disclosure state
 const faviconFailed = ref(false)
 const eventData = ref(null)
-const showEventData = ref(false)
-const showMore = ref(false)
+const responseError = ref('')
+const isLogin = computed(() => method.value === 'getPublicKey' || (method.value === 'signEvent' && ['22242', '27235'].includes(kind.value)))
 const siteTitle = ref('')
 const siteFavicon = ref('')
 const queuedCount = ref(0)
@@ -108,15 +109,13 @@ onMounted(async () => {
       accountMode.value = active.mode || ''
 
       if (active.pubkey) {
-        try {
-          const profileResult = await fetchWithTimeout({ type: 'FETCH_PROFILE', params: [active.pubkey] })
-          const profile = profileResult?.result || profileResult
-          if (profile?.picture) profilePicture.value = profile.picture
-          if (profile?.display_name) accountName.value = profile.display_name
-          else if (profile?.name && !accountName.value) accountName.value = profile.name
-        } catch {
-          // Profile fetch timed out or failed — continue with account name
-        }
+        // Optional metadata must never hold the approval UI behind a slow relay.
+        fetchWithTimeout({ type: 'FETCH_PROFILE', params: [active.pubkey] }).then(result => {
+          const profile = result?.result || result
+          const safe = accountProfile(profile)
+          if (safe?.picture) profilePicture.value = safe.picture
+          accountName.value = safe?.display_name || safe?.name || accountName.value
+        }).catch(() => {})
       }
     }
   } catch {
@@ -143,88 +142,71 @@ onMounted(async () => {
 
 // ── Permission metadata ──
 const PERMISSION_INFO = computed(() => ({
+  getRelays: {
+    label: t('prompt.permRelaysLabel'), what: t('prompt.permRelaysWhat'), detail: '', icon: Globe,
+  },
   getPublicKey: {
     label: t('prompt.permPublicLabel'),
     what: t('prompt.permPublicWhat'),
     detail: t('prompt.permPublicDetail'),
     icon: Fingerprint,
-    risk: 'low',
-    riskLabel: t('prompt.permPublicRisk'),
   },
   signEvent: {
     label: t('prompt.permSignLabel'),
     what: t('prompt.permSignWhat'),
     detail: t('prompt.permSignDetail'),
     icon: FileSignature,
-    risk: 'medium',
-    riskLabel: t('prompt.permSignRisk'),
   },
   nip04_encrypt: {
     label: t('prompt.permEncryptLabel'),
     what: t('prompt.permEncryptWhat'),
     detail: t('prompt.permEncryptDetail'),
     icon: Lock,
-    risk: 'medium',
-    riskLabel: t('prompt.permEncryptRisk'),
   },
   nip04_decrypt: {
     label: t('prompt.permDecryptLabel'),
     what: t('prompt.permDecryptWhat'),
     detail: t('prompt.permDecryptDetail'),
     icon: Unlock,
-    risk: 'medium',
-    riskLabel: t('prompt.permDecryptRisk'),
   },
   nip44_encrypt: {
     label: t('prompt.permEncryptLabel'),
     what: t('prompt.permEncryptWhat'),
     detail: t('prompt.permEncryptDetail'),
     icon: Lock,
-    risk: 'medium',
-    riskLabel: t('prompt.permEncryptRisk'),
   },
   nip44_decrypt: {
     label: t('prompt.permDecryptLabel'),
     what: t('prompt.permDecryptWhat'),
     detail: t('prompt.permDecryptDetail'),
     icon: Unlock,
-    risk: 'medium',
-    riskLabel: t('prompt.permDecryptRisk'),
   },
   weblnEnable: {
     label: t('prompt.permWeblnLabel'),
     what: t('prompt.permWeblnWhat'),
     detail: t('prompt.permWeblnDetail'),
     icon: Zap,
-    risk: 'medium',
-    riskLabel: t('prompt.permWeblnRisk'),
   },
   weblnSendPayment: {
     label: t('prompt.permWeblnPayLabel'),
     what: t('prompt.permWeblnPayWhat'),
     detail: t('prompt.permWeblnPayDetail'),
     icon: Zap,
-    risk: 'high',
-    riskLabel: t('prompt.permWeblnPayRisk'),
   },
   weblnKeysend: {
     label: t('prompt.permKeysendLabel'),
     what: t('prompt.permKeysendWhat'),
     detail: t('prompt.permKeysendDetail'),
     icon: Zap,
-    risk: 'high',
-    riskLabel: t('prompt.permKeysendRisk'),
   },
 }))
 
 const permInfo = computed(() => {
   const base = PERMISSION_INFO.value[method.value] || {
-    label: method.value,
+    label: t('prompt.permSignLabel'),
     what: t('prompt.permDefaultWhat'),
     detail: '',
     icon: ShieldCheck,
-    risk: 'medium',
-    riskLabel: t('prompt.permDefaultRisk'),
   }
 
   if (method.value !== 'signEvent') return base
@@ -238,6 +220,7 @@ const permInfo = computed(() => {
     '7': [t('prompt.actionReactionLabel'), t('prompt.actionReactionWhat')],
     '9734': [t('prompt.actionZapLabel'), t('prompt.actionZapWhat')],
     '10002': [t('prompt.actionRelaysLabel'), t('prompt.actionRelaysWhat')],
+    '22242': [t('prompt.actionLoginLabel'), t('prompt.actionLoginWhat')],
     '27235': [t('prompt.actionLoginLabel'), t('prompt.actionLoginWhat')],
     '30023': [t('prompt.actionArticleLabel'), t('prompt.actionArticleWhat')],
     '30078': [t('prompt.actionAppDataLabel'), t('prompt.actionAppDataWhat')],
@@ -245,12 +228,6 @@ const permInfo = computed(() => {
   const action = actions[kind.value]
   if (!action) return base
   return { ...base, label: action[0], what: action[1] }
-})
-
-const riskBadge = computed(() => {
-  if (permInfo.value.risk === 'low') return { class: 'text-success bg-success/10 border-success/20', dot: 'bg-success' }
-  if (permInfo.value.risk === 'high') return { class: 'text-error bg-error/10 border-error/20', dot: 'bg-error' }
-  return { class: 'text-warning bg-warning/10 border-warning/20', dot: 'bg-warning' }
 })
 
 const kindLabel = computed(() => {
@@ -330,10 +307,6 @@ const paymentBudget = computed(() => {
   return { budget: budgetSats, spent: spentSats || 0, remaining: budgetSats - (spentSats || 0) }
 })
 
-const accountModeBadge = computed(() => {
-  return accountMode.value === 'nip46' ? t('account.external') : t('account.local')
-})
-
 // signEvent disclosure — only show the event toggle when there is event data
 const isSignEvent = computed(() => method.value === 'signEvent' && !!eventData.value)
 const isHttpAuth = computed(() => isSignEvent.value && eventData.value?.kind === 27235)
@@ -357,18 +330,9 @@ const unlockOriginDisplay = computed(() => {
   }
 })
 
-const unlockOriginFavicon = computed(() => {
-  if (!origin.value) return ''
-  try {
-    return `https://${origin.value}/favicon.ico`
-  } catch {
-    return ''
-  }
-})
-
-const unlockFaviconFailed = ref(false)
-
 async function respond(decision) {
+  if (deciding.value) return
+  responseError.value = ''
   deciding.value = decision
   try {
     const payload = {
@@ -378,16 +342,18 @@ async function respond(decision) {
 
     // Include budget if user opted in during payment approval
     if (rememberBudget.value && isPayment.value && decision.startsWith('allow')) {
-      const budget = parseInt(budgetAmount.value) || 0
-      if (budget > 0) payload.setBudget = budget
+      const budget = Number(budgetAmount.value) || 0
+      if (Number.isSafeInteger(budget) && budget > 0) payload.setBudget = budget
     }
 
-    await chrome.runtime.sendMessage({
+    const response = await chrome.runtime.sendMessage({
       type: 'PERMISSION_RESPONSE',
       params: [payload],
     })
+    if (response?.error) throw new Error(response.error)
     window.close()
   } catch {
+    responseError.value = t('prompt.responseFailed')
     deciding.value = ''
   }
 }
@@ -429,362 +395,92 @@ async function submitUnlock() {
 </script>
 
 <template>
-  <div class="w-full min-h-screen bg-surface-base flex items-start justify-center">
-  <div class="w-full max-w-[420px] min-h-[400px] bg-surface-base text-text-primary flex flex-col select-none">
-
-    <!-- Top accent strip -->
-    <div class="h-[3px] bg-gradient-to-r from-brand via-brand-light to-brand" />
-
-    <!-- Loading state -->
-    <div v-if="loading" class="flex-1 flex items-center justify-center p-8">
-      <div class="space-y-3 text-center animate-fade-in">
-        <ShieldCheck class="w-8 h-8 text-brand mx-auto animate-pulse" />
-        <p class="text-xs text-text-muted">{{ t('common.loading') }}</p>
-      </div>
+  <div class="prompt-window bg-surface-base text-text-primary">
+    <div v-if="loading" class="flex-1 flex items-center justify-center" role="status">
+      <Loader2 class="w-6 h-6 animate-spin text-brand" :aria-label="t('common.loading')" />
     </div>
-
-    <!-- ════════════════════════════════════════════════════ -->
-    <!-- UNLOCK MODE                                          -->
-    <!-- ════════════════════════════════════════════════════ -->
-    <template v-else-if="mode === 'unlock'">
-      <div class="flex-1 flex flex-col px-6 pt-6 pb-6 overflow-y-auto animate-fade-in-up">
-
-        <!-- Lock icon + title -->
-        <div class="text-center space-y-3 pt-2 pb-5">
-          <div class="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center mx-auto">
-            <Lock class="w-7 h-7 text-brand" />
-          </div>
-          <div>
-            <h1 class="text-lg font-extrabold">{{ t('prompt.lockedTitle') }}</h1>
-            <p class="text-xs text-text-muted mt-1 leading-relaxed">{{ t('prompt.lockedDesc') }}</p>
-          </div>
-        </div>
-
-        <!-- Requesting site context -->
-        <div v-if="unlockOriginDisplay"
-          class="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-surface-card border border-border mb-4">
-          <div class="w-9 h-9 rounded-xl bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
-            <img
-              v-if="unlockOriginFavicon && !unlockFaviconFailed"
-              :src="unlockOriginFavicon"
-              @error="unlockFaviconFailed = true"
-              class="w-5 h-5"
-              alt=""
-            />
-            <Globe v-else class="w-4 h-4 text-text-muted" />
-          </div>
-          <div class="min-w-0 flex-1">
-            <span class="text-[10px] text-text-muted font-medium uppercase tracking-wide">{{ t('prompt.lockedRequestedBy') }}</span>
-            <div class="text-xs font-semibold truncate">{{ unlockOriginDisplay }}</div>
-          </div>
-        </div>
-
-        <!-- Password input with visibility toggle -->
-        <div class="space-y-2 mb-4">
-          <div class="relative">
-            <input
-              v-model="unlockPassword"
-              :type="showPassword ? 'text' : 'password'"
-              :placeholder="t('lock.enterPassword')"
-              autofocus
-              @keydown.enter="submitUnlock"
-              class="w-full pl-4 pr-14 py-3 text-sm rounded-xl bg-surface-card border text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-brand/30 transition-all"
-              :class="unlockError ? 'border-error focus:border-error' : 'border-border focus:border-brand'"
-            />
-            <button
-              @click="showPassword = !showPassword"
-              type="button"
-              tabindex="-1"
-              :aria-label="showPassword ? t('prompt.hidePassword') : t('prompt.showPassword')"
-              class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-elevated transition-all"
-            >
-              <Eye v-if="!showPassword" class="w-4 h-4" />
-              <EyeOff v-else class="w-4 h-4" />
-            </button>
-          </div>
-          <p v-if="unlockError" class="flex items-center gap-1.5 text-[11px] text-error font-medium px-1">
-            <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
-            {{ unlockError }}
-          </p>
-        </div>
-
-        <div class="flex-1 min-h-2" />
-
-        <!-- Actions -->
-        <div class="space-y-2.5">
-          <button
-            @click="submitUnlock"
-            :disabled="!unlockPassword || unlockBusy"
-            class="w-full flex items-center justify-center gap-2 py-3.5 text-sm rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all btn-primary"
-          >
-            <Loader2 v-if="unlockBusy" class="w-4 h-4 animate-spin" />
-            <KeyRound v-else class="w-4 h-4" />
-            {{ t('lock.unlock') }}
-          </button>
-          <button
-            @click="closeWindow"
-            :disabled="unlockBusy"
-            class="w-full py-3 text-[13px] rounded-2xl text-text-muted font-semibold hover:bg-surface-card disabled:opacity-50 transition-all"
-          >
-            {{ t('common.cancel') }}
-          </button>
-        </div>
-
-      </div>
-    </template>
-
-    <!-- ════════════════════════════════════════════════════ -->
-    <!-- PERMISSION MODE                                      -->
-    <!-- ════════════════════════════════════════════════════ -->
+    <UnlockForm v-else-if="mode === 'unlock'" :origin="unlockOriginDisplay" :error="unlockError" :loading="unlockBusy" dismissible @submit="unlockPassword = $event; submitUnlock()" @cancel="closeWindow" />
     <template v-else>
-      <div class="flex-1 flex flex-col px-6 pt-5 pb-6 overflow-y-auto animate-fade-in-up">
-
-        <!-- ── Site identity ── -->
-        <div class="flex items-center gap-3.5">
-          <div class="w-12 h-12 rounded-2xl border border-border flex items-center justify-center shrink-0 overflow-hidden"
-            :class="faviconFailed ? 'bg-brand text-surface-base' : 'bg-surface-elevated'">
-            <img
-              v-if="faviconUrl && !faviconFailed"
-              :src="faviconUrl"
-              @error="faviconFailed = true"
-              class="w-7 h-7"
-              alt=""
-            />
-            <span v-else class="text-base font-bold">{{ hostInitial }}</span>
+      <main class="prompt-content space-y-4">
+        <header class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 overflow-hidden">
+            <img v-if="faviconUrl && !faviconFailed" :src="faviconUrl" @error="faviconFailed = true" referrerpolicy="no-referrer" class="w-6 h-6" alt="" />
+            <Globe v-else class="w-5 h-5 text-text-secondary" />
           </div>
-          <div class="min-w-0 flex-1">
-            <div class="text-[15px] font-extrabold truncate leading-tight">{{ siteTitle || displayHost }}</div>
-            <div class="text-xs text-text-secondary mt-0.5">{{ t('prompt.wantsAccess') }}</div>
+          <!-- The origin is authoritative; a website's chosen title is not. Never truncate it. -->
+          <div class="min-w-0">
+            <p class="text-sm font-semibold break-all" dir="ltr">{{ fullOrigin }}</p>
+            <p v-if="siteTitle" class="text-xs text-text-secondary truncate">{{ siteTitle }}</p>
           </div>
+        </header>
+        <div>
+          <h1 class="text-xl font-bold leading-snug break-words">{{ isLogin ? t('prompt.signInTitle', { site: displayHost }) : permInfo.label }}</h1>
+          <p class="mt-2 text-sm text-text-secondary leading-relaxed">{{ isLogin ? t('prompt.signInDescription') : permInfo.what }}</p>
         </div>
-
-        <!-- Full origin (trust verification) -->
-        <div class="mt-2 text-[10px] text-text-muted font-mono truncate">{{ fullOrigin }}</div>
-
-        <!-- HTTP warning -->
-        <div v-if="isHttp"
-          class="mt-2.5 flex items-center gap-2 px-3 py-2 rounded-xl bg-warning/8 border border-warning/20">
-          <AlertTriangle class="w-3.5 h-3.5 text-warning shrink-0" />
-          <span class="text-[11px] text-warning font-medium">{{ t('prompt.httpWarning') }}</span>
+        <p v-if="isHttp" class="text-sm text-warning flex gap-2"><AlertTriangle class="w-4 h-4 shrink-0" />{{ t('prompt.httpWarning') }}</p>
+        <div class="flex items-center gap-2 text-sm">
+          <img v-if="profilePicture" :src="profilePicture" @error="profilePicture = ''" referrerpolicy="no-referrer" alt="" class="w-8 h-8 rounded-full object-cover" />
+          <Fingerprint v-else class="w-7 h-7 text-text-secondary shrink-0" />
+          <span class="truncate">{{ accountName || t('prompt.yourAccount') }}</span>
+          <span v-if="accountMode === 'nip46'" class="text-xs text-text-secondary">{{ t('account.externalSigner') }}</span>
         </div>
-
-        <!-- A burst of requests reads as one guided flow, not window spam -->
-        <p v-if="queuedCount > 0" class="mt-2.5 text-center text-[10px] text-text-muted">
-          {{ t('prompt.moreWaiting', { n: queuedCount }) }}
-        </p>
-
-        <!-- ── Permission summary ── -->
-        <div class="mt-5 rounded-2xl border border-border bg-surface-card overflow-hidden">
-          <div class="flex items-start gap-3 px-4 py-3.5">
-            <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" :class="riskBadge.class">
-              <component :is="permInfo.icon" class="w-5 h-5" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="text-sm font-bold leading-snug">{{ permInfo.label }}</div>
-              <p class="text-[11px] text-text-muted mt-1 leading-relaxed">{{ permInfo.what }}</p>
-              <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2">
-                <span class="inline-flex items-center gap-1 text-[10px] font-semibold" :class="riskBadge.class.split(' ')[0]">
-                  <span class="w-1.5 h-1.5 rounded-full" :class="riskBadge.dot" />
-                  {{ permInfo.riskLabel }}
-                </span>
-                <span v-if="kindLabel"
-                  class="inline-flex items-center text-[9px] font-medium px-2 py-0.5 rounded-full bg-surface-elevated text-text-muted border border-border">
-                  {{ kindLabel }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- What will actually be published (signEvent, content-first) -->
-          <div v-if="eventContentPreview" class="px-4 py-3 border-t border-border">
-            <p class="text-[10px] text-text-muted font-semibold uppercase tracking-wide mb-1.5">{{ t('prompt.eventPreview') }}</p>
-            <p v-if="eventContentPreview.encrypted" class="text-[11px] text-text-muted italic">
-              {{ t('prompt.encryptedContent') }}
-            </p>
-            <p v-else class="text-[11px] text-text-secondary leading-relaxed whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
-              {{ eventContentPreview.text }}
-            </p>
-          </div>
-
-          <!-- Payment amount (weblnSendPayment / weblnKeysend) -->
-          <div v-if="isPayment" class="px-4 py-3 border-t border-border bg-surface-elevated/40">
-            <div class="flex items-center justify-between">
-              <span class="text-xs text-text-muted font-medium">{{ t('prompt.payAmount') }}</span>
-              <div class="text-right">
-                <span class="text-lg font-extrabold">{{ paymentAmount ? paymentAmount.toLocaleString() + ' sats' : t('prompt.payAmountUnknown') }}</span>
-                <span v-if="paymentAmount && toFiat(paymentAmount)" class="block text-[11px] text-text-muted">≈ {{ toFiat(paymentAmount) }}</span>
-              </div>
-            </div>
-            <div v-if="paymentBudget" class="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-              <span class="text-[11px] text-text-muted">{{ t('prompt.budgetRemaining') }}</span>
-              <span class="text-[11px] font-semibold" :class="paymentAmount && paymentBudget.remaining >= paymentAmount ? 'text-success' : 'text-warning'">
-                {{ paymentBudget.remaining.toLocaleString() }} / {{ paymentBudget.budget.toLocaleString() }} sats
-              </span>
-            </div>
-          </div>
-
-          <!-- NIP-98 HTTP Auth — show target up front (security-relevant) -->
-          <div v-if="isHttpAuth" class="px-4 py-3 border-t border-border space-y-1.5">
-            <p class="text-[10px] text-text-muted font-semibold uppercase tracking-wide">{{ t('prompt.httpAuth') }}</p>
-            <div class="bg-surface-base rounded-lg p-2.5 border border-border flex items-center gap-2">
-              <span class="text-[9px] font-bold uppercase text-brand bg-brand/10 px-1.5 py-0.5 rounded shrink-0">
-                {{ eventData.tags?.find(tag => tag[0] === 'method')?.[1] || 'GET' }}
-              </span>
-              <!-- Mid-truncate: keep start AND end visible so tampering shows -->
-              <span class="text-[10px] text-text-secondary font-mono">
-                {{ truncateKey(eventData.tags?.find(tag => tag[0] === 'u')?.[1] || '', 34, 14) }}
-              </span>
-            </div>
-          </div>
-
-          <div v-if="permInfo.detail && !isHttpAuth" class="px-4 py-2.5 border-t border-border bg-surface-elevated/40">
-            <p class="text-[10px] text-text-muted leading-relaxed">{{ permInfo.detail }}</p>
-          </div>
-
-          <!-- Protocol names and raw event data are available without burdening new users. -->
-          <button @click="showEventData = !showEventData"
-            class="w-full flex items-center justify-between px-4 py-2.5 border-t border-border text-[11px] text-text-muted hover:text-text-secondary transition-all font-medium">
-            <span>{{ showEventData ? t('prompt.hideTechnicalDetails') : t('prompt.technicalDetails') }}</span>
-            <ChevronDown class="w-3.5 h-3.5 transition-transform" :class="showEventData ? 'rotate-180' : ''" />
-          </button>
-          <div v-if="showEventData" class="px-4 pb-3 space-y-2">
-            <div class="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-base px-3 py-2 text-[10px]">
-              <span class="text-text-muted">{{ t('prompt.protocol') }}</span>
-              <span class="font-mono text-text-secondary">{{ technicalProtocol }}</span>
-            </div>
-            <div v-if="isSignEvent" class="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-base px-3 py-2 text-[10px]">
-              <span class="text-text-muted">{{ t('prompt.eventType') }}</span>
-              <span class="text-text-secondary">{{ kindLabel || eventData.kind }}
-                <span class="font-mono text-text-muted/70">({{ eventData.kind }})</span>
-              </span>
-            </div>
-            <pre v-if="isSignEvent" class="text-[10px] leading-relaxed font-mono bg-surface-base rounded-lg p-3 max-h-[160px] overflow-auto border border-border text-text-secondary whitespace-pre-wrap break-all">{{ JSON.stringify(eventData, null, 2) }}</pre>
-          </div>
+        <div v-if="eventContentPreview" class="rounded-xl bg-surface-card border border-border p-3">
+          <p class="text-xs text-text-secondary mb-1">{{ t('prompt.eventPreview') }}</p>
+          <p class="text-sm whitespace-pre-wrap break-words max-h-32 overflow-y-auto">{{ eventContentPreview.encrypted ? t('prompt.encryptedContent') : eventContentPreview.text }}</p>
         </div>
-
-        <!-- ── Account identity ── -->
-        <div class="mt-4 flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-surface-card border border-border">
-          <div class="w-8 h-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
-            :class="profilePicture ? '' : 'bg-brand text-surface-base'">
-            <img v-if="profilePicture" :src="profilePicture" alt="" class="w-full h-full object-cover" />
-            <span v-else class="text-xs font-bold">{{ (accountName || '?')[0].toUpperCase() }}</span>
-          </div>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-1.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
-              <span class="text-xs font-semibold truncate">{{ accountName || t('prompt.yourAccount') }}</span>
-            </div>
-            <div v-if="accountNpub" class="text-[10px] text-text-muted font-mono mt-0.5 truncate">
-              {{ truncateKey(accountNpub, 10, 6) }}
-            </div>
-          </div>
-          <span class="text-[9px] px-2 py-0.5 rounded-md bg-surface-elevated text-text-muted font-semibold uppercase tracking-wide shrink-0">
-            {{ accountModeBadge }}
-          </span>
-        </div>
-
-        <!-- Spacer pushes actions to the bottom -->
-        <div class="flex-1 min-h-5" />
-
-        <!-- ════════════════════════════════════════════════ -->
-        <!-- ACTIONS                                          -->
-        <!-- ════════════════════════════════════════════════ -->
-        <div class="space-y-2.5 stagger-4 animate-fade-in-up">
-
-          <!-- ── Payment: budget opt-in + confirm / deny ── -->
-          <template v-if="isPayment">
-            <div v-if="!paymentBudget" class="rounded-2xl border border-border bg-surface-card overflow-hidden">
-              <label class="flex items-center gap-3 px-3.5 py-2.5 cursor-pointer select-none hover:bg-surface-elevated/50 transition-colors">
-                <input
-                  v-model="rememberBudget"
-                  type="checkbox"
-                  class="w-4 h-4 rounded border-border accent-[var(--brand-primary)]"
-                />
-                <div class="min-w-0 flex items-center gap-1.5">
-                  <Wallet class="w-3.5 h-3.5 text-text-muted shrink-0" />
-                  <span class="text-[11px] font-semibold text-text-secondary">{{ t('prompt.rememberBudget') }}</span>
-                </div>
-              </label>
-              <div v-if="rememberBudget" class="px-3.5 pb-3 pt-0.5 border-t border-border/50 animate-fade-in">
-                <div class="flex items-center gap-2">
-                  <input
-                    v-model="budgetAmount"
-                    type="number"
-                    min="1"
-                    class="flex-1 bg-surface-elevated border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-brand transition-colors tabular-nums"
-                  />
-                  <span class="text-[11px] text-text-muted font-semibold shrink-0">sats</span>
-                </div>
-                <div class="flex items-center justify-between mt-1 px-0.5">
-                  <p class="text-[10px] text-text-muted">{{ t('prompt.rememberBudgetHint') }}</p>
-                  <span v-if="budgetAmountFiat" class="text-[10px] text-text-muted tabular-nums shrink-0 ml-2">≈ {{ budgetAmountFiat }}</span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              @click="respond('allow_once')"
-              :disabled="!!deciding"
-              class="w-full flex items-center justify-center gap-2 py-3.5 text-sm rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all btn-primary"
-            >
-              <Loader2 v-if="deciding === 'allow_once'" class="w-4 h-4 animate-spin" />
-              <Zap v-else class="w-4 h-4" />
-              {{ t('prompt.confirmPayment') }}
-            </button>
-            <button
-              @click="respond('deny_once')"
-              :disabled="!!deciding"
-              class="w-full py-3 text-[13px] rounded-2xl text-text-muted font-semibold hover:bg-surface-card disabled:opacity-50 transition-all"
-            >
-              {{ t('prompt.deny') }}
-            </button>
-          </template>
-
-          <!-- ── Standard: allow / not now / more ── -->
+        <div v-if="isPayment" class="rounded-xl bg-surface-card border border-border p-3 space-y-2">
+          <p class="text-sm text-text-secondary">{{ t('prompt.payAmount') }}</p>
+          <p class="text-2xl font-bold">{{ paymentAmount ? paymentAmount.toLocaleString() + ' sats' : t('prompt.payAmountUnknown') }}</p>
+          <p v-if="paymentAmount && toFiat(paymentAmount)" class="text-sm text-text-secondary">≈ {{ toFiat(paymentAmount) }}</p>
+          <p v-if="paymentBudget" class="text-sm">{{ t('prompt.budgetRemaining') }}: {{ paymentBudget.remaining.toLocaleString() }} / {{ paymentBudget.budget.toLocaleString() }} sats</p>
           <template v-else>
-            <button
-              @click="respond('allow_session')"
-              :disabled="!!deciding"
-              class="w-full flex items-center justify-center gap-2 py-3.5 text-sm rounded-2xl bg-brand text-surface-base font-bold hover:bg-brand-hover disabled:opacity-50 transition-all btn-primary"
-            >
-              <Loader2 v-if="deciding === 'allow_session'" class="w-4 h-4 animate-spin" />
-              <Check v-else class="w-4 h-4" />
-              {{ t('prompt.allowForVisit') }}
-            </button>
-            <p class="text-center text-[10px] text-text-muted px-2 leading-relaxed">{{ t('prompt.allowForVisitHint') }}</p>
-            <button
-              @click="respond('deny_once')"
-              :disabled="!!deciding"
-              class="w-full py-3 text-[13px] rounded-2xl text-text-muted font-semibold hover:bg-surface-card disabled:opacity-50 transition-all"
-            >
-              {{ t('prompt.notNow') }}
-            </button>
-
-            <button @click="showMore = !showMore"
-              class="w-full flex items-center justify-center gap-1 py-1.5 text-[11px] text-text-muted hover:text-text-secondary transition-all font-medium">
-              {{ t('common.more') }}
-              <ChevronDown class="w-3 h-3 transition-transform" :class="showMore ? 'rotate-180' : ''" />
-            </button>
-            <!-- Kind-scoped wording says exactly what a standing rule covers -->
-            <div v-if="showMore" class="flex items-center justify-center gap-2 animate-fade-in">
-              <button @click="respond('allow_always')" :disabled="!!deciding"
-                class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-success hover:bg-success/8 transition-all font-medium disabled:opacity-50">
-                <Clock class="w-3.5 h-3.5" />
-                {{ isSignEvent && kindLabel ? t('prompt.allowAlwaysKind', { kind: kindLabel }) : t('prompt.allowAlways') }}
-              </button>
-              <span class="text-border text-[10px]">|</span>
-              <button @click="respond('deny_always')" :disabled="!!deciding"
-                class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-xl text-text-muted hover:text-error hover:bg-error/8 transition-all font-medium disabled:opacity-50">
-                <ShieldOff class="w-3.5 h-3.5" />
-                {{ isSignEvent && kindLabel ? t('prompt.denyAlwaysKind', { kind: kindLabel }) : t('prompt.denyAlways') }}
-              </button>
+            <label class="flex items-center gap-2 min-h-11 text-sm"><input v-model="rememberBudget" type="checkbox" />{{ t('prompt.rememberBudget') }}</label>
+            <div v-if="rememberBudget">
+              <label for="budget" class="text-sm">{{ t('prompt.rememberBudgetHint') }}</label>
+              <div class="flex items-center gap-2 mt-2"><input id="budget" v-model="budgetAmount" :aria-invalid="!validBudget" type="number" min="1" class="w-full min-w-0 bg-surface-elevated border border-border rounded-lg p-2 text-sm" /><span class="text-sm">sats</span></div>
+              <p v-if="budgetAmountFiat" class="text-xs mt-1">≈ {{ budgetAmountFiat }}</p>
             </div>
           </template>
-
         </div>
-
-      </div>
+        <div v-if="isHttpAuth" class="text-sm rounded-xl border border-border p-3 break-all">
+          <p class="text-text-secondary mb-1">{{ t('prompt.httpAuth') }}</p>
+          <p>{{ eventData.tags?.find(tag => tag[0] === 'method')?.[1] || 'GET' }} {{ eventData.tags?.find(tag => tag[0] === 'u')?.[1] }}</p>
+        </div>
+        <details class="text-sm">
+          <summary class="cursor-pointer min-h-8 text-text-secondary">{{ t('prompt.details') }}</summary>
+          <div class="space-y-3 pt-2">
+            <p v-if="permInfo.detail" class="text-text-secondary">{{ permInfo.detail }}</p>
+            <p v-if="accountNpub" class="break-all text-xs font-mono">{{ accountNpub }}</p>
+            <p class="text-xs text-text-secondary">{{ technicalProtocol }}<span v-if="kindLabel"> · {{ kindLabel }}</span></p>
+            <pre v-if="isSignEvent" class="text-xs whitespace-pre-wrap break-all max-h-48 overflow-auto bg-surface-card p-3 rounded-xl">{{ JSON.stringify(eventData, null, 2) }}</pre>
+            <button @click="respond('deny_all')" :disabled="!!deciding" class="prompt-button border border-border text-error">{{ t('prompt.denyAll') }}</button>
+          </div>
+        </details>
+        <p v-if="queuedCount" class="text-xs text-text-secondary">{{ t('prompt.moreWaiting', { n: queuedCount }) }}</p>
+      </main>
+      <footer class="prompt-actions">
+        <p v-if="responseError" role="alert" class="text-sm text-error">{{ responseError }}</p>
+        <button @click="respond('allow_once')" :disabled="!!deciding || (isPayment && rememberBudget && !validBudget)" data-decision="allow_once" class="prompt-button bg-brand text-surface-base font-semibold">
+          <Loader2 v-if="deciding === 'allow_once'" class="w-4 h-4 animate-spin" />
+          {{ isPayment ? t('prompt.confirmPayment') : isLogin ? t('prompt.actionLoginLabel') : t('prompt.allow') }}
+        </button>
+        <template v-if="!isPayment">
+          <button @click="respond('allow_all')" :disabled="!!deciding" data-decision="allow_all" aria-describedby="trust-description" class="prompt-button border border-border bg-surface-card font-semibold">
+            <Loader2 v-if="deciding === 'allow_all'" class="w-4 h-4 animate-spin shrink-0" />
+            <span>{{ t('prompt.alwaysAllowSite', { site: displayHost }) }}</span>
+          </button>
+          <p id="trust-description" class="text-xs text-text-secondary leading-snug">{{ t('prompt.trustDescription') }}</p>
+        </template>
+        <button @click="respond('deny_once')" :disabled="!!deciding" data-decision="deny_once" class="prompt-button text-text-secondary">{{ t('prompt.notNow') }}</button>
+      </footer>
     </template>
-  </div>
   </div>
 </template>
+
+<style scoped>
+.prompt-window { height: 100dvh; max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; overflow: hidden; }
+.prompt-content { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 24px 12px; }
+.prompt-actions { flex: none; display: grid; gap: 8px; padding: 12px 24px 16px; border-top: 1px solid var(--border); background: var(--surface-base); }
+.prompt-button { width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+.prompt-button:disabled { opacity: 0.5; }
+</style>

@@ -18,7 +18,7 @@ function openOptions() {
 <template>
   <button
     @click.stop="openOptions"
-    class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200"
+    class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200 min-w-8 min-h-8"
     :title="t('options.openInTab')"
     :aria-label="t('options.openInTab')"
   >

@@ -5,7 +5,7 @@
  * Shows a row of quick reactions + an action menu (reply, delete, report).
  * Telegram-style: appears above the bubble, closes on outside click.
  */
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Reply, Trash2, Flag, Forward, Copy, Check } from 'lucide-vue-next'
 
@@ -20,13 +20,13 @@ const emit = defineEmits(['react', 'reply', 'delete', 'report', 'forward', 'copy
 
 const copied = ref(false)
 
-const quickReactions = [
-  { emoji: '❤️', label: 'Love' },
-  { emoji: '👍', label: 'Like' },
-  { emoji: '👎', label: 'Dislike' },
-  { emoji: '😂', label: 'Laugh' },
-  { emoji: '⚡', label: 'Zap' },
-]
+const quickReactions = computed(() => [
+  { emoji: '❤️', label: t('chat.reactions.love') },
+  { emoji: '👍', label: t('chat.reactions.like') },
+  { emoji: '👎', label: t('chat.reactions.dislike') },
+  { emoji: '😂', label: t('chat.reactions.laugh') },
+  { emoji: '⚡', label: t('chat.reactions.zap') },
+])
 
 function handleReact(emoji) {
   emit('react', emoji)

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
+import { baseCompile } from '@intlify/message-compiler'
 import path from 'node:path'
 
 const localesDir = path.resolve(process.cwd(), 'locales')
@@ -34,6 +35,18 @@ function collectDiff(base, current, prefix = '', diff = { missing: [], empty: []
 }
 
 describe('locales', () => {
+  it('all translated messages compile without broken interpolation syntax', () => {
+    const errors = []
+    const visit = (object, location) => {
+      for (const [key,value] of Object.entries(object)) {
+        if (isPlainObject(value)) visit(value, `${location}.${key}`)
+        else baseCompile(value, { onError:error => errors.push(`${location}.${key}: ${error.message}`) })
+      }
+    }
+    for (const file of ['en.json', ...localeFiles]) visit(JSON.parse(fs.readFileSync(path.join(localesDir,file),'utf8')),file)
+    expect(errors).toEqual([])
+  })
+
   for (const file of localeFiles) {
     it(`${file} matches the English locale shape`, () => {
       const locale = JSON.parse(fs.readFileSync(path.join(localesDir, file), 'utf8'))

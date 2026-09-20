@@ -20,6 +20,12 @@ export default defineConfig({
     excludeSources: [
       '**/*.zip',
       'PRODUCT_TREE.md',
+      'UX_REVIEW.md',
+      'docs/HIG_SCREEN_REVIEW.md',
+      'docs/TECHNICAL_BUGS.md',
+      'scripts/ux-review/**',
+      'scripts/review-screens.mjs',
+      'signal-*.png',
     ],
   },
   manifest: ({ browser }) => ({

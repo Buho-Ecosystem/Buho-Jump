@@ -118,7 +118,7 @@ async function onChanged() {
       <div v-if="filteredSites.length > 3 || search" class="relative">
         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
         <input
-          v-model="search"
+          v-model="search" :aria-label="t('options.searchSites')"
           :placeholder="t('options.searchSites')"
           class="w-full pl-9 pr-3 py-2 bg-surface-card border border-border rounded-3xl text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted"
         />
@@ -142,13 +142,13 @@ async function onChanged() {
           <div class="flex-1 min-w-0">
             <div class="text-sm font-semibold truncate">{{ host }}</div>
             <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-[10px] text-text-muted">
+              <span class="text-xs text-text-muted">
                 {{ allowedCount(methods) }} {{ t('options.allowed') }}, {{ methodCount(methods) - allowedCount(methods) }} {{ t('options.denied') }}
               </span>
-              <span v-if="grantsFor(host).length" class="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-brand/10 text-brand">
+              <span v-if="grantsFor(host).length" class="text-xs px-1.5 py-0.5 rounded-full font-semibold bg-brand/10 text-brand">
                 {{ grantsFor(host).length }} {{ t('sites.thisVisit') }}
               </span>
-              <span v-if="budgetInfo(host)" class="text-[9px] px-1.5 py-0.5 rounded-full font-semibold"
+              <span v-if="budgetInfo(host)" class="text-xs px-1.5 py-0.5 rounded-full font-semibold"
                 :class="budgetInfo(host).color">
                 {{ budgetInfo(host).paused ? t('sites.budgetPaused') : budgetInfo(host).label }}
               </span>

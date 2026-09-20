@@ -12,6 +12,8 @@ import { truncateKey } from '../../lib/utils.js'
 import { getAvatarColor } from '../../lib/avatarColor.js'
 import IdentityWizard from '../IdentityWizard.vue'
 import LightningLogin from '../LightningLogin.vue'
+import DeleteAccountSheet from '../DeleteAccountSheet.vue'
+import AccountIdentity from '../AccountIdentity.vue'
 import BottomSheet from '../BottomSheet.vue'
 import {
   Copy, Check, Trash2, User, Plus, Loader2, AlertTriangle,
@@ -40,6 +42,16 @@ const switchingAccount = ref(null)
 const confirmSwitchId = ref(null)
 const confirmingDelete = ref(null)
 const deletingAccount = ref(false)
+const accountWallets = ref([])
+onMounted(async () => { accountWallets.value = await send('GET_WALLETS').catch(() => []) || [] })
+async function backupBeforeRemoval() {
+  const id = confirmingDelete.value
+  cancelDelete()
+  try {
+    if (id !== activeAccount.value?.id) await switchTo(id)
+    openBackup()
+  } catch { toast.error(t('toast.failedSwitch')) }
+}
 
 // Backup key state
 const showBackup = ref(false)
@@ -77,6 +89,7 @@ onMounted(async () => {
     finally { profileLoading.value = false }
   }
   await loadLightningLoginSites()
+  if (new URLSearchParams(location.search).get('backup') === '1') openBackup()
 })
 
 watch(() => activeAccount.value?.pubkey, async (pk) => {
@@ -311,7 +324,7 @@ function onWizardComplete() {
       <div>
         <p class="text-sm font-bold text-error">{{ t('account.vaultProblemTitle') }}</p>
         <p class="text-xs text-text-secondary mt-1 leading-relaxed">{{ vaultError }}</p>
-        <p class="text-[10px] text-text-muted mt-2">{{ t('account.vaultProblemHint') }}</p>
+        <p class="text-xs text-text-muted mt-2">{{ t('account.vaultProblemHint') }}</p>
       </div>
     </div>
 
@@ -341,10 +354,10 @@ function onWizardComplete() {
           </div>
 
           <!-- Mode badge -->
-          <span class="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border backdrop-blur-sm"
+          <span v-if="activeAccount.mode === 'nip46'" class="absolute top-3 right-3 flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border backdrop-blur-sm"
             :class="activeAccount.mode === 'local'
               ? 'bg-success/10 text-success border-success/20'
-              : 'bg-warning/10 text-warning border-warning/20'">
+              : 'bg-surface-elevated text-text-secondary border-border'">
             <span class="w-1.5 h-1.5 rounded-full" :class="activeAccount.mode === 'local' ? 'bg-success' : 'bg-warning'" />
             {{ activeAccount.mode === 'local' ? t('account.onThisDevice') : t('account.externalSigner') }}
           </span>
@@ -355,9 +368,9 @@ function onWizardComplete() {
           <div>
             <div class="flex items-center gap-2">
               <span class="font-bold text-base">{{ displayName }}</span>
-              <span v-if="profileData?.nip05" class="text-[10px] text-brand font-medium truncate">{{ profileData.nip05 }}</span>
+              <span v-if="profileData?.nip05" class="text-xs text-brand font-medium truncate">{{ profileData.nip05 }}</span>
               <button v-if="activeAccount.mode === 'local'" @click="openProfileEdit"
-                class="ml-auto text-[10px] text-text-muted hover:text-brand font-semibold">
+                class="ml-auto text-xs text-text-muted hover:text-brand font-semibold">
                 {{ t('account.editProfile') }}
               </button>
             </div>
@@ -367,29 +380,27 @@ function onWizardComplete() {
           <!-- Identity model: human-readable, with the exact derivation path available. -->
           <div class="grid grid-cols-2 gap-2">
             <div class="bg-surface-base border border-border rounded-2xl p-3">
-              <p class="text-[9px] uppercase tracking-wide text-text-muted font-semibold">{{ t('account.identityType') }}</p>
-              <p class="text-[11px] font-semibold mt-1">
+              <p class="text-xs uppercase tracking-wide text-text-muted font-semibold">{{ t('account.identityType') }}</p>
+              <p class="text-xs font-semibold mt-1">
                 {{ activeAccount.capabilities?.seedBacked ? t('account.recoveryIdentity') : activeAccount.mode === 'nip46' ? t('account.remoteIdentity') : t('account.singleKeyIdentity') }}
               </p>
-              <p class="text-[9px] text-text-muted mt-1">
+              <p class="text-xs text-text-muted mt-1">
                 {{ activeAccount.capabilities?.seedBacked ? t('account.recoveryIdentityHint') : t('account.singleKeyIdentityHint') }}
               </p>
             </div>
             <div class="bg-surface-base border border-border rounded-2xl p-3">
-              <p class="text-[9px] uppercase tracking-wide text-text-muted font-semibold">{{ t('account.recoveryStatus') }}</p>
-              <p class="text-[11px] font-semibold mt-1"
+              <p class="text-xs uppercase tracking-wide text-text-muted font-semibold">{{ t('account.recoveryStatus') }}</p>
+              <p class="text-xs font-semibold mt-1"
                 :class="activeAccount.identityBackupConfirmed ? 'text-success' : 'text-warning'">
                 {{ activeAccount.identityBackupConfirmed ? t('account.backupVerified') : activeAccount.mode === 'nip46' ? t('account.heldBySigner') : t('account.backupNeeded') }}
               </p>
-              <p v-if="activeAccount.keyOrigin?.path" class="text-[9px] text-text-muted font-mono mt-1 break-all">
-                {{ activeAccount.keyOrigin.path }}
-              </p>
+              <details v-if="activeAccount.keyOrigin?.path" class="text-xs mt-2"><summary>{{ t('prompt.details') }}</summary><p class="font-mono break-all">{{ activeAccount.keyOrigin.path }}</p></details>
             </div>
           </div>
 
           <!-- Pubkey -->
           <div v-if="activeAccount.npub" class="flex items-center gap-2">
-            <code class="flex-1 text-[11px] bg-surface-base px-3 py-2 rounded-lg font-mono text-text-muted truncate">
+            <code class="flex-1 text-xs bg-surface-base px-3 py-2 rounded-lg font-mono text-text-muted truncate">
               {{ truncateKey(activeAccount.npub, 16, 8) }}
             </code>
             <button @click="copyPubkey" :aria-label="t('common.copy')" class="p-2 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0">
@@ -400,13 +411,13 @@ function onWizardComplete() {
 
           <!-- Profile metadata pills -->
           <div v-if="profileData?.lud16 || profileData?.lud19 || (profileLoading && !profileData)" class="flex items-center gap-2 flex-wrap">
-            <div v-if="profileData?.lud16" class="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
+            <div v-if="profileData?.lud16" class="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
               <Wallet class="w-3 h-3" />
               <span class="truncate max-w-[220px]">{{ profileData.lud16 }}</span>
             </div>
-            <div v-else-if="profileData?.lud19" class="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
+            <div v-else-if="profileData?.lud19" class="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
               <Wallet class="w-3 h-3" />
-              <span>LNURL set</span>
+              <span>{{ t('account.profileLightning') }}</span>
             </div>
             <div v-if="profileLoading && !profileData" class="skeleton-shimmer h-5 w-28 rounded-full" />
           </div>
@@ -422,7 +433,7 @@ function onWizardComplete() {
             </div>
             <div class="flex-1 min-w-0">
               <span class="text-sm font-medium block">{{ t('options.exportKey') }}</span>
-              <span class="text-[10px] text-text-muted">{{ t('options.exportKeyDesc') }}</span>
+              <span class="text-xs text-text-muted">{{ t('options.exportKeyDesc') }}</span>
             </div>
           </button>
         </div>
@@ -433,20 +444,41 @@ function onWizardComplete() {
         class="max-w-lg bg-surface-card rounded-3xl border border-border shadow-sm p-5 space-y-3">
         <div>
           <h3 class="text-sm font-bold">{{ t('account.editProfile') }}</h3>
-          <p class="text-[10px] text-text-muted mt-1">{{ t('account.editProfileHint') }}</p>
+          <p class="text-xs text-text-muted mt-1">{{ t('account.editProfileHint') }}</p>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <input v-model="profileForm.name" maxlength="80" :placeholder="t('account.profileName')" class="bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
-          <input v-model="profileForm.display_name" maxlength="80" :placeholder="t('account.profileDisplayName')" class="bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
+          <label class="flex flex-col gap-1 min-w-0 text-sm text-text-secondary">
+            <span>{{ t('account.profileName') }}</span>
+            <input v-model="profileForm.name" maxlength="80" :placeholder="t('account.profileName')" class="bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
+          </label>
+          <label class="flex flex-col gap-1 min-w-0 text-sm text-text-secondary">
+            <span>{{ t('account.profileDisplayName') }}</span>
+            <input v-model="profileForm.display_name" maxlength="80" :placeholder="t('account.profileDisplayName')" class="bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
+          </label>
         </div>
-        <textarea v-model="profileForm.about" maxlength="1000" rows="3" :placeholder="t('account.profileAbout')" class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand resize-none" />
-        <input v-model="profileForm.picture" inputmode="url" :placeholder="t('account.profilePicture')" class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
-        <input v-model="profileForm.banner" inputmode="url" :placeholder="t('account.profileBanner')" class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
+        <label class="flex flex-col gap-1 min-w-0 text-sm text-text-secondary">
+          <span>{{ t('account.profileAbout') }}</span>
+          <textarea v-model="profileForm.about" maxlength="1000" rows="3" :placeholder="t('account.profileAbout')" class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand resize-none" />
+        </label>
+        <label class="flex flex-col gap-1 min-w-0 text-sm text-text-secondary">
+          <span>{{ t('account.profilePicture') }}</span>
+          <input v-model="profileForm.picture" inputmode="url" :placeholder="t('account.profilePicture')" class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
+        </label>
+        <label class="flex flex-col gap-1 min-w-0 text-sm text-text-secondary">
+          <span>{{ t('account.profileBanner') }}</span>
+          <input v-model="profileForm.banner" inputmode="url" :placeholder="t('account.profileBanner')" class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
+        </label>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <input v-model="profileForm.nip05" autocapitalize="none" spellcheck="false" :placeholder="t('account.profileNip05')" class="bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
-          <input v-model="profileForm.lud16" autocapitalize="none" spellcheck="false" :placeholder="t('account.profileLightning')" class="bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
+          <label class="flex flex-col gap-1 min-w-0 text-sm text-text-secondary">
+            <span>{{ t('account.profileNip05') }}</span>
+            <input v-model="profileForm.nip05" autocapitalize="none" spellcheck="false" :placeholder="t('account.profileNip05')" class="bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
+          </label>
+          <label class="flex flex-col gap-1 min-w-0 text-sm text-text-secondary">
+            <span>{{ t('account.profileLightning') }}</span>
+            <input v-model="profileForm.lud16" autocapitalize="none" spellcheck="false" :placeholder="t('account.profileLightning')" class="bg-surface-base border border-border rounded-xl px-3 py-2.5 text-xs outline-none focus:border-brand" />
+          </label>
         </div>
-        <p v-if="profileError" class="text-[10px] text-error">{{ profileError }}</p>
+        <p v-if="profileError" class="text-xs text-error">{{ profileError }}</p>
         <div class="grid grid-cols-2 gap-2">
           <button type="button" @click="showProfileEdit = false" class="py-2.5 text-xs rounded-2xl bg-surface-elevated font-semibold">{{ t('common.cancel') }}</button>
           <button type="submit" :disabled="profileSaving" class="py-2.5 text-xs rounded-2xl bg-brand text-surface-base font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50">
@@ -462,20 +494,20 @@ function onWizardComplete() {
         <div class="flex items-start justify-between gap-3">
           <div>
             <h3 class="text-xs font-bold">{{ t('lightningLogin.activityTitle') }}</h3>
-            <p class="text-[10px] text-text-muted mt-1">{{ t('lightningLogin.activityHint') }}</p>
+            <p class="text-xs text-text-muted mt-1">{{ t('lightningLogin.activityHint') }}</p>
           </div>
           <button @click="clearLightningLoginActivity" :disabled="clearingLoginActivity"
-            class="text-[10px] text-text-muted hover:text-error font-semibold disabled:opacity-50">
+            class="text-xs text-text-muted hover:text-error font-semibold disabled:opacity-50">
             {{ t('lightningLogin.clearActivity') }}
           </button>
         </div>
         <div class="divide-y divide-border">
           <div v-for="site in lightningLoginSites.slice(0, 5)" :key="site.origin" class="flex items-center justify-between gap-3 py-2.5">
             <div class="min-w-0">
-              <p class="text-[11px] font-semibold truncate">{{ site.origin }}</p>
-              <p class="text-[9px] text-text-muted">{{ t('lightningLogin.loginCount', { count: site.loginCount }) }}</p>
+              <p class="text-xs font-semibold truncate">{{ site.origin }}</p>
+              <p class="text-xs text-text-muted">{{ t('lightningLogin.loginCount', { count: site.loginCount }) }}</p>
             </div>
-            <span class="text-[9px] text-text-muted shrink-0">{{ formatLoginDate(site.lastLoginAt) }}</span>
+            <span class="text-xs text-text-muted shrink-0">{{ formatLoginDate(site.lastLoginAt) }}</span>
           </div>
         </div>
       </div>
@@ -497,17 +529,17 @@ function onWizardComplete() {
         <div class="p-5 space-y-4">
           <div>
             <h3 class="text-sm font-bold">{{ backupStage === 'auth' ? t('wizard.backupReauthTitle') : backupKind === 'mnemonic' ? t('wizard.backupMnemonicTitle') : t('wizard.backupTitle') }}</h3>
-            <p class="text-[11px] text-text-muted mt-1 leading-relaxed">
+            <p class="text-xs text-text-muted mt-1 leading-relaxed">
               {{ backupStage === 'auth' ? t('wizard.backupReauthDesc') : backupStage === 'verify' ? t('wizard.backupVerifyDesc') : backupKind === 'mnemonic' ? t('wizard.backupMnemonicDesc') : t('wizard.backupDesc') }}
             </p>
           </div>
 
           <!-- Re-authentication gate -->
           <form v-if="backupStage === 'auth'" class="space-y-3" @submit.prevent="loadBackupKey">
-            <input v-model="backupPassword" type="password" autocomplete="current-password" autofocus
+            <input v-model="backupPassword" :aria-label="t('lock.enterPassword')" type="password" autocomplete="current-password" autofocus
               :placeholder="t('lock.enterPassword')"
               class="w-full bg-surface-base border border-border rounded-xl px-3.5 py-3 text-sm outline-none focus:border-brand" />
-            <p v-if="backupError" class="text-[11px] text-error">{{ backupError }}</p>
+            <p v-if="backupError" class="text-xs text-error">{{ backupError }}</p>
             <div class="grid grid-cols-2 gap-2">
               <button type="button" @click="closeBackup" class="py-2.5 text-xs rounded-2xl bg-surface-elevated text-text-secondary font-semibold">{{ t('common.cancel') }}</button>
               <button type="submit" :disabled="!backupPassword || backupLoading"
@@ -523,8 +555,8 @@ function onWizardComplete() {
             <div v-if="backupKind === 'mnemonic'" class="grid grid-cols-3 gap-2"
               :class="nsecRevealed ? '' : 'blur-[6px] select-none pointer-events-none'">
               <div v-for="(word, index) in backupNsec.split(' ')" :key="index" class="flex items-center gap-1.5 bg-surface-card rounded-lg px-2 py-2 border border-border">
-                <span class="text-[9px] text-text-muted font-mono w-3 text-right">{{ index + 1 }}</span>
-                <span class="text-[11px] text-text-secondary font-medium">{{ word }}</span>
+                <span class="text-xs text-text-muted font-mono w-3 text-right">{{ index + 1 }}</span>
+                <span class="text-xs text-text-secondary font-medium">{{ word }}</span>
               </div>
             </div>
             <div v-else class="font-mono text-xs break-all leading-relaxed select-all"
@@ -565,17 +597,17 @@ function onWizardComplete() {
           <form v-else-if="backupStage === 'verify'" class="space-y-3" @submit.prevent="verifyBackup">
             <div v-if="backupChallenge?.type === 'words'" class="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <label v-for="(wordIndex, index) in backupChallenge.indices" :key="wordIndex" class="space-y-1">
-                <span class="text-[10px] font-semibold text-text-muted">{{ t('wizard.wordNumber', { number: wordIndex + 1 }) }}</span>
+                <span class="text-xs font-semibold text-text-muted">{{ t('wizard.wordNumber', { number: wordIndex + 1 }) }}</span>
                 <input v-model="backupAnswers[index]" autocomplete="off" autocapitalize="none" spellcheck="false"
                   class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand" />
               </label>
             </div>
             <label v-else class="space-y-1">
-              <span class="text-[10px] font-semibold text-text-muted">{{ t('wizard.keyEnding', { count: backupChallenge?.length || 6 }) }}</span>
+              <span class="text-xs font-semibold text-text-muted">{{ t('wizard.keyEnding', { count: backupChallenge?.length || 6 }) }}</span>
               <input v-model="backupAnswers[0]" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="6"
                 class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm font-mono outline-none focus:border-brand" />
             </label>
-            <p v-if="backupError" class="text-[11px] text-error">{{ backupError }}</p>
+            <p v-if="backupError" class="text-xs text-error">{{ backupError }}</p>
             <div class="grid grid-cols-2 gap-2">
               <button type="button" @click="backupStage = 'show'; backupError = ''" class="py-2.5 text-xs rounded-2xl bg-surface-elevated text-text-secondary font-semibold">{{ t('wizard.showAgain') }}</button>
               <button type="submit" :disabled="backupAnswers.some(answer => !answer.trim()) || backupLoading"
@@ -594,45 +626,17 @@ function onWizardComplete() {
         </div>
       </div>
 
-      <!-- Other accounts -->
-      <div v-if="accounts.length > 1" class="space-y-2 max-w-lg">
-        <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('account.switchAccount') }}</p>
-        <button
-          v-for="acc in accounts.filter(a => !a.isActive)"
-          :key="acc.id"
-          @click="requestSwitch(acc.id)"
-          :disabled="!!switchingAccount"
-          class="w-full flex items-center justify-between px-4 py-3 rounded-3xl hover:bg-surface-card border border-transparent hover:border-border transition-all duration-200 group disabled:opacity-60"
-        >
-          <div class="flex items-center gap-3">
-            <div v-if="switchingAccount === acc.id"
-              class="w-9 h-9 rounded-full bg-brand/10 flex items-center justify-center">
-              <Loader2 class="w-4 h-4 text-brand animate-spin" />
-            </div>
-            <!-- Per-identity color makes same-letter identities distinguishable -->
-            <div v-else class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white"
-              :style="{ background: getAvatarColor(acc.pubkey) }">
-              {{ (acc.name || '?')[0].toUpperCase() }}
-            </div>
-            <div class="text-left">
-              <div>
-                <span class="text-sm font-medium text-text-secondary">{{ acc.name }}</span>
-                <span class="text-[10px] ml-2 px-1.5 py-0.5 rounded font-medium"
-                  :class="acc.mode === 'nip46' ? 'bg-warning/10 text-warning' : 'bg-surface-elevated text-text-muted'">
-                  {{ acc.mode === 'nip46' ? t('account.external') : t('account.local') }}
-                </span>
-              </div>
-              <code v-if="acc.npub" class="block text-[9px] font-mono text-text-muted/70">{{ truncateKey(acc.npub, 10, 4) }}</code>
-            </div>
-          </div>
-          <span
-            v-if="!switchingAccount"
-            @click.stop="requestDelete(acc.id)"
-            class="p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-error/10 transition-all cursor-pointer"
-          >
-            <Trash2 class="w-3.5 h-3.5 text-text-muted hover:text-error" />
-          </span>
-        </button>
+      <div v-if="accounts.length > 1" class="space-y-2">
+        <p class="text-xs text-text-secondary font-semibold">{{ t('account.switchAccount') }}</p>
+        <div v-for="acc in accounts.filter(a => !a.isActive)" :key="acc.id" class="flex items-center gap-2 rounded-xl border border-border p-2">
+          <button @click="requestSwitch(acc.id)" :disabled="!!switchingAccount" class="flex-1 min-w-0 p-1 rounded-lg hover:bg-surface-elevated min-w-8 min-h-8">
+            <AccountIdentity :account="acc" />
+          </button>
+          <Loader2 v-if="switchingAccount === acc.id" class="w-5 h-5 animate-spin" />
+          <button @click="requestDelete(acc.id)" :disabled="!!switchingAccount" :aria-label="t('account.deleteTitle')" class="w-10 h-10 rounded-lg flex items-center justify-center text-text-secondary hover:bg-error/10 hover:text-error">
+            <Trash2 class="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <!-- Add account -->
@@ -647,13 +651,7 @@ function onWizardComplete() {
         <template #icon><AlertTriangle class="w-4 h-4 text-brand" /></template>
         <template #title>{{ t('account.switchConfirmTitle') }}</template>
         <template #description>
-          <div v-if="switchTargetAccount" class="flex items-center gap-2 justify-center mb-1">
-            <div class="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-              :style="{ background: getAvatarColor(switchTargetAccount.pubkey) }">
-              {{ (switchTargetAccount.name || '?')[0].toUpperCase() }}
-            </div>
-            <span class="font-semibold text-text-primary text-xs">{{ switchTargetAccount.name }}</span>
-          </div>
+          <AccountIdentity v-if="switchTargetAccount" :account="switchTargetAccount" class="mb-3" />
           {{ t('account.switchConfirmDesc') }}
         </template>
         <template #actions>
@@ -670,22 +668,7 @@ function onWizardComplete() {
       </BottomSheet>
 
       <!-- Delete confirmation -->
-      <BottomSheet :open="!!confirmingDelete" variant="danger" @close="cancelDelete">
-        <template #icon><AlertTriangle class="w-4 h-4 text-error" /></template>
-        <template #title>{{ t('account.deleteTitle') }}</template>
-        <template #description>{{ accounts.find(a => a.id === confirmingDelete)?.mode === 'nip46' ? t('account.deleteDescRemote') : t('account.deleteDescLocal') }}</template>
-        <template #actions>
-          <button @click="cancelDelete" :disabled="deletingAccount"
-            class="py-2 text-xs rounded-2xl bg-surface-elevated text-text-secondary hover:bg-surface-hover transition-all duration-200 font-semibold disabled:opacity-60">
-            {{ t('common.cancel') }}
-          </button>
-          <button @click="confirmDelete" :disabled="deletingAccount"
-            class="py-2 text-xs rounded-2xl bg-error text-white hover:bg-error/90 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
-            <Loader2 v-if="deletingAccount" class="w-3 h-3 animate-spin" />
-            {{ deletingAccount ? t('account.removing') : t('account.deleteForever') }}
-          </button>
-        </template>
-      </BottomSheet>
+      <DeleteAccountSheet :account="accounts.find(a => a.id === confirmingDelete) || null" :has-wallet="accountWallets.some(w => w.type === 'cashu' && w.ownerAccountId === confirmingDelete)" :busy="deletingAccount" @close="cancelDelete" @confirm="confirmDelete" @backup="backupBeforeRemoval" />
     </template>
   </div>
 </template>
