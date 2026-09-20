@@ -1,4 +1,5 @@
 <script setup>
+import BackButton from '../BackButton.vue'
 /**
  * Send flow — smart input that detects invoice / Lightning Address / LNURL /
  * SA retail QR codes (Pick n Pay, Checkers, Shoprite, Woolworths via CryptoQR).
@@ -951,12 +952,23 @@ function onScan(val) {
   showScanner.value = false
 }
 
+function requestClose() {
+  if (paying.value || creatingShare.value) return
+  if (shareToken.value && !shareReclaimed.value) {
+    payError.value = t('wallet.requestDeliveryFailedHint')
+    return
+  }
+  emit('back')
+}
+defineExpose({ requestClose })
+
 function goBack() {
+  if (paying.value || creatingShare.value) return
   if (step.value === 'input') { emit('back'); return }
   if (step.value === 'ecash-share') {
     // A created token holds real sats: never discard it on a stray tap.
     // The user leaves through "Take it back" or "Done" instead.
-    if (shareToken.value && !shareReclaimed.value) return
+    if (shareToken.value && !shareReclaimed.value) { requestClose(); return }
     reset()
     return
   }
@@ -1011,13 +1023,9 @@ function reset() {
 
     <!-- Header -->
     <div class="flex items-center gap-3 mb-5">
-      <button
+      <BackButton
         @click="goBack"
-        :aria-label="t('common.back')"
-        class="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-surface-elevated transition-all duration-200"
-      >
-        <ArrowLeft class="w-4 h-4 text-text-muted" />
-      </button>
+       />
       <div>
         <h1 class="text-[15px] font-extrabold leading-tight">
           {{ step === 'result' ? (payResult?.withdrawn ? t('wallet.withdrawSuccess') : t('wallet.sendResult'))
@@ -1043,7 +1051,7 @@ function reset() {
       <!-- Destination input card -->
       <div class="bg-surface-card rounded-2xl border border-border overflow-hidden">
         <div class="px-3.5 pt-3 pb-1.5">
-          <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+          <label class="text-xs uppercase tracking-widest text-text-muted font-semibold">
             {{ t('wallet.invoiceLabel') }}
           </label>
         </div>
@@ -1058,16 +1066,16 @@ function reset() {
         <!-- Input with inline QR button -->
         <div v-else class="relative px-3.5 pb-3">
           <textarea
-            v-model="input"
+            v-model="input" :aria-label="t('wallet.invoiceLabel')"
             :placeholder="t('wallet.invoicePlaceholder')"
             rows="2"
-            class="w-full bg-transparent outline-none text-sm font-mono placeholder:text-text-muted/40 resize-none pr-8"
+            class="w-full bg-transparent outline-none text-sm font-mono placeholder:text-text-muted resize-none pr-8"
           />
           <button
             type="button"
             @click="showScanner = true"
             :title="t('common.scanQr')"
-            class="absolute bottom-3.5 right-3.5 p-1.5 rounded-lg text-text-muted hover:text-brand hover:bg-brand/10 transition-all duration-150"
+            class="absolute bottom-3.5 right-3.5 p-1.5 rounded-lg text-text-muted hover:text-brand hover:bg-brand/10 transition-all duration-150 min-w-8 min-h-8"
           >
             <ScanLine class="w-4 h-4" />
           </button>
@@ -1076,7 +1084,7 @@ function reset() {
         <!-- Detection indicator — inside the card -->
         <div
           v-if="detected"
-          class="flex items-center gap-2 px-3.5 py-2 border-t border-border text-[11px] font-medium"
+          class="flex items-center gap-2 px-3.5 py-2 border-t border-border text-xs font-medium"
           :class="detectedColor"
         >
           <component :is="detectedIcon" class="w-3.5 h-3.5" />
@@ -1095,32 +1103,32 @@ function reset() {
           </div>
           <div class="min-w-0 flex-1">
             <p class="text-sm font-bold truncate">{{ (mobilePayment || detected.mobile).display }}</p>
-            <p class="text-[10px] text-text-muted truncate">
+            <p class="text-xs text-text-muted truncate">
               {{ (mobilePayment || detected.mobile).country.provider }} · {{ (mobilePayment || detected.mobile).operator }} · {{ (mobilePayment || detected.mobile).country.currency }}
             </p>
           </div>
         </div>
         <div v-if="detected.mobile.ambiguous && !mobilePayment" class="space-y-2">
-          <p class="text-[10px] text-warning">{{ t('wallet.chooseMobileCountry') }}</p>
+          <p class="text-xs text-warning">{{ t('wallet.chooseMobileCountry') }}</p>
           <div class="grid grid-cols-2 gap-2">
             <button v-for="candidate in mobileCandidates" :key="candidate.country.code"
               @click="chooseMobileCountry(candidate.country.code)"
               class="px-3 py-2 rounded-xl border border-border bg-surface-elevated hover:border-brand/40 text-left transition-colors">
               <span class="text-xs font-semibold">{{ candidate.country.flag }} {{ candidate.country.name }}</span>
-              <span class="block text-[9px] text-text-muted">{{ candidate.country.provider }}</span>
+              <span class="block text-xs text-text-muted">{{ candidate.country.provider }}</span>
             </button>
           </div>
         </div>
-        <p v-else class="text-[10px] text-info">{{ mobilePayment?.country.hint || detected.mobile.country.hint }}</p>
+        <p v-else class="text-xs text-info">{{ mobilePayment?.country.hint || detected.mobile.country.hint }}</p>
       </div>
 
       <!-- Unknown format — guidance + report -->
       <div v-if="detected?.type === 'unknown'" class="px-1 space-y-2 animate-fade-in-up">
-        <p class="text-[11px] text-text-muted">
+        <p class="text-xs text-text-muted">
           <span class="font-semibold text-text-secondary">{{ t('wallet.unknownFormatTitle') }}</span>
           — {{ t('wallet.unknownFormatHint') }}
         </p>
-        <p class="text-[10px] text-text-muted">
+        <p class="text-xs text-text-muted">
           {{ t('wallet.unknownFormatReport') }}
           <a href="https://t.me/rotation77" target="_blank" rel="noopener noreferrer" class="font-semibold text-text-secondary hover:text-brand transition-colors">{{ t('wallet.reportTelegram') }}</a>
           <span class="opacity-30 mx-1">·</span>
@@ -1131,7 +1139,7 @@ function reset() {
       <!-- Phase 2 warning -->
       <div v-if="isMerchantUnsupported" class="flex items-start gap-2 p-2.5 rounded-xl bg-warning/10 text-warning text-xs">
         <AlertTriangle class="w-3.5 h-3.5 mt-0.5 shrink-0" />
-        <span>{{ t('wallet.merchantNotSupported', { name: detected.merchant?.name || 'This retailer' }) }}</span>
+        <span>{{ t('wallet.merchantNotSupported', { name: detected.merchant?.name || t('wallet.recipient') }) }}</span>
       </div>
 
       <!-- Nostr identity — resolving shimmer -->
@@ -1144,7 +1152,7 @@ function reset() {
           </div>
         </div>
         <div class="flex justify-center mt-3">
-          <div class="flex items-center gap-2 text-[10px] text-text-muted">
+          <div class="flex items-center gap-2 text-xs text-text-muted">
             <Loader2 class="w-3 h-3 animate-spin" />
             <span>{{ t('wallet.resolvingProfile') }}</span>
           </div>
@@ -1162,9 +1170,9 @@ function reset() {
             <span v-else class="text-lg font-bold text-white">{{ (nostrProfile.name || '?')[0].toUpperCase() }}</span>
           </div>
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-extrabold truncate">{{ nostrProfile.name || 'Unknown' }}</p>
-            <p v-if="nostrProfile.nip05" class="text-[11px] text-brand truncate">{{ nostrProfile.nip05 }}</p>
-            <p v-if="nostrProfile.lud16" class="text-[10px] text-success truncate flex items-center gap-1 mt-0.5">
+            <p class="text-sm font-extrabold truncate">{{ nostrProfile.name || t('chat.unknownUser') }}</p>
+            <p v-if="nostrProfile.nip05" class="text-xs text-brand truncate">{{ nostrProfile.nip05 }}</p>
+            <p v-if="nostrProfile.lud16" class="text-xs text-success truncate flex items-center gap-1 mt-0.5">
               <Wallet class="w-3 h-3" />
               {{ nostrProfile.lud16 }}
             </p>
@@ -1178,8 +1186,8 @@ function reset() {
           <span class="text-3xl font-extrabold tracking-tight tabular-nums">{{ formatSats(invoiceAmountSats) }}</span>
           <span class="text-sm font-medium text-text-muted">{{ t('wallet.sats') }}</span>
         </div>
-        <p v-if="toFiat(invoiceAmountSats)" class="text-[11px] text-brand mt-1 font-medium">≈ {{ toFiat(invoiceAmountSats) }}</p>
-        <p v-if="invoiceDetails?.description" class="text-[11px] text-text-muted mt-1 truncate">{{ invoiceDetails.description }}</p>
+        <p v-if="toFiat(invoiceAmountSats)" class="text-xs text-brand mt-1 font-medium">≈ {{ toFiat(invoiceAmountSats) }}</p>
+        <p v-if="invoiceDetails?.description" class="text-xs text-text-muted mt-1 truncate">{{ invoiceDetails.description }}</p>
       </div>
 
       <ErrorBanner
@@ -1210,11 +1218,11 @@ function reset() {
             <span class="text-3xl font-extrabold tracking-tight tabular-nums">{{ formatSats(requestInfo.amountSats) }}</span>
             <span class="text-sm font-medium text-text-muted">{{ t('wallet.sats') }}</span>
           </div>
-          <p v-if="toFiat(requestInfo.amountSats)" class="text-[11px] text-brand mt-1 font-medium">≈ {{ toFiat(requestInfo.amountSats) }}</p>
+          <p v-if="toFiat(requestInfo.amountSats)" class="text-xs text-brand mt-1 font-medium">≈ {{ toFiat(requestInfo.amountSats) }}</p>
         </template>
         <p v-else class="text-sm font-bold">{{ t('wallet.requestChooseAmount') }}</p>
-        <p v-if="requestInfo.description" class="text-[11px] text-text-muted mt-1 truncate">{{ requestInfo.description }}</p>
-        <p v-if="requestInfo.mintHosts.length" class="text-[10px] text-text-muted mt-1.5 truncate">
+        <p v-if="requestInfo.description" class="text-xs text-text-muted mt-1 truncate">{{ requestInfo.description }}</p>
+        <p v-if="requestInfo.mintHosts.length" class="text-xs text-text-muted mt-1.5 truncate">
           {{ t('wallet.requestAcceptsMint', { host: requestInfo.mintHosts.join(', ') }) }}
         </p>
       </div>
@@ -1222,7 +1230,7 @@ function reset() {
       <!-- Amount input card (only when needed) -->
       <div v-if="needsAmount" class="bg-surface-card rounded-2xl border border-border p-4 space-y-3">
         <div class="flex items-center justify-between">
-          <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+          <label class="text-xs uppercase tracking-widest text-text-muted font-semibold">
             {{ inputMode === 'sats' ? t('wallet.amountSats')
               : inputMode === 'payout' ? t('wallet.recipientGets', { currency: payoutCurrency?.code })
               : t('wallet.amountFiat', { currency: currency.toUpperCase() }) }}
@@ -1230,7 +1238,7 @@ function reset() {
           <button
             v-if="!lnurlFixedAmount"
             @click="toggleInputMode"
-            class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium"
+            class="flex items-center gap-1 text-xs text-text-muted hover:text-brand transition-all duration-200 font-medium"
           >
             <ArrowLeftRight class="w-3 h-3" />
             {{ nextInputModeLabel }}
@@ -1241,34 +1249,34 @@ function reset() {
         <div class="text-center">
           <input
             v-if="inputMode === 'sats'"
-            v-model="amountSats"
+            v-model="amountSats" :aria-label="t('wallet.amountSats')"
             type="number"
             min="1"
             placeholder="0"
             :readonly="lnurlFixedAmount"
-            class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
           <input
             v-else-if="inputMode === 'fiat'"
-            v-model="amountFiat"
+            v-model="amountFiat" :aria-label="t('wallet.amountFiat', { currency: currency.toUpperCase() })"
             type="number"
             min="0.01"
             step="0.01"
             placeholder="0.00"
-            class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
           <div v-else class="flex items-baseline justify-center gap-2">
             <input
-              v-model="amountPayout"
+              v-model="amountPayout" :aria-label="t('wallet.merchantAmount')"
               type="number"
               min="0"
               :step="payoutCurrency?.decimals > 0 ? 0.01 : 1"
               :placeholder="payoutCurrency?.decimals > 0 ? '0.00' : '0'"
-              class="min-w-0 text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              class="min-w-0 text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
             <span class="text-sm font-bold text-info">{{ payoutCurrency?.code }}</span>
           </div>
-          <p v-if="conversionHint" class="text-[11px] text-text-muted mt-1 font-medium">{{ conversionHint }}</p>
+          <p v-if="conversionHint" class="text-xs text-text-muted mt-1 font-medium">{{ conversionHint }}</p>
         </div>
 
         <SatButtons
@@ -1277,13 +1285,13 @@ function reset() {
           :max="status?.balance || Infinity"
         />
 
-        <p v-if="fiatRateUnavailable && inputMode === 'fiat'" class="text-[10px] text-warning text-center">
+        <p v-if="fiatRateUnavailable && inputMode === 'fiat'" class="text-xs text-warning text-center">
           {{ t('wallet.rateUnavailable') }}
         </p>
-        <p v-else-if="amountError" class="text-[10px] text-error text-center">
+        <p v-else-if="amountError" class="text-xs text-error text-center">
           {{ amountError }}
         </p>
-        <p v-else-if="lnurlRangeHint" class="text-[10px] text-text-muted text-center">
+        <p v-else-if="lnurlRangeHint" class="text-xs text-text-muted text-center">
           {{ lnurlRangeHint }}
         </p>
       </div>
@@ -1324,19 +1332,19 @@ function reset() {
       <!-- Amount + memo form -->
       <template v-if="!shareToken">
         <div class="bg-surface-card rounded-2xl border border-border p-4 space-y-3">
-          <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+          <label class="text-xs uppercase tracking-widest text-text-muted font-semibold">
             {{ t('wallet.amountSats') }}
           </label>
           <div class="text-center">
             <input
-              v-model="shareAmountSats"
+              v-model="shareAmountSats" :aria-label="t('wallet.amountSats')"
               type="number"
               min="1"
               placeholder="0"
               autofocus
-              class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              class="w-full text-center text-3xl font-extrabold tracking-tight bg-transparent outline-none tabular-nums placeholder:text-text-muted [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
-            <p v-if="toFiat(parseInt(shareAmountSats) || 0)" class="text-[11px] text-text-muted mt-1 font-medium">
+            <p v-if="toFiat(parseInt(shareAmountSats) || 0)" class="text-xs text-text-muted mt-1 font-medium">
               ≈ {{ toFiat(parseInt(shareAmountSats) || 0) }}
             </p>
           </div>
@@ -1345,11 +1353,11 @@ function reset() {
 
         <div class="relative">
           <input
-            v-model="shareMemo"
+            v-model="shareMemo" :aria-label="t('wallet.memo')"
             :placeholder="t('wallet.memoPlaceholder')"
             class="w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted"
           />
-          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-text-muted/60 font-medium pointer-events-none">
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted font-medium pointer-events-none">
             {{ t('common.optional') }}
           </span>
         </div>
@@ -1382,7 +1390,7 @@ function reset() {
       <template v-else>
         <div class="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm">
           <div class="px-4 pt-4 pb-2 text-center">
-            <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider">{{ t('wallet.shareEcashScanHint') }}</p>
+            <p class="text-xs text-text-muted font-medium uppercase tracking-wider">{{ t('wallet.shareEcashScanHint') }}</p>
             <div class="flex items-baseline justify-center gap-1.5 mt-1">
               <span class="text-2xl font-extrabold tracking-tight">{{ formatSats(parseInt(shareAmountSats) || 0) }}</span>
               <span class="text-xs font-medium text-text-muted">{{ t('wallet.sats') }}</span>
@@ -1392,7 +1400,7 @@ function reset() {
             <QrDisplay :value="shareToken" :mode="shareProofCount > 2 ? 'animated' : 'auto'" />
           </div>
           <div v-if="shareMemo" class="px-4 pb-3 text-center">
-            <p class="text-[11px] text-text-muted italic">{{ shareMemo }}</p>
+            <p class="text-xs text-text-muted italic">{{ shareMemo }}</p>
           </div>
         </div>
 
@@ -1401,7 +1409,7 @@ function reset() {
           @click="copyShareToken"
           class="relative w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-left hover:border-brand/40 transition-all duration-200 cursor-pointer"
         >
-          <div class="text-[9px] font-mono text-text-muted break-all line-clamp-2 leading-relaxed pr-8">
+          <div class="text-xs font-mono text-text-muted break-all line-clamp-2 leading-relaxed pr-8">
             {{ shareToken }}
           </div>
           <div class="absolute top-1/2 -translate-y-1/2 right-3 p-1 rounded-md transition-colors"
@@ -1417,7 +1425,7 @@ function reset() {
           <span>{{ payError }}</span>
         </div>
 
-        <p v-if="shareReclaimed" class="text-[11px] text-success text-center font-medium">
+        <p v-if="shareReclaimed" class="text-xs text-success text-center font-medium">
           {{ t('wallet.tokenTakenBackDesc') }}
         </p>
 
@@ -1483,14 +1491,14 @@ function reset() {
               >{{ getMerchantInitials(merchantInfo?.name) }}</span>
             </div>
             <div class="min-w-0">
-              <p class="text-sm font-extrabold truncate">{{ merchantStoreName || merchantInfo?.name || 'Retailer' }}</p>
-              <p class="text-[10px] text-text-muted">{{ t('wallet.merchantPaying') }} {{ merchantInfo?.name }}</p>
+              <p class="text-sm font-extrabold truncate">{{ merchantStoreName || merchantInfo?.name || t('wallet.recipient') }}</p>
+              <p class="text-xs text-text-muted">{{ t('wallet.merchantPaying') }} {{ merchantInfo?.name }}</p>
             </div>
           </div>
 
           <!-- ZAR Amount -->
           <div v-if="merchantZAR" class="text-center py-3 border-t border-b border-border">
-            <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-1">{{ t('wallet.merchantAmount') }}</p>
+            <p class="text-xs text-text-muted font-medium uppercase tracking-wider mb-1">{{ t('wallet.merchantAmount') }}</p>
             <div class="text-3xl font-extrabold tracking-tight">
               R{{ merchantZAR.toFixed(2) }}
             </div>
@@ -1498,14 +1506,14 @@ function reset() {
               ≈ {{ formatSats(merchantSats) }} sats
             </div>
             <!-- Show user's local fiat equivalent if currency is not ZAR -->
-            <div v-if="currency !== 'zar' && toFiat(merchantSats)" class="text-[10px] text-text-muted mt-0.5">
+            <div v-if="currency !== 'zar' && toFiat(merchantSats)" class="text-xs text-text-muted mt-0.5">
               ≈ {{ toFiat(merchantSats) }}
             </div>
           </div>
 
           <!-- Sats amount (no ZAR parsed) -->
           <div v-else class="text-center py-3 border-t border-b border-border">
-            <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-1">{{ t('wallet.sending') }}</p>
+            <p class="text-xs text-text-muted font-medium uppercase tracking-wider mb-1">{{ t('wallet.sending') }}</p>
             <div class="text-2xl font-extrabold tracking-tight">
               {{ formatSats(merchantSats) }}
               <span class="text-sm font-medium text-text-muted ml-1">{{ t('wallet.sats') }}</span>
@@ -1514,7 +1522,7 @@ function reset() {
 
           <!-- Countdown timer -->
           <div class="flex items-center justify-between mt-3">
-            <span class="text-[10px] text-text-muted font-medium">{{ t('wallet.merchantTimeLeft') }}</span>
+            <span class="text-xs text-text-muted font-medium">{{ t('wallet.merchantTimeLeft') }}</span>
             <div
               class="flex items-center gap-1 text-xs font-mono font-bold tabular-nums"
               :class="countdownUrgent ? 'text-error animate-pulse' : 'text-text-secondary'"
@@ -1564,14 +1572,14 @@ function reset() {
         <div class="w-10 h-10 rounded-[10px] bg-success/10 flex items-center justify-center mx-auto mb-3">
           <ArrowDownLeft class="w-5 h-5 text-success" />
         </div>
-        <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-1">{{ t('wallet.withdrawDesc') }}</p>
+        <p class="text-xs text-text-muted font-medium uppercase tracking-wider mb-1">{{ t('wallet.withdrawDesc') }}</p>
 
         <!-- Amount input if range -->
         <div v-if="withdrawInfo && withdrawInfo.minSats !== withdrawInfo.maxSats" class="mt-3 space-y-2">
-          <input v-model="withdrawAmountSats" type="number"
+          <input v-model="withdrawAmountSats" :aria-label="t('wallet.amountSats')" type="number"
             :min="withdrawInfo.minSats" :max="withdrawInfo.maxSats"
             class="w-full bg-surface-base border border-border rounded-lg px-3 py-2.5 text-sm text-center outline-none focus:border-brand transition-colors tabular-nums" />
-          <p class="text-[10px] text-text-muted">
+          <p class="text-xs text-text-muted">
             {{ t('wallet.withdrawMin', { min: formatSats(withdrawInfo.minSats) }) }} ·
             {{ t('wallet.withdrawMax', { max: formatSats(withdrawInfo.maxSats) }) }}
           </p>
@@ -1587,7 +1595,7 @@ function reset() {
           ≈ {{ toFiat(parseInt(withdrawAmountSats) || 0) }}
         </div>
 
-        <p v-if="withdrawInfo?.defaultDescription" class="text-[10px] text-text-muted mt-3 truncate">
+        <p v-if="withdrawInfo?.defaultDescription" class="text-xs text-text-muted mt-3 truncate">
           {{ withdrawInfo.defaultDescription }}
         </p>
       </div>
@@ -1615,23 +1623,23 @@ function reset() {
 
       <div class="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm">
         <div class="p-5 text-center">
-          <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-2">{{ t('wallet.sending') }}</p>
+          <p class="text-xs text-text-muted font-medium uppercase tracking-wider mb-2">{{ t('wallet.sending') }}</p>
           <div class="flex items-baseline justify-center gap-1.5">
             <span class="text-3xl font-extrabold tracking-tight">{{ formatSats(effectiveSats) }}</span>
             <span class="text-sm font-medium text-text-muted">{{ t('wallet.sats') }}</span>
           </div>
-          <p v-if="toFiat(effectiveSats)" class="text-[11px] text-brand mt-1 font-medium">≈ {{ toFiat(effectiveSats) }}</p>
-          <p v-if="requestInfo?.description" class="text-[11px] text-text-muted mt-1 truncate">{{ requestInfo.description }}</p>
+          <p v-if="toFiat(effectiveSats)" class="text-xs text-brand mt-1 font-medium">≈ {{ toFiat(effectiveSats) }}</p>
+          <p v-if="requestInfo?.description" class="text-xs text-text-muted mt-1 truncate">{{ requestInfo.description }}</p>
         </div>
 
         <!-- How the payment travels -->
         <div class="flex items-center gap-2 px-4 py-2.5 border-t border-border text-brand bg-brand/10">
           <Coins class="w-3.5 h-3.5" />
-          <span class="text-[11px] font-medium truncate">{{ requestDeliveryLabel }}</span>
+          <span class="text-xs font-medium truncate">{{ requestDeliveryLabel }}</span>
         </div>
 
         <!-- Which mint pays -->
-        <div v-if="requestPayMint" class="flex items-center gap-2 px-4 py-2.5 border-t border-border text-[11px] text-text-muted">
+        <div v-if="requestPayMint" class="flex items-center gap-2 px-4 py-2.5 border-t border-border text-xs text-text-muted">
           <Wallet class="w-3.5 h-3.5" />
           <span class="truncate">{{ t('wallet.requestPaysFrom', { host: requestPayMintHost }) }}</span>
         </div>
@@ -1669,7 +1677,7 @@ function reset() {
 
       <div class="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm">
         <div class="p-5 text-center">
-          <p class="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-2">{{ t('wallet.sending') }}</p>
+          <p class="text-xs text-text-muted font-medium uppercase tracking-wider mb-2">{{ t('wallet.sending') }}</p>
           <div v-if="currentPayout()" class="flex items-baseline justify-center gap-1.5 mb-1">
             <span class="text-3xl font-extrabold tracking-tight">{{ currentPayout().amount }}</span>
             <span class="text-sm font-bold text-info">{{ currentPayout().code }}</span>
@@ -1679,10 +1687,10 @@ function reset() {
             <span class="text-sm font-medium text-text-muted">{{ t('wallet.sats') }}</span>
           </div>
           <div v-else class="text-xs text-text-muted">{{ t('wallet.amountInInvoice') }}</div>
-          <p v-if="effectiveSats && toFiat(effectiveSats)" class="text-[11px] text-brand mt-1 font-medium">
+          <p v-if="effectiveSats && toFiat(effectiveSats)" class="text-xs text-brand mt-1 font-medium">
             ≈ {{ toFiat(effectiveSats) }}
           </p>
-          <p v-if="invoiceDetails?.description" class="text-[11px] text-text-muted mt-1 truncate">
+          <p v-if="invoiceDetails?.description" class="text-xs text-text-muted mt-1 truncate">
             {{ invoiceDetails.description }}
           </p>
         </div>
@@ -1690,11 +1698,11 @@ function reset() {
         <!-- Destination -->
         <div class="flex items-center gap-2 px-4 py-2.5 border-t border-border" :class="nostrProfile?.lud16 ? 'text-success bg-success/10' : detectedColor">
           <component :is="detectedIcon" class="w-3.5 h-3.5" />
-          <span v-if="nostrProfile" class="text-[11px] font-medium truncate flex items-center gap-1.5">
+          <span v-if="nostrProfile" class="text-xs font-medium truncate flex items-center gap-1.5">
             <img v-if="nostrProfile.picture" :src="nostrProfile.picture" class="w-4 h-4 rounded-full" />
             {{ nostrProfile.name || nostrProfile.lud16 }}
           </span>
-          <span v-else class="text-[11px] font-medium truncate">{{ detected?.type === 'lnaddress' ? detected.value : detectedLabel }}</span>
+          <span v-else class="text-xs font-medium truncate">{{ detected?.type === 'lnaddress' ? detected.value : detectedLabel }}</span>
         </div>
       </div>
 
@@ -1704,18 +1712,18 @@ function reset() {
         <div v-else class="w-9 h-9 rounded-lg bg-success/15 flex items-center justify-center"><BadgeCheck class="w-5 h-5 text-success" /></div>
         <div class="min-w-0 flex-1">
           <p class="text-xs font-bold truncate">{{ merchantVerification.name || t('wallet.verifiedMerchant') }}</p>
-          <p class="text-[10px] text-success">{{ t('wallet.verifiedByBranta') }}</p>
+          <p class="text-xs text-success">{{ t('wallet.verifiedByBranta') }}</p>
         </div>
       </a>
 
       <!-- Invoice preview (collapsible) -->
       <div class="space-y-1">
         <button @click="showInvoicePreview = !showInvoicePreview"
-          class="flex items-center gap-1 text-[10px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
+          class="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
           <Code class="w-3 h-3" />
           {{ showInvoicePreview ? t('wallet.hideInvoiceDetails') : t('wallet.showInvoiceDetails') }}
         </button>
-        <div v-if="showInvoicePreview" class="bg-surface-card rounded-xl px-3 py-2 text-[9px] font-mono text-text-muted break-all max-h-16 overflow-y-auto border border-border animate-fade-in">
+        <div v-if="showInvoicePreview" class="bg-surface-card rounded-xl px-3 py-2 text-xs font-mono text-text-muted break-all max-h-16 overflow-y-auto border border-border animate-fade-in">
           {{ (resolvedInvoice || input.trim()).slice(0, 200) }}{{ (resolvedInvoice || input.trim()).length > 200 ? '...' : '' }}
         </div>
       </div>
@@ -1774,7 +1782,7 @@ function reset() {
               @click="copyFallbackToken"
               class="relative mt-4 w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-left hover:border-brand/40 transition-all duration-200 cursor-pointer"
             >
-              <div class="text-[9px] font-mono text-text-muted break-all line-clamp-3 leading-relaxed pr-8">
+              <div class="text-xs font-mono text-text-muted break-all line-clamp-3 leading-relaxed pr-8">
                 {{ requestFallback.token }}
               </div>
               <div class="absolute top-1/2 -translate-y-1/2 right-3 p-1 rounded-md transition-colors"
@@ -1820,7 +1828,7 @@ function reset() {
               {{ merchantInfo ? `${t('wallet.merchantPaying')} ${merchantInfo.name}` : t('wallet.paymentSuccess') }}
             </p>
           </template>
-          <p v-if="paymentVerified" class="text-[10px] text-success mt-1 font-medium">
+          <p v-if="paymentVerified" class="text-xs text-success mt-1 font-medium">
             {{ t('wallet.paymentVerified') }}
           </p>
 
@@ -1831,8 +1839,8 @@ function reset() {
               <Loader2 v-else class="w-4 h-4 text-info animate-spin" />
               <p class="text-xs font-bold">{{ deliveryStatus.delivered ? t('wallet.mobileDelivered') : t('wallet.mobileDeliveryPending') }}</p>
             </div>
-            <p v-if="deliveryStatus.recipient" class="text-[10px] text-text-secondary mt-1">{{ deliveryStatus.recipient }}</p>
-            <p v-if="deliveryStatus.receipt" class="text-[9px] font-mono text-text-muted mt-1 break-all">{{ deliveryStatus.receipt }}</p>
+            <p v-if="deliveryStatus.recipient" class="text-xs text-text-secondary mt-1">{{ deliveryStatus.recipient }}</p>
+            <p v-if="deliveryStatus.receipt" class="text-xs font-mono text-text-muted mt-1 break-all">{{ deliveryStatus.receipt }}</p>
           </div>
 
           <div v-if="merchantInfo && merchantZAR" class="mt-3 text-sm text-text-secondary">
@@ -1862,7 +1870,7 @@ function reset() {
                   <ArrowUpRight class="w-3.5 h-3.5" />
                   {{ t('common.open') }}
                 </a>
-                <p v-else class="text-[10px] text-text-muted font-mono break-all px-1">{{ successAction.url }}</p>
+                <p v-else class="text-xs text-text-muted font-mono break-all px-1">{{ successAction.url }}</p>
               </div>
             </template>
 
@@ -1875,18 +1883,18 @@ function reset() {
                 <div v-if="successAction.secret" class="bg-surface-base rounded-lg px-3 py-2 border border-border">
                   <p class="text-xs text-text-primary break-all leading-relaxed">{{ successAction.secret }}</p>
                 </div>
-                <p v-else-if="successAction.decryptError" class="text-[10px] text-warning">{{ t('wallet.successActionDecryptFailed') }}</p>
+                <p v-else-if="successAction.decryptError" class="text-xs text-warning">{{ t('wallet.successActionDecryptFailed') }}</p>
               </div>
             </template>
           </div>
 
           <div v-if="payResult?.preimage" class="mt-4 text-left">
             <button @click="showPaymentProof = !showPaymentProof"
-              class="flex items-center gap-1 text-[10px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
+              class="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
               <Code class="w-3 h-3" />
               {{ t('wallet.preimage') }}
             </button>
-            <code v-if="showPaymentProof" class="block mt-1 text-[10px] bg-surface-base px-2.5 py-1.5 rounded-lg font-mono text-text-secondary break-all animate-fade-in">
+            <code v-if="showPaymentProof" class="block mt-1 text-xs bg-surface-base px-2.5 py-1.5 rounded-lg font-mono text-text-secondary break-all animate-fade-in">
               {{ payResult.preimage }}
             </code>
           </div>

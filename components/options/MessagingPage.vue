@@ -9,6 +9,7 @@ import { useChat } from '../../composables/useChat.js'
 import { useContacts } from '../../composables/useContacts.js'
 import { useAccounts } from '../../composables/useAccounts.js'
 import { useMuteList } from '../../composables/useMuteList.js'
+import ChatThread from '../chat/ChatThread.vue'
 import { nip19 } from 'nostr-core'
 import { formatTimestamp } from '../../lib/utils.js'
 import { getAvatarColor } from '../../lib/avatarColor.js'
@@ -24,6 +25,7 @@ const { contacts, loading: contactsLoading, loadFollowList, getCachedProfile, fe
 const { activeAccount } = useAccounts()
 const { isMuted } = useMuteList()
 
+const openThread = ref(null)
 const tab = ref('conversations') // 'conversations' | 'contacts'
 const search = ref('')
 const initializing = ref(true)
@@ -84,13 +86,14 @@ function profileName(pubkey) {
 function truncateNpub(pubkey) {
   try {
     const npub = nip19.npubEncode(pubkey)
-    return 'User ' + npub.slice(5, 9) + '...' + npub.slice(-4)
-  } catch { return 'User ' + pubkey.slice(0, 6) + '...' }
+    return t('chat.unknownUser')
+  } catch { return t('chat.unknownUser') }
 }
 </script>
 
 <template>
-  <div class="space-y-6 max-w-2xl">
+  <ChatThread v-if="openThread" :pubkey="openThread" @back="openThread = null" class="h-[calc(100dvh-80px)]" />
+  <div v-else class="space-y-6 max-w-2xl">
     <!-- Header -->
     <div>
       <h1 class="text-lg font-extrabold">{{ t('options.messaging') }}</h1>
@@ -112,7 +115,7 @@ function truncateNpub(pubkey) {
     <!-- Search -->
     <div class="relative">
       <Search class="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-      <input v-model="search" :placeholder="t('chat.searchPlaceholder')"
+      <input v-model="search" :aria-label="t('chat.searchPlaceholder')" :placeholder="t('chat.searchPlaceholder')"
         class="w-full bg-surface-card border border-border rounded-2xl pl-10 pr-4 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted" />
     </div>
 
@@ -124,8 +127,8 @@ function truncateNpub(pubkey) {
     <!-- ═══ CONVERSATIONS TAB ═══ -->
     <template v-else-if="tab === 'conversations'">
       <div v-if="filteredConversations.length > 0" class="space-y-1">
-        <div v-for="conv in filteredConversations" :key="conv.pubkey"
-          class="flex items-center gap-3 px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
+        <button @click="openThread = conv.pubkey" v-for="conv in filteredConversations" :key="conv.pubkey"
+          class="w-full text-left flex items-center gap-3 px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
           <div class="w-10 h-10 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
             :style="{ background: getCachedProfile(conv.pubkey)?.picture ? '' : getAvatarColor(conv.pubkey) }">
             <img v-if="getCachedProfile(conv.pubkey)?.picture" :src="getCachedProfile(conv.pubkey).picture" alt="" class="w-full h-full object-cover" />
@@ -133,15 +136,15 @@ function truncateNpub(pubkey) {
           </div>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium truncate">{{ profileName(conv.pubkey) }}</div>
-            <div class="text-[11px] text-text-muted truncate">{{ conv.lastMessage?.content || '' }}</div>
+            <div class="text-xs text-text-muted truncate">{{ conv.lastMessage?.content || '' }}</div>
           </div>
           <div class="text-right shrink-0">
-            <div class="text-[10px] text-text-muted">{{ conv.lastMessage ? formatTimestamp(conv.lastMessage.created_at, t) : '' }}</div>
-            <span v-if="conv.unread > 0" class="inline-block mt-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-brand text-surface-base font-semibold">
+            <div class="text-xs text-text-muted">{{ conv.lastMessage ? formatTimestamp(conv.lastMessage.created_at, t) : '' }}</div>
+            <span v-if="conv.unread > 0" class="inline-block mt-0.5 text-xs px-1.5 py-0.5 rounded-full bg-brand text-surface-base font-semibold">
               {{ conv.unread > 99 ? '99+' : conv.unread }}
             </span>
           </div>
-        </div>
+        </button>
       </div>
       <div v-else class="bg-surface-card rounded-3xl border border-border p-8 text-center">
         <img src="/Onboarding%20wizard/storyset-online-friends-bro.svg" alt="" class="w-40 h-28 object-contain mx-auto -mt-3 mb-1" />
@@ -155,8 +158,8 @@ function truncateNpub(pubkey) {
         <div v-for="i in 5" :key="i" class="skeleton-shimmer h-14 rounded-3xl" />
       </div>
       <div v-else-if="filteredContacts.length > 0" class="space-y-1">
-        <div v-for="c in paginatedContacts" :key="c.pubkey"
-          class="flex items-center gap-3 px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
+        <button @click="openThread = c.pubkey" v-for="c in paginatedContacts" :key="c.pubkey"
+          class="w-full text-left flex items-center gap-3 px-4 py-3 bg-surface-card rounded-3xl border border-border shadow-sm">
           <div class="w-10 h-10 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
             :style="!c.profile?.picture ? { background: getAvatarColor(c.pubkey) } : {}">
             <img v-if="c.profile?.picture" :src="c.profile.picture" alt="" class="w-full h-full object-cover" />
@@ -164,15 +167,15 @@ function truncateNpub(pubkey) {
           </div>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium truncate">{{ c.profile?.display_name || c.profile?.name || truncateNpub(c.pubkey) }}</div>
-            <div v-if="c.profile?.nip05" class="text-[11px] text-brand truncate">{{ c.profile.nip05 }}</div>
-            <div v-else class="text-[11px] text-text-muted truncate">{{ truncateNpub(c.pubkey) }}</div>
+            <div v-if="c.profile?.nip05" class="text-xs text-brand truncate">{{ c.profile.nip05 }}</div>
+            <div v-else class="text-xs text-text-muted truncate">{{ truncateNpub(c.pubkey) }}</div>
           </div>
-        </div>
+        </button>
         <!-- Show more -->
         <button v-if="hasMoreContacts" @click="showMoreContacts"
-          class="w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] text-text-muted hover:text-brand font-semibold transition-all duration-200">
+          class="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs text-text-muted hover:text-brand font-semibold transition-all duration-200">
           <span>{{ t('common.showMore') }}</span>
-          <span class="text-[10px] opacity-60">({{ t('common.showingOf', { shown: paginatedContacts.length, total: filteredContacts.length }) }})</span>
+          <span class="text-xs opacity-60">({{ t('common.showingOf', { shown: paginatedContacts.length, total: filteredContacts.length }) }})</span>
           <ChevronRight class="w-3 h-3" />
         </button>
       </div>

@@ -12,6 +12,7 @@ import {
   Sparkles, Info, RotateCcw, PinIcon, Puzzle,
 } from 'lucide-vue-next'
 import QrScanner from './QrScanner.vue'
+import BackButton from './BackButton.vue'
 
 const emit = defineEmits(['complete', 'cancel'])
 const { t } = useI18n()
@@ -79,7 +80,7 @@ watch(nip46Method, async (method, previous) => {
   nostrConnectStarted = true
   try {
     nip46Status.value = 'creating'
-    const account = await createRemote('Remote Signer')
+    const account = await createRemote()
     nostrConnectAccountId.value = account.id
 
     nip46Status.value = 'waiting'
@@ -220,15 +221,17 @@ const totalSteps = computed(() => {
   if (mode.value === 'nip46') return 3
   if (mode.value === 'import') return 3
   if (mode.value === 'recover') return 5
-  return 5 // new: choose → name → backup → profile → done
+  return 3 // new: choose → name → done; backup and profile remain optional
 })
 
 const stepLabels = computed(() => {
   if (mode.value === 'nip46') return [t('wizard.stepSetup'), t('wizard.stepConnect'), t('wizard.stepDone')]
   if (mode.value === 'import') return [t('wizard.stepSetup'), t('wizard.stepImport'), t('wizard.stepDone')]
   if (mode.value === 'recover') return [t('wizard.stepSetup'), t('wizard.stepRecover'), t('wizard.stepIdentity'), t('wizard.stepProfile'), t('wizard.stepDone')]
-  return [t('wizard.stepSetup'), t('wizard.stepName'), t('wizard.stepBackup'), t('wizard.stepProfile'), t('wizard.stepDone')]
+  return [t('wizard.stepSetup'), t('wizard.stepName'), t('wizard.stepDone')]
 })
+
+const progressStep = computed(() => mode.value === 'new' && step.value >= 3 ? 3 : step.value)
 
 // ── Step handlers ──
 
@@ -251,16 +254,14 @@ async function goBack() {
     nostrConnectQr.value = ''
     nostrConnectStarted = false
   } else if (step.value === 3 && mode.value === 'new') {
-    // Backup step — allow going back to name input
-    step.value = 2
+    step.value = 5
   } else if (step.value === 3 && mode.value === 'recover') {
     recoveryCandidates.value = []
     selectedRecoveryIndex.value = null
     showAllRecoveryCandidates.value = false
     step.value = 2
   } else if (step.value === 4 && mode.value === 'new') {
-    // Profile step — allow going back to backup
-    step.value = 3
+    step.value = 5
   }
 }
 
@@ -314,19 +315,14 @@ async function handleStep2() {
 
   try {
     if (mode.value === 'new') {
-      // Brief staged pause turns key creation into a felt moment and gives
-      // the "save these words" screen more weight when it appears.
-      const [account] = await Promise.all([
-        createWithMnemonic(displayName.value.trim()),
-        new Promise(resolve => setTimeout(resolve, 750)),
-      ])
-      if (!account) throw new Error('Account creation returned no data')
+      const account = await createWithMnemonic(displayName.value.trim())
+      if (!account) throw new Error(t('common.error'))
       createdAccount.value = account
       mnemonicDisplay.value = account.mnemonic.split(' ')
       backupStage.value = 'show'
       backupChallenge.value = null
       backupAnswers.value = []
-      step.value = 3
+      step.value = 5
     } else if (mode.value === 'recover') {
       if (manualRecoveryIndex.value !== '') {
         await completeMnemonicRecovery({ accountIndex: Number(manualRecoveryIndex.value) })
@@ -370,7 +366,7 @@ async function handleStep2() {
 
       // Bunker URI flow
       nip46Status.value = 'creating'
-      const account = await createRemote('Remote Signer')
+      const account = await createRemote()
 
       try {
         nip46Status.value = 'connecting'
@@ -499,7 +495,7 @@ async function confirmIdentityBackup() {
       backupChallenge.value.token,
       backupAnswers.value,
     )
-    step.value = 4
+    step.value = 5
   } catch (err) {
     error.value = t('wizard.backupVerificationFailed')
   } finally {
@@ -520,6 +516,8 @@ onBeforeUnmount(() => {
   if (nostrConnectAccountId.value && !nostrConnectCompleted) cleanupNostrConnectAccount()
   else cancelNostrConnect().catch(() => {})
   mnemonicWords.value = ''
+  mnemonicDisplay.value = []
+  createdAccount.value = null
   recoveryCandidates.value = []
 })
 </script>
@@ -527,37 +525,20 @@ onBeforeUnmount(() => {
 <template>
   <div class="space-y-5">
 
-    <!-- ── Step progress bar ── -->
-    <div v-if="mode" class="px-1">
-      <div class="flex items-center gap-0">
-        <template v-for="(label, i) in stepLabels" :key="i">
-          <!-- Step circle + label -->
-          <div class="flex flex-col items-center gap-1 min-w-0" :style="{ flex: '0 0 auto' }">
-            <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300"
-              :class="i + 1 < step
-                ? 'bg-success text-white'
-                : i + 1 === step
-                  ? 'bg-brand text-surface-base ring-2 ring-brand/20'
-                  : 'bg-surface-elevated text-text-muted'">
-              <Check v-if="i + 1 < step" class="w-3 h-3" />
-              <span v-else>{{ i + 1 }}</span>
-            </div>
-            <span class="text-[8px] font-semibold uppercase tracking-wider"
-              :class="i + 1 <= step ? 'text-text-secondary' : 'text-text-muted'">
-              {{ label }}
-            </span>
-          </div>
-          <!-- Connector line -->
-          <div v-if="i < stepLabels.length - 1"
-            class="flex-1 h-px mx-1.5 mb-4 transition-colors duration-300"
-            :class="i + 1 < step ? 'bg-success' : 'bg-border'" />
-        </template>
-      </div>
+    <!-- Keep the current step readable even with long translated labels. -->
+    <div v-if="mode && !(mode === 'new' && (step === 3 || step === 4))" class="space-y-2 px-1">
+      <ol class="flex items-center justify-between gap-2">
+        <li v-for="(label, i) in stepLabels" :key="i" :aria-current="i + 1 === progressStep ? 'step' : undefined"
+          :aria-label="`${i + 1}: ${label}`" class="flex flex-1 justify-center">
+          <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold"
+            :class="i + 1 === progressStep ? 'bg-brand text-surface-base' : 'bg-surface-elevated text-text-secondary'">
+            <Check v-if="i + 1 < progressStep" class="w-3 h-3" /><span v-else>{{ i + 1 }}</span>
+          </span>
+        </li>
+      </ol>
+      <p class="text-sm font-medium text-center text-text-secondary break-words">{{ stepLabels[progressStep - 1] }}</p>
     </div>
 
-    <!-- ═══════════════════════════════════════════ -->
-    <!-- Step 1: Choose how to set up              -->
-    <!-- ═══════════════════════════════════════════ -->
     <div v-if="step === 1" class="space-y-4 animate-fade-in-up">
 
       <!-- Welcome header -->
@@ -566,7 +547,7 @@ onBeforeUnmount(() => {
           <Shield class="w-5 h-5 text-brand" />
         </div>
         <h2 class="text-[15px] font-extrabold tracking-tight">{{ t('wizard.addAccount') }}</h2>
-        <p class="text-[11px] text-text-muted leading-relaxed max-w-[280px] mx-auto">
+        <p class="text-xs text-text-muted leading-relaxed max-w-[280px] mx-auto">
           {{ t('wizard.addAccountDesc') }}
         </p>
       </div>
@@ -581,7 +562,7 @@ onBeforeUnmount(() => {
         >
           <!-- Recommended ribbon -->
           <span v-if="m.recommended"
-            class="absolute -top-px -right-px text-[8px] font-bold uppercase tracking-wider bg-brand text-surface-base px-2 py-0.5 rounded-bl-lg rounded-tr-3xl">
+            class="absolute -top-px -right-px text-xs font-bold uppercase tracking-wider bg-brand text-surface-base px-2 py-0.5 rounded-bl-lg rounded-tr-3xl">
             {{ t('wizard.recommended') }}
           </span>
 
@@ -591,7 +572,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="flex-1 min-w-0 pr-4">
             <div class="text-[13px] font-extrabold group-hover:text-brand transition-all duration-200">{{ m.title }}</div>
-            <div class="text-[10px] text-text-muted leading-relaxed mt-0.5">{{ m.desc }}</div>
+            <div class="text-xs text-text-muted leading-relaxed mt-0.5">{{ m.desc }}</div>
           </div>
           <ArrowRight class="w-4 h-4 text-text-muted group-hover:text-brand transition-all duration-200 shrink-0 absolute right-3.5 top-1/2 -translate-y-1/2" />
         </button>
@@ -600,7 +581,7 @@ onBeforeUnmount(() => {
       <!-- Advanced options toggle -->
       <button
         @click="showAdvanced = !showAdvanced"
-        class="w-full flex items-center justify-center gap-1.5 text-[11px] text-text-muted hover:text-text-secondary py-1.5 transition-all duration-200 font-medium"
+        class="w-full flex items-center justify-center gap-1.5 text-xs text-text-muted hover:text-text-secondary py-1.5 transition-all duration-200 font-medium"
       >
         <span>{{ t('wizard.advancedOptions') }}</span>
         <ArrowRight class="w-3 h-3 transition-transform duration-200" :class="showAdvanced ? 'rotate-90' : ''" />
@@ -618,13 +599,13 @@ onBeforeUnmount(() => {
           </div>
           <div class="flex-1 min-w-0 pr-4">
             <div class="text-[13px] font-extrabold group-hover:text-brand transition-all duration-200">{{ m.title }}</div>
-            <div class="text-[10px] text-text-muted leading-relaxed mt-0.5">{{ m.desc }}</div>
+            <div class="text-xs text-text-muted leading-relaxed mt-0.5">{{ m.desc }}</div>
           </div>
           <ArrowRight class="w-4 h-4 text-text-muted group-hover:text-brand transition-all duration-200 shrink-0 absolute right-3.5 top-1/2 -translate-y-1/2" />
         </button>
       </div>
 
-      <button @click="emit('cancel')" class="w-full text-[11px] text-text-muted hover:text-text-secondary py-2 transition-all duration-200 font-medium">
+      <button @click="emit('cancel')" class="w-full text-xs text-text-muted hover:text-text-secondary py-2 transition-all duration-200 font-medium">
         {{ t('common.cancel') }}
       </button>
     </div>
@@ -635,9 +616,7 @@ onBeforeUnmount(() => {
     <div v-if="step === 2" class="space-y-4 animate-fade-in-up">
 
       <!-- Back button -->
-      <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
-        <ArrowLeft class="w-3.5 h-3.5" /> {{ t('common.back') }}
-      </button>
+      <BackButton @click="goBack" :disabled="loading" />
 
       <!-- Header -->
       <div class="text-center space-y-1.5">
@@ -647,7 +626,7 @@ onBeforeUnmount(() => {
             : mode === 'import' ? t('wizard.importAccount')
             : t('wizard.connectSigner') }}
         </h2>
-        <p class="text-[11px] text-text-muted leading-relaxed max-w-[280px] mx-auto">
+        <p class="text-xs text-text-muted leading-relaxed max-w-[280px] mx-auto">
           {{ mode === 'new' ? t('wizard.chooseNameDesc')
             : mode === 'recover' ? t('wizard.recoverAccountDesc')
             : mode === 'import' ? t('wizard.importAccountDesc')
@@ -657,13 +636,13 @@ onBeforeUnmount(() => {
 
       <!-- ── New: Name input ── -->
       <div v-if="mode === 'new'" class="space-y-2">
-        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold block px-0.5">
+        <label class="text-xs uppercase tracking-widest text-text-muted font-semibold block px-0.5">
           {{ t('wizard.displayName') }}
         </label>
-        <input v-model="displayName" :placeholder="t('wizard.namePlaceholder')"
+        <input v-model="displayName" :aria-label="t('wizard.displayName')" :placeholder="t('wizard.namePlaceholder')"
           autofocus maxlength="50"
-          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50" />
-        <p class="text-[10px] text-text-muted px-0.5 leading-relaxed">
+          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted" />
+        <p class="text-xs text-text-muted px-0.5 leading-relaxed">
           {{ t('wizard.nameHint') }}
         </p>
       </div>
@@ -672,9 +651,9 @@ onBeforeUnmount(() => {
       <template v-if="mode === 'import'">
         <div class="space-y-2">
           <div class="flex items-center justify-between px-0.5">
-            <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">{{ t('wizard.backupKey') }}</label>
+            <label class="text-xs uppercase tracking-widest text-text-muted font-semibold">{{ t('wizard.backupKey') }}</label>
             <button @click="showScanner = !showScanner"
-              class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium">
+              class="flex items-center gap-1 text-xs text-text-muted hover:text-brand transition-all duration-200 font-medium">
               <ScanLine class="w-3 h-3" />
               {{ showScanner ? t('common.typeInstead') : t('common.scanQr') }}
             </button>
@@ -685,20 +664,20 @@ onBeforeUnmount(() => {
             @close="showScanner = false" />
 
           <div v-else class="relative">
-            <input v-model="importNsec" :type="showNsec ? 'text' : 'password'" :placeholder="t('wizard.backupKeyPlaceholder')"
-              class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 pr-11 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted/50 placeholder:font-sans" />
-            <button @click="showNsec = !showNsec"
-              class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-secondary transition-all duration-200 rounded-md">
+            <input v-model="importNsec" :aria-label="t('wizard.backupKey')" :type="showNsec ? 'text' : 'password'" :placeholder="t('wizard.backupKeyPlaceholder')"
+              class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 pr-11 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted placeholder:font-sans" />
+            <button @click="showNsec = !showNsec" :aria-label="showNsec ? t('prompt.hidePassword') : t('prompt.showPassword')" :aria-pressed="showNsec"
+              class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-secondary transition-all duration-200 rounded-md min-w-8 min-h-8">
               <EyeOff v-if="showNsec" class="w-4 h-4" />
               <Eye v-else class="w-4 h-4" />
             </button>
           </div>
-          <p v-if="importKeyError" class="text-[10px] text-warning px-0.5">
+          <p v-if="importKeyError" class="text-xs text-warning px-0.5">
             {{ importKeyError }}
           </p>
           <div class="flex items-start gap-1.5 px-0.5">
             <Info class="w-3 h-3 text-text-muted shrink-0 mt-px" />
-            <p class="text-[10px] text-text-muted leading-relaxed">
+            <p class="text-xs text-text-muted leading-relaxed">
               {{ t('wizard.nsecWhereToFind') }}
             </p>
           </div>
@@ -707,30 +686,30 @@ onBeforeUnmount(() => {
 
       <!-- ── Recover: Name (optional) + Mnemonic input ── -->
       <div v-if="mode === 'recover'" class="space-y-2">
-        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold block px-0.5">
-          {{ t('wizard.displayName') }} <span class="normal-case tracking-normal text-text-muted/60">{{ t('common.optional') }}</span>
+        <label class="text-xs uppercase tracking-widest text-text-muted font-semibold block px-0.5">
+          {{ t('wizard.displayName') }} <span class="normal-case tracking-normal text-text-muted">{{ t('common.optional') }}</span>
         </label>
-        <input v-model="displayName" placeholder="satoshi" maxlength="50"
-          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50" />
+        <input v-model="displayName" :aria-label="t('wizard.displayName')" placeholder="satoshi" maxlength="50"
+          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted" />
       </div>
 
       <div v-if="mode === 'recover'" class="space-y-2">
-        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold block px-0.5">
+        <label class="text-xs uppercase tracking-widest text-text-muted font-semibold block px-0.5">
           {{ t('wizard.recoveryWords') }}
         </label>
-        <textarea v-model="mnemonicWords"
+        <textarea v-model="mnemonicWords" :aria-label="t('wizard.recoveryWords')"
           :placeholder="t('wizard.recoveryWordsPlaceholder')"
           rows="3"
-          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted/50 placeholder:font-sans resize-none lowercase" />
+          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted placeholder:font-sans resize-none lowercase" />
         <div class="flex items-center justify-between px-0.5">
           <p v-if="mnemonicWords.trim().split(/\s+/).filter(Boolean).length >= 12 && !nip06.validateMnemonic(mnemonicWords.trim().toLowerCase())"
-            class="text-[10px] text-warning leading-relaxed">
+            class="text-xs text-warning leading-relaxed">
             {{ t('wizard.invalidMnemonic') }}
           </p>
-          <p v-else class="text-[10px] text-text-muted leading-relaxed">
+          <p v-else class="text-xs text-text-muted leading-relaxed">
             {{ t('wizard.recoveryWordsHint') }}
           </p>
-          <span class="text-[10px] tabular-nums font-mono"
+          <span class="text-xs tabular-nums font-mono"
             :class="mnemonicWords.trim().split(/\s+/).filter(Boolean).length >= 12 ? 'text-success' : 'text-text-muted'">
             {{ mnemonicWords.trim().split(/\s+/).filter(Boolean).length }}/12
           </span>
@@ -740,22 +719,22 @@ onBeforeUnmount(() => {
       <div v-if="mode === 'recover' && manualRecoveryIndex === ''"
         class="flex items-start gap-2.5 p-3 rounded-3xl bg-brand/5 border border-brand/15">
         <Info class="w-4 h-4 text-brand shrink-0 mt-0.5" />
-        <p class="text-[10px] text-text-muted leading-relaxed">
+        <p class="text-xs text-text-muted leading-relaxed">
           {{ t('wizard.recoveryScanPrivacy') }}
         </p>
       </div>
 
       <details v-if="mode === 'recover'" class="group rounded-2xl border border-border bg-surface-card overflow-hidden">
-        <summary class="cursor-pointer list-none flex items-center justify-between gap-3 px-3.5 py-3 text-[10px] font-semibold text-text-secondary">
+        <summary class="cursor-pointer list-none flex items-center justify-between gap-3 px-3.5 py-3 text-xs font-semibold text-text-secondary">
           <span>{{ t('wizard.recoverySpecificAccount') }}</span>
           <ArrowRight class="w-3.5 h-3.5 text-text-muted transition-transform group-open:rotate-90" />
         </summary>
         <div class="px-3.5 pb-3.5 space-y-2 border-t border-border pt-3">
-          <p class="text-[10px] text-text-muted leading-relaxed">{{ t('wizard.recoverySpecificAccountHint') }}</p>
-          <input v-model="manualRecoveryIndex" type="number" min="0" max="2147483647" step="1"
+          <p class="text-xs text-text-muted leading-relaxed">{{ t('wizard.recoverySpecificAccountHint') }}</p>
+          <input v-model="manualRecoveryIndex" :aria-label="t('wizard.recoveryAccountNumberPlaceholder')" type="number" min="0" max="2147483647" step="1"
             :placeholder="t('wizard.recoveryAccountNumberPlaceholder')"
-            class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted/50" />
-          <p v-if="manualRecoveryError" class="text-[10px] text-warning">{{ manualRecoveryError }}</p>
+            class="w-full bg-surface-base border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted" />
+          <p v-if="manualRecoveryError" class="text-xs text-warning">{{ manualRecoveryError }}</p>
         </div>
       </details>
 
@@ -764,12 +743,12 @@ onBeforeUnmount(() => {
         <!-- Method toggle -->
         <div class="flex rounded-2xl border border-border overflow-hidden">
           <button @click="nip46Method = 'bunker'"
-            class="flex-1 py-2 text-[11px] font-semibold transition-all duration-200"
+            class="flex-1 py-2 text-xs font-semibold transition-all duration-200"
             :class="nip46Method === 'bunker' ? 'bg-brand text-surface-base' : 'bg-surface-card text-text-muted hover:text-text-secondary'">
             {{ t('wizard.pasteUri') }}
           </button>
           <button @click="nip46Method = 'nostrconnect'"
-            class="flex-1 py-2 text-[11px] font-semibold transition-all duration-200"
+            class="flex-1 py-2 text-xs font-semibold transition-all duration-200"
             :class="nip46Method === 'nostrconnect' ? 'bg-brand text-surface-base' : 'bg-surface-card text-text-muted hover:text-text-secondary'">
             {{ t('wizard.showQr') }}
           </button>
@@ -778,9 +757,9 @@ onBeforeUnmount(() => {
         <!-- Bunker URI input -->
         <template v-if="nip46Method === 'bunker'">
           <div class="flex items-center justify-between px-0.5">
-            <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">{{ t('wizard.connectionLink') }}</label>
+            <label class="text-xs uppercase tracking-widest text-text-muted font-semibold">{{ t('wizard.connectionLink') }}</label>
             <button @click="showScanner = !showScanner"
-              class="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium">
+              class="flex items-center gap-1 text-xs text-text-muted hover:text-brand transition-all duration-200 font-medium">
               <ScanLine class="w-3 h-3" />
               {{ showScanner ? t('common.typeInstead') : t('common.scanQr') }}
             </button>
@@ -791,11 +770,11 @@ onBeforeUnmount(() => {
             @close="showScanner = false" />
 
           <template v-else>
-            <input v-model="bunkerUri" :placeholder="t('wizard.connectionPlaceholder')"
-              class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted/50 placeholder:font-sans" />
+            <input v-model="bunkerUri" :aria-label="t('wizard.connectionLink')" :placeholder="t('wizard.connectionPlaceholder')"
+              class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all font-mono placeholder:text-text-muted placeholder:font-sans" />
             <div class="flex items-start gap-1.5 px-0.5">
               <Info class="w-3 h-3 text-text-muted shrink-0 mt-px" />
-              <p class="text-[10px] text-text-muted leading-relaxed">
+              <p class="text-xs text-text-muted leading-relaxed">
                 {{ t('wizard.signerHint') }}
               </p>
             </div>
@@ -805,7 +784,7 @@ onBeforeUnmount(() => {
         <!-- Nostr Connect info -->
         <div v-else class="flex items-start gap-1.5 px-0.5">
           <Info class="w-3 h-3 text-text-muted shrink-0 mt-px" />
-          <p class="text-[10px] text-text-muted leading-relaxed">
+          <p class="text-xs text-text-muted leading-relaxed">
             {{ t('wizard.nostrConnectHint') }}
           </p>
         </div>
@@ -814,18 +793,18 @@ onBeforeUnmount(() => {
       <!-- ── NIP-46: Nostr Connect waiting screen ── -->
       <div v-if="mode === 'nip46' && nip46Status === 'waiting' && nostrConnectQr" class="space-y-4 animate-fade-in-up">
         <div class="flex flex-col items-center gap-3 bg-surface-card rounded-3xl border border-border shadow-sm p-4">
-          <p class="text-[11px] font-semibold text-text-secondary">{{ t('wizard.scanWithSigner') }}</p>
+          <p class="text-xs font-semibold text-text-secondary">{{ t('wizard.scanWithSigner') }}</p>
           <img :src="nostrConnectQr" alt="QR" class="w-[200px] h-[200px] rounded-lg" />
           <button @click="copyConnectUri"
-            class="flex items-center gap-1.5 text-[10px] text-text-muted hover:text-brand transition-all duration-200 font-medium">
+            class="flex items-center gap-1.5 text-xs text-text-muted hover:text-brand transition-all duration-200 font-medium">
             <Check v-if="copied" class="w-3 h-3 text-success" />
             <Copy v-else class="w-3 h-3" />
             {{ copied ? t('common.copied') : t('wizard.copyUri') }}
           </button>
-          <div class="flex items-center gap-2 text-[10px] text-text-muted">
+          <div class="flex items-center gap-2 text-xs text-text-muted">
             <Loader2 class="w-3 h-3 animate-spin text-brand" />
             <span>{{ t('wizard.waitingForSigner') }}</span>
-            <span v-if="nostrConnectCountdown > 0" class="tabular-nums text-text-muted/60">
+            <span v-if="nostrConnectCountdown > 0" class="tabular-nums text-text-muted">
               {{ Math.floor(nostrConnectCountdown / 60) }}:{{ (nostrConnectCountdown % 60).toString().padStart(2, '0') }}
             </span>
             <span v-else-if="nostrConnectCountdown <= 0 && nostrConnectQr" class="text-warning">
@@ -848,7 +827,7 @@ onBeforeUnmount(() => {
                  nip46Status === 'fetching-profile' ? t('wizard.connectFetchingProfile') :
                  t('common.working') }}
             </div>
-            <div class="text-[10px] text-text-muted mt-0.5">
+            <div class="text-xs text-text-muted mt-0.5">
               {{ nip46Status === 'connecting' ? t('wizard.connectTimeout') :
                  nip46Status === 'fetching-profile' ? t('wizard.connectAlmostThere') :
                  t('common.pleaseWait') }}
@@ -863,7 +842,7 @@ onBeforeUnmount(() => {
             { key: 'connecting', label: t('wizard.progressConnecting') },
             { key: 'fetching-profile', label: t('wizard.progressLoadingProfile') },
           ]" :key="s.key"
-            class="flex items-center gap-2.5 text-[11px] transition-colors"
+            class="flex items-center gap-2.5 text-xs transition-colors"
             :class="
               (['connecting','fetching-profile','done'].includes(nip46Status) && i === 0) ||
               (['fetching-profile','done'].includes(nip46Status) && i === 1) ||
@@ -871,7 +850,7 @@ onBeforeUnmount(() => {
                 ? 'text-success'
                 : nip46Status === s.key
                   ? 'text-brand'
-                  : 'text-text-muted/50'
+                  : 'text-text-muted'
             ">
             <CheckCircle2 v-if="
               (['connecting','fetching-profile','done'].includes(nip46Status) && i === 0) ||
@@ -886,7 +865,7 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Error -->
-      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-[11px] text-error animate-scale-in">
+      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-xs text-error animate-scale-in">
         <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
         <div>
           <span class="font-semibold">{{ t('common.error') }}</span>
@@ -919,7 +898,7 @@ onBeforeUnmount(() => {
           <ShieldAlert class="w-5 h-5 text-warning" />
         </div>
         <h2 class="text-[15px] font-extrabold tracking-tight">{{ backupStage === 'verify' ? t('wizard.verifyBackup') : t('wizard.backupTitle') }}</h2>
-        <p class="text-[11px] text-text-muted leading-relaxed max-w-[280px] mx-auto">
+        <p class="text-xs text-text-muted leading-relaxed max-w-[280px] mx-auto">
           {{ backupStage === 'verify' ? t('wizard.backupVerifyDesc') : t('wizard.backupDesc') }}
         </p>
       </div>
@@ -930,7 +909,7 @@ onBeforeUnmount(() => {
         <!-- Warning banner -->
         <div class="bg-warning/8 px-4 py-2.5 flex items-center gap-2 border-b border-warning/15">
           <AlertTriangle class="w-3.5 h-3.5 text-warning shrink-0" />
-          <span class="text-[10px] text-warning font-semibold">{{ t('wizard.mnemonicWarning') }}</span>
+          <span class="text-xs text-warning font-semibold">{{ t('wizard.mnemonicWarning') }}</span>
         </div>
 
         <!-- 12-word grid -->
@@ -942,7 +921,7 @@ onBeforeUnmount(() => {
               :class="showNsec ? '' : 'blur-[8px] select-none pointer-events-none'">
               <div v-for="(word, i) in mnemonicDisplay" :key="i"
                 class="flex items-center gap-1.5 bg-surface-base rounded-lg px-2.5 py-2 border border-border">
-                <span class="text-[10px] text-text-muted font-mono w-4 text-right">{{ i + 1 }}</span>
+                <span class="text-xs text-text-muted font-mono w-4 text-right">{{ i + 1 }}</span>
                 <span class="text-[12px] font-medium text-text-secondary select-all">{{ showNsec ? word : '••••' }}</span>
               </div>
             </div>
@@ -950,13 +929,13 @@ onBeforeUnmount(() => {
             <button v-if="!showNsec" @click="showNsec = true"
               class="absolute inset-0 flex items-center justify-center gap-2 bg-surface-card/60 rounded-lg cursor-pointer group">
               <Eye class="w-4 h-4 text-text-muted group-hover:text-brand transition-all duration-200" />
-              <span class="text-[11px] font-semibold text-text-muted group-hover:text-brand transition-all duration-200">{{ t('wizard.clickToReveal') }}</span>
+              <span class="text-xs font-semibold text-text-muted group-hover:text-brand transition-all duration-200">{{ t('wizard.clickToReveal') }}</span>
             </button>
           </div>
 
           <!-- Copy words -->
           <button @click="copyMnemonic"
-            class="w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] rounded-2xl font-semibold transition-all"
+            class="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs rounded-2xl font-semibold transition-all"
             :class="copied
               ? 'bg-success/10 text-success border border-success/20'
               : 'bg-surface-elevated text-text-secondary hover:bg-surface-hover border border-border'">
@@ -970,16 +949,16 @@ onBeforeUnmount(() => {
       <div v-else class="bg-surface-card rounded-3xl border border-border p-4 space-y-3">
         <div class="grid grid-cols-3 gap-2">
           <label v-for="(wordIndex, index) in backupChallenge?.indices || []" :key="wordIndex" class="space-y-1">
-            <span class="text-[10px] font-semibold text-text-muted">{{ t('wizard.wordNumber', { number: wordIndex + 1 }) }}</span>
+            <span class="text-xs font-semibold text-text-muted">{{ t('wizard.wordNumber', { number: wordIndex + 1 }) }}</span>
             <input v-model="backupAnswers[index]" autocomplete="off" autocapitalize="none" spellcheck="false"
               class="w-full bg-surface-base border border-border rounded-xl px-2.5 py-2 text-sm outline-none focus:border-brand" />
           </label>
         </div>
-        <button @click="backupStage = 'show'; error = ''" class="text-[10px] text-brand font-semibold">{{ t('wizard.showAgain') }}</button>
+        <button @click="backupStage = 'show'; error = ''" class="text-xs text-brand font-semibold">{{ t('wizard.showAgain') }}</button>
       </div>
 
       <!-- Continue button -->
-      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-[11px] text-error">
+      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-xs text-error">
         <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
         <span>{{ error }}</span>
       </div>
@@ -1003,16 +982,14 @@ onBeforeUnmount(() => {
     <!-- ═══════════════════════════════════════════ -->
     <div v-if="step === 3 && mode === 'recover'" class="space-y-4 animate-fade-in-up">
 
-      <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
-        <ArrowLeft class="w-3.5 h-3.5" /> {{ t('common.back') }}
-      </button>
+      <BackButton @click="goBack" :disabled="loading" />
 
       <div class="text-center space-y-1.5">
         <div class="w-11 h-11 rounded-2xl bg-brand/10 flex items-center justify-center mx-auto mb-2">
           <UserRound class="w-5 h-5 text-brand" />
         </div>
         <h2 class="text-[15px] font-extrabold tracking-tight">{{ t('wizard.chooseRecoveredIdentity') }}</h2>
-        <p class="text-[11px] text-text-muted leading-relaxed max-w-[280px] mx-auto">
+        <p class="text-xs text-text-muted leading-relaxed max-w-[280px] mx-auto">
           {{ recoveryNetworkChecked ? t('wizard.multipleIdentitiesFound') : t('wizard.recoveryScanUnavailable') }}
         </p>
       </div>
@@ -1031,12 +1008,12 @@ onBeforeUnmount(() => {
               <span class="font-bold text-[12px] truncate">
                 {{ candidate.profile?.display_name || candidate.profile?.name || t('wizard.derivedIdentity', { number: candidate.accountIndex + 1 }) }}
               </span>
-              <span v-if="candidate.used" class="text-[8px] font-bold uppercase tracking-wide text-success bg-success/10 rounded-full px-1.5 py-0.5 shrink-0">
+              <span v-if="candidate.used" class="text-xs font-bold uppercase tracking-wide text-success bg-success/10 rounded-full px-1.5 py-0.5 shrink-0">
                 {{ t('wizard.activityFound') }}
               </span>
             </div>
-            <div class="text-[9px] text-text-muted font-mono truncate mt-0.5">{{ truncateKey(candidate.npub, 13, 5) }}</div>
-            <div class="text-[8px] text-text-muted/70 font-mono truncate mt-0.5">{{ candidate.path }}</div>
+            <div class="text-xs text-text-muted font-mono truncate mt-0.5">{{ truncateKey(candidate.npub, 13, 5) }}</div>
+            <div class="text-xs text-text-muted font-mono truncate mt-0.5">{{ candidate.path }}</div>
           </div>
           <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
             :class="selectedRecoveryIndex === candidate.accountIndex ? 'border-brand' : 'border-border'">
@@ -1047,11 +1024,11 @@ onBeforeUnmount(() => {
 
       <button v-if="!showAllRecoveryCandidates && recoveryCandidates.length > visibleRecoveryCandidates.length"
         @click="showAllRecoveryCandidates = true"
-        class="w-full text-[10px] text-text-muted hover:text-brand py-1 font-semibold transition-colors">
+        class="w-full text-xs text-text-muted hover:text-brand py-1 font-semibold transition-colors">
         {{ t('wizard.showAllDerivedIdentities', { count: recoveryCandidates.length }) }}
       </button>
 
-      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-[11px] text-error">
+      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-xs text-error">
         <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
         <span>{{ error }}</span>
       </div>
@@ -1070,7 +1047,7 @@ onBeforeUnmount(() => {
 
       <div class="text-center space-y-1.5">
         <h2 class="text-[15px] font-extrabold tracking-tight">{{ t('wizard.profileTitle') }}</h2>
-        <p class="text-[11px] text-text-muted leading-relaxed max-w-[280px] mx-auto">
+        <p class="text-xs text-text-muted leading-relaxed max-w-[280px] mx-auto">
           {{ t('wizard.profileDesc') }}
         </p>
       </div>
@@ -1081,8 +1058,8 @@ onBeforeUnmount(() => {
             {{ (displayName || '?')[0].toUpperCase() }}
           </div>
           <div class="min-w-0">
-            <div class="font-extrabold text-sm truncate">{{ displayName || 'Anonymous' }}</div>
-            <div class="text-[10px] text-text-muted font-mono mt-0.5 truncate">
+            <div class="font-extrabold text-sm truncate">{{ displayName || t('prompt.yourAccount') }}</div>
+            <div class="text-xs text-text-muted font-mono mt-0.5 truncate">
               {{ createdAccount?.npub ? truncateKey(createdAccount.npub, 14, 6) : '' }}
             </div>
           </div>
@@ -1090,18 +1067,18 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="space-y-2">
-        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold block px-0.5">{{ t('wizard.displayName') }}</label>
-        <input v-model="displayName" placeholder="satoshi"
-          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50" />
+        <label class="text-xs uppercase tracking-widest text-text-muted font-semibold block px-0.5">{{ t('wizard.displayName') }}</label>
+        <input v-model="displayName" :aria-label="t('wizard.displayName')" placeholder="satoshi"
+          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted" />
       </div>
 
       <div class="space-y-2">
-        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold block px-0.5">{{ t('wizard.about') }} <span class="normal-case tracking-normal text-text-muted/60">{{ t('common.optional') }}</span></label>
-        <textarea v-model="aboutMe" :placeholder="t('wizard.aboutPlaceholder')" rows="2"
-          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50 resize-none" />
+        <label class="text-xs uppercase tracking-widest text-text-muted font-semibold block px-0.5">{{ t('wizard.about') }} <span class="normal-case tracking-normal text-text-muted">{{ t('common.optional') }}</span></label>
+        <textarea v-model="aboutMe" :aria-label="t('wizard.about')" :placeholder="t('wizard.aboutPlaceholder')" rows="2"
+          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted resize-none" />
       </div>
 
-      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-[11px] text-error">
+      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-xs text-error">
         <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
         <span>{{ error }}</span>
       </div>
@@ -1112,7 +1089,7 @@ onBeforeUnmount(() => {
         <span>{{ loading ? t('wizard.saving') : t('wizard.saveProfile') }}</span>
       </button>
 
-      <button @click="skipPublish" class="w-full text-[11px] text-text-muted hover:text-text-secondary py-1 transition-all duration-200 font-medium">
+      <button @click="skipPublish" class="w-full text-xs text-text-muted hover:text-text-secondary py-1 transition-all duration-200 font-medium">
         {{ t('common.skip') }}
       </button>
     </div>
@@ -1126,8 +1103,13 @@ onBeforeUnmount(() => {
           <CheckCircle2 class="w-6 h-6 text-success" />
         </div>
         <h2 class="text-[15px] font-extrabold tracking-tight">{{ t('wizard.connectedTitle') }}</h2>
-        <p class="text-[11px] text-text-muted">{{ t('wizard.connectedDesc') }}</p>
+        <p class="text-xs text-text-muted">{{ t('wizard.connectedDesc') }}</p>
       </div>
+
+      <button @click="finish"
+        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all font-bold btn-primary">
+        {{ t('common.getStarted') }}
+      </button>
 
       <!-- Connected identity card -->
       <div class="bg-surface-card rounded-3xl border border-border overflow-hidden shadow-sm">
@@ -1139,23 +1121,23 @@ onBeforeUnmount(() => {
               <span v-else class="font-bold text-lg">{{ (displayName || '?')[0].toUpperCase() }}</span>
             </div>
             <div class="min-w-0 flex-1">
-              <div class="font-extrabold text-sm truncate">{{ displayName || 'Anonymous' }}</div>
-              <div v-if="createdAccount?.pubkey" class="text-[10px] text-text-muted font-mono mt-0.5 truncate">
+              <div class="font-extrabold text-sm truncate">{{ displayName || t('prompt.yourAccount') }}</div>
+              <div v-if="createdAccount?.pubkey" class="text-xs text-text-muted font-mono mt-0.5 truncate">
                 {{ truncateKey(createdAccount.pubkey, 14, 6) }}
               </div>
             </div>
-            <span class="flex items-center gap-1 text-[9px] text-success font-bold px-2 py-0.5 rounded-full bg-success/10 border border-success/20 shrink-0">
+            <span class="flex items-center gap-1 text-xs text-success font-bold px-2 py-0.5 rounded-full bg-success/10 border border-success/20 shrink-0">
               <Wifi class="w-2.5 h-2.5" />
               {{ t('wizard.connectedBadge') }}
             </span>
           </div>
 
-          <div v-if="nip46Profile?.about" class="text-[11px] text-text-muted line-clamp-2 leading-relaxed">
+          <div v-if="nip46Profile?.about" class="text-xs text-text-muted line-clamp-2 leading-relaxed">
             {{ nip46Profile.about }}
           </div>
 
-          <div v-if="nip46Profile?.nip05" class="flex items-center gap-1.5 text-[10px] text-text-muted">
-            <CheckCircle2 class="w-3 h-3 text-brand" />
+          <div v-if="nip46Profile?.nip05" class="flex items-center gap-1.5 text-xs text-text-muted">
+            <Globe class="w-3 h-3 text-text-secondary" />
             <span class="font-mono">{{ nip46Profile.nip05 }}</span>
           </div>
         </div>
@@ -1164,7 +1146,7 @@ onBeforeUnmount(() => {
       <!-- Explainer -->
       <div class="flex items-start gap-2.5 p-3 rounded-3xl bg-surface-card border border-border shadow-sm">
         <Info class="w-4 h-4 text-brand shrink-0 mt-0.5" />
-        <p class="text-[10px] text-text-muted leading-relaxed">
+        <p class="text-xs text-text-muted leading-relaxed">
           <strong class="text-text-secondary">{{ t('wizard.howItWorks') }}</strong> {{ t('wizard.signerExplainer') }}
         </p>
       </div>
@@ -1175,15 +1157,12 @@ onBeforeUnmount(() => {
           <Puzzle class="w-4.5 h-4.5 text-brand" />
         </div>
         <div class="min-w-0">
-          <p class="text-[11px] font-semibold text-text-primary leading-snug">{{ t('wizard.pinTitle') }}</p>
-          <p class="text-[10px] text-text-muted mt-0.5 leading-relaxed">{{ t('wizard.pinDesc') }}</p>
+          <p class="text-xs font-semibold text-text-primary leading-snug">{{ t('wizard.pinTitle') }}</p>
+          <p class="text-xs text-text-muted mt-0.5 leading-relaxed">{{ t('wizard.pinDesc') }}</p>
         </div>
       </div>
 
-      <button @click="finish"
-        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all font-bold btn-primary">
-        {{ t('common.getStarted') }}
-      </button>
+
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
@@ -1192,13 +1171,11 @@ onBeforeUnmount(() => {
     <div v-if="step === 4 && mode === 'new'" class="space-y-4 animate-fade-in-up">
 
       <!-- Back button -->
-      <button @click="goBack" class="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-secondary transition-all duration-200 font-medium">
-        <ArrowLeft class="w-3.5 h-3.5" /> {{ t('common.back') }}
-      </button>
+      <BackButton @click="goBack" :disabled="loading" />
 
       <div class="text-center space-y-1.5">
         <h2 class="text-[15px] font-extrabold tracking-tight">{{ t('wizard.completeProfile') }}</h2>
-        <p class="text-[11px] text-text-muted leading-relaxed max-w-[280px] mx-auto">
+        <p class="text-xs text-text-muted leading-relaxed max-w-[280px] mx-auto">
           {{ t('wizard.completeProfileDesc') }}
         </p>
       </div>
@@ -1210,8 +1187,8 @@ onBeforeUnmount(() => {
             {{ (displayName || '?')[0].toUpperCase() }}
           </div>
           <div class="min-w-0">
-            <div class="font-extrabold text-sm truncate">{{ displayName || 'Anonymous' }}</div>
-            <div class="text-[10px] text-text-muted font-mono mt-0.5 truncate">
+            <div class="font-extrabold text-sm truncate">{{ displayName || t('prompt.yourAccount') }}</div>
+            <div class="text-xs text-text-muted font-mono mt-0.5 truncate">
               {{ createdAccount?.npub ? truncateKey(createdAccount.npub, 14, 6) : '' }}
             </div>
           </div>
@@ -1219,18 +1196,18 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="space-y-2">
-        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold block px-0.5">{{ t('wizard.displayName') }}</label>
-        <input v-model="displayName" placeholder="satoshi"
-          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50" />
+        <label class="text-xs uppercase tracking-widest text-text-muted font-semibold block px-0.5">{{ t('wizard.displayName') }}</label>
+        <input v-model="displayName" :aria-label="t('wizard.displayName')" placeholder="satoshi"
+          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted" />
       </div>
 
       <div class="space-y-2">
-        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold block px-0.5">{{ t('wizard.about') }} <span class="normal-case tracking-normal text-text-muted/60">{{ t('common.optional') }}</span></label>
-        <textarea v-model="aboutMe" :placeholder="t('wizard.aboutPlaceholder')" rows="2"
-          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted/50 resize-none" />
+        <label class="text-xs uppercase tracking-widest text-text-muted font-semibold block px-0.5">{{ t('wizard.about') }} <span class="normal-case tracking-normal text-text-muted">{{ t('common.optional') }}</span></label>
+        <textarea v-model="aboutMe" :aria-label="t('wizard.about')" :placeholder="t('wizard.aboutPlaceholder')" rows="2"
+          class="w-full bg-surface-card border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-text-muted resize-none" />
       </div>
 
-      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-[11px] text-error">
+      <div v-if="error" class="flex items-start gap-2.5 p-3 rounded-3xl bg-error/8 border border-error/15 text-xs text-error">
         <AlertTriangle class="w-4 h-4 mt-0.5 shrink-0" />
         <span>{{ error }}</span>
       </div>
@@ -1241,7 +1218,7 @@ onBeforeUnmount(() => {
         <span>{{ loading ? t('wizard.saving') : t('wizard.saveProfile') }}</span>
       </button>
 
-      <button @click="skipPublish" class="w-full text-[11px] text-text-muted hover:text-text-secondary py-1 transition-all duration-200 font-medium">
+      <button @click="skipPublish" class="w-full text-xs text-text-muted hover:text-text-secondary py-1 transition-all duration-200 font-medium">
         {{ t('common.skip') }}
       </button>
     </div>
@@ -1255,17 +1232,30 @@ onBeforeUnmount(() => {
           <Check class="w-7 h-7 text-success" />
         </div>
         <h2 class="text-[15px] font-extrabold tracking-tight">{{ t('wizard.doneTitle') }}</h2>
-        <p class="text-[11px] text-text-muted leading-relaxed max-w-[260px] mx-auto">
+        <p class="text-xs text-text-muted leading-relaxed max-w-[260px] mx-auto">
           {{ t('wizard.doneDesc') }}
         </p>
       </div>
 
+      <button @click="finish"
+        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all font-bold btn-primary">
+        {{ t('common.getStarted') }}
+      </button>
+
+      <div v-if="mode === 'new'" class="rounded-2xl border border-border bg-surface-card p-3 space-y-2">
+        <p class="text-sm text-text-secondary">{{ t('lock.backupReminder') }}</p>
+        <button @click="step = 3" class="min-h-10 text-sm text-brand font-semibold">{{ t('wizard.verifyBackup') }}</button>
+      </div>
+      <button v-if="mode === 'new' || mode === 'recover'" @click="step = 4" class="min-h-10 text-sm text-text-secondary font-semibold">
+        {{ t('account.editProfile') }} · {{ t('common.optional') }}
+      </button>
+
       <div v-if="publishResult" class="bg-surface-card rounded-3xl p-3.5 border border-border shadow-sm space-y-1.5">
-        <div v-if="publishResult.published?.length" class="flex items-center gap-2 text-[11px] text-success font-medium">
+        <div v-if="publishResult.published?.length" class="flex items-center gap-2 text-xs text-success font-medium">
           <CheckCircle2 class="w-3.5 h-3.5" />
           {{ t('wizard.profileSaved') }}
         </div>
-        <div v-if="publishResult.failed?.length" class="flex items-center gap-2 text-[11px] text-warning font-medium">
+        <div v-if="publishResult.failed?.length" class="flex items-center gap-2 text-xs text-warning font-medium">
           <AlertTriangle class="w-3.5 h-3.5" />
           {{ t('wizard.profileSyncLater') }}
         </div>
@@ -1277,15 +1267,12 @@ onBeforeUnmount(() => {
           <Puzzle class="w-4.5 h-4.5 text-brand" />
         </div>
         <div class="min-w-0">
-          <p class="text-[11px] font-semibold text-text-primary leading-snug">{{ t('wizard.pinTitle') }}</p>
-          <p class="text-[10px] text-text-muted mt-0.5 leading-relaxed">{{ t('wizard.pinDesc') }}</p>
+          <p class="text-xs font-semibold text-text-primary leading-snug">{{ t('wizard.pinTitle') }}</p>
+          <p class="text-xs text-text-muted mt-0.5 leading-relaxed">{{ t('wizard.pinDesc') }}</p>
         </div>
       </div>
 
-      <button @click="finish"
-        class="w-full py-3 text-[13px] rounded-2xl bg-brand text-surface-base hover:bg-brand-hover transition-all font-bold btn-primary">
-        {{ t('common.getStarted') }}
-      </button>
+
     </div>
   </div>
 </template>

@@ -66,7 +66,7 @@ function shouldInjectOnPage() {
 }
 
 function createBridge(eventName, responseType, methodMap, allowedMethods) {
-  let isRejected = false
+  let rejectedUntil = 0
 
   document.addEventListener(eventName, async (e) => {
     const { id, method, params } = e.detail ?? {}
@@ -77,8 +77,8 @@ function createBridge(eventName, responseType, methodMap, allowedMethods) {
     }
 
     // Anti-spam: block after rejection
-    if (isRejected) {
-      sendResponse({ id, error: 'Access denied. Reload the page to try again.' })
+    if (Date.now() < rejectedUntil) {
+      sendResponse({ id, error: 'Request declined. Try again in a few seconds.' })
       return
     }
 
@@ -109,7 +109,7 @@ function createBridge(eventName, responseType, methodMap, allowedMethods) {
       if (res?.error) {
         // Track rejections for anti-spam
         if (res.error === 'PERMISSION_DENIED' || (typeof res.error === 'string' && res.error.includes('Access denied'))) {
-          isRejected = true
+          rejectedUntil = Date.now() + 3000
         }
         sendResponse({ id, error: res.error })
       } else {

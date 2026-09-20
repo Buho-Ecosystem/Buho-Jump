@@ -44,7 +44,7 @@ function select(value) {
       :key="preset"
       type="button"
       @click="select(preset)"
-      class="px-2.5 py-1 rounded-full text-[10px] font-semibold tabular-nums transition-all duration-150 border select-none"
+      class="px-2.5 py-1 rounded-full text-xs font-semibold tabular-nums transition-all duration-150 border select-none"
       :class="activeValue === preset
         ? 'bg-brand text-white border-brand shadow-sm'
         : 'bg-surface-base text-text-secondary border-border hover:border-brand hover:text-brand'"

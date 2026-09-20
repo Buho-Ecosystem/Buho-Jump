@@ -182,7 +182,7 @@ describe('notification format', () => {
     expect(chrome.notifications.create).toHaveBeenCalledWith(
       'payment-fmt-pay',
       expect.objectContaining({
-        title: 'Payment Received',
+        title: 'Payment received',
         message: expect.stringContaining('42'),
       })
     )
@@ -194,7 +194,7 @@ describe('notification format', () => {
     expect(chrome.notifications.create).toHaveBeenCalledWith(
       'dm-fmt-fallback',
       expect.objectContaining({
-        title: 'New Message',
+        title: 'New message',
       })
     )
   })
@@ -258,5 +258,16 @@ describe('quiet hours edge — midnight wrap', () => {
     _resetForTesting()
     await notifyDm('Alice', 'after quiet', 'qh-wrap-3')
     expect(chrome.notifications.create).toHaveBeenCalled()
+  })
+})
+
+
+describe('stored notification language', () => {
+  it('uses the saved German locale for payment text and amount formatting', async () => {
+    await chrome.storage.local.set({ locale: 'de' })
+    await notifyPayment(12345, 'localized-payment')
+    expect(chrome.notifications.create).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      title: 'Zahlung erhalten', message: expect.stringContaining('12.345'),
+    }))
   })
 })

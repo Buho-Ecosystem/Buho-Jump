@@ -1,4 +1,5 @@
 <script setup>
+import ThemePicker from '../../components/ThemePicker.vue'
 import { ref, computed, watch, onMounted, onUnmounted, onErrorCaptured } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLock } from '../../composables/useLock.js'
@@ -8,13 +9,10 @@ import { usePermissions } from '../../composables/usePermissions.js'
 import { useAllowanceSync } from '../../composables/useAllowanceSync.js'
 import { useTheme } from '../../composables/useTheme.js'
 import { useToast } from '../../composables/useToast.js'
-import { useFiat, CURRENCIES } from '../../composables/useFiat.js'
 import { useLocale } from '../../composables/useLocale.js'
-import { useListKeyboard } from '../../composables/useListKeyboard.js'
 import { usePopupState } from '../../composables/usePopupState.js'
 import { truncateKey } from '../../lib/utils.js'
 import { getAvatarColor } from '../../lib/avatarColor.js'
-import { nip19, nip21 } from 'nostr-core'
 import QRCode from 'qrcode'
 import LockScreen from '../../components/LockScreen.vue'
 import WelcomeScreen from '../../components/WelcomeScreen.vue'
@@ -26,6 +24,8 @@ import SkeletonLoader from '../../components/SkeletonLoader.vue'
 import EmptyState from '../../components/EmptyState.vue'
 import SiteDetail from '../../components/SiteDetail.vue'
 import SiteContextBar from '../../components/SiteContextBar.vue'
+import DeleteAccountSheet from '../../components/DeleteAccountSheet.vue'
+import AccountIdentity from '../../components/AccountIdentity.vue'
 import BottomSheet from '../../components/BottomSheet.vue'
 import SlidePanel from '../../components/SlidePanel.vue'
 import BottomTabs from '../../components/popup/BottomTabs.vue'
@@ -67,9 +67,11 @@ onErrorCaptured((err) => {
   return false // let it propagate for visibility
 })
 
-const activeTab = ref('wallet')
+const activeTab = ref('identity')
 const showLanguagePicker = ref(false)
 const copied = ref(false)
+const sendFlowRef = ref(null)
+const receiveFlowRef = ref(null)
 const dataLoaded = ref(false)
 const welcomeCompleted = ref(true) // assume true until checked (prevents flash)
 const lockError = ref('')
@@ -89,33 +91,11 @@ const deletingAccount = ref(false)
 const revokingDomain = ref(null) // domain being revoked
 const confirmRevokeDomain = ref(null) // domain pending confirmation
 
-// Pubkey format cycling: 0 = npub, 1 = hex, 2 = nprofile
-const pubkeyFormat = ref(0)
+// A single public identifier is easier to recognize and copy.
 const showPubkeyQr = ref(false)
 const pubkeyQrDataUrl = ref('')
-
-const formattedPubkey = computed(() => {
-  const acct = activeAccount.value
-  if (!acct) return ''
-  if (pubkeyFormat.value === 0) return acct.npub || ''
-  if (pubkeyFormat.value === 1) return acct.pubkey || ''
-  if (pubkeyFormat.value === 2 && acct.pubkey) {
-    try { return nip19.nprofileEncode({ pubkey: acct.pubkey, relays: [] }) } catch { return acct.npub || '' }
-  }
-  if (pubkeyFormat.value === 3 && acct.npub) {
-    try { return nip21.encodeNostrURI(acct.npub) } catch { return acct.npub || '' }
-  }
-  return acct.npub || ''
-})
-
-const pubkeyFormatLabel = computed(() => {
-  const labels = ['npub', 'hex', 'nprofile', 'nostr:']
-  return labels[pubkeyFormat.value] || 'npub'
-})
-
-function cyclePubkeyFormat() {
-  pubkeyFormat.value = (pubkeyFormat.value + 1) % 4
-}
+const formattedPubkey = computed(() => activeAccount.value?.npub || '')
+const pubkeyFormatLabel = 'npub'
 
 async function togglePubkeyQr() {
   if (showPubkeyQr.value) {
@@ -139,9 +119,8 @@ const { accounts, activeAccount, nip46Status, load: loadAccounts, switchTo, remo
 const { status: walletStatus, wallets: savedWallets, switching: walletSwitching, walletType, loadStatus: loadWallet, loadWallets, disconnect: disconnectWallet, switchWallet, rename: renameWallet, autoCreateWallet } = useWallet()
 const { policies: permissions, load: loadPermissions, revokeDomain } = usePermissions()
 const { getForHost: getAllowanceForHost } = useAllowanceSync()
-const { currentTheme, currentMode, themes, themeIds, setTheme, toggleMode } = useTheme()
+const { currentMode, toggleMode } = useTheme()
 const toast = useToast()
-const { currency: fiatCurrency, setCurrency: setFiatCurrency } = useFiat()
 const { switchAccount: switchChatAccount, unreadTotal: chatUnreadTotal } = useChat()
 const { resetContacts } = useContacts()
 const { reset: resetMuteList } = useMuteList()
@@ -168,17 +147,12 @@ const {
   openChatThread,
   closeChatThread,
 } = usePopupState()
-const { highlightedIndex: currencyHighlight, onKeydown: onCurrencyKeydown, resetHighlight: resetCurrencyHighlight } = useListKeyboard({
-  itemCount: () => CURRENCIES.length,
-  onSelect: (i) => { setFiatCurrency(CURRENCIES[i].code); showCurrencyPicker.value = false; resetCurrencyHighlight() },
-})
 const needsBackup = ref(false)
 const profileBadges = ref([])
 const lastUnlockedAt = ref(0)
-const showCurrencyPicker = ref(false)
 
 function toggleIdentity() {
-  activeTab.value = activeTab.value === 'identity' ? 'wallet' : 'identity'
+  activeTab.value = 'identity'
 }
 
 // Site detail opened from wallet budget bar — stays on wallet tab via SlidePanel
@@ -346,8 +320,12 @@ function cancelDelete() {
   confirmingDelete.value = null
 }
 
-function openBackupPage() {
-  const url = chrome.runtime.getURL('options.html?page=account')
+async function openBackupPage() {
+  if (confirmingDelete.value && confirmingDelete.value !== activeAccount.value?.id) {
+    try { await switchTo(confirmingDelete.value) } catch { toast.error(t('toast.failedSwitch')); return }
+  }
+  cancelDelete()
+  const url = chrome.runtime.getURL('options.html?page=account&backup=1')
   chrome.tabs.create({ url })
 }
 
@@ -386,13 +364,6 @@ async function handleRevokeDomain(host) {
   } finally {
     revokingDomain.value = null
   }
-}
-
-async function handleDisconnectWallet() {
-  const activeId = walletStatus.value.activeWallet?.id
-  await disconnectWallet(activeId)
-  walletView.value = 'home'
-  toast.info(t('toast.walletDisconnected'))
 }
 
 async function handleSwitchWallet(walletId) {
@@ -591,7 +562,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
     <ToastContainer />
 
     <!-- Offline banner -->
-    <div v-if="!online" class="flex items-center justify-center gap-2 px-3 py-1.5 bg-error/10 border-b border-error/20 text-[11px] text-error font-medium">
+    <div v-if="!online" class="flex items-center justify-center gap-2 px-3 py-1.5 bg-error/10 border-b border-error/20 text-xs text-error font-medium">
       <WifiOff class="w-3.5 h-3.5 shrink-0" />
       <span>{{ t('common.offline') }}</span>
     </div>
@@ -619,14 +590,14 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         <!-- Minimal settings on lock screen -->
         <div class="relative" ref="settingsRef">
           <button @click.stop="showSettings = !showSettings"
-            class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200"
-            title="Settings">
+            class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 min-w-8 min-h-8"
+            :aria-label="t('settings.allSettings')">
             <Settings class="w-4 h-4 text-text-muted" />
           </button>
 
           <!-- Lock screen settings dropdown (theme only) -->
           <div v-if="showSettings"
-            class="absolute right-0 top-full mt-1.5 w-56 bg-surface-card rounded-2xl border border-border shadow-lg z-50 overflow-hidden animate-scale-in origin-top-right">
+            class="absolute right-0 top-full mt-1.5 w-80 bg-surface-card rounded-2xl border border-border shadow-lg z-50 overflow-hidden animate-scale-in origin-top-right">
             <!-- Mode toggle -->
             <button @click="toggleMode"
               class="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-elevated transition-all duration-200 text-left">
@@ -637,16 +608,9 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             <div class="h-px bg-border" />
             <!-- Theme list -->
             <div class="px-3 py-2">
-              <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.theme') }}</span>
+              <span class="text-xs uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.theme') }}</span>
             </div>
-            <button v-for="id in themeIds" :key="id"
-              @click="setTheme(id)"
-              class="w-full flex items-center justify-between px-4 py-2 hover:bg-surface-elevated transition-all duration-200 text-left">
-              <span class="text-xs" :class="currentTheme === id ? 'font-semibold text-brand' : 'text-text-secondary'">
-                {{ themes[id]?.label }}
-              </span>
-              <CheckCircle v-if="currentTheme === id" class="w-3.5 h-3.5 text-brand" />
-            </button>
+            <ThemePicker class="p-3" />
           </div>
         </div>
       </header>
@@ -667,7 +631,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         <ShieldAlert class="w-10 h-10 text-error mx-auto" />
         <h1 class="text-base font-extrabold mt-3">{{ t('account.vaultProblemTitle') }}</h1>
         <p class="text-xs text-text-secondary mt-2 leading-relaxed">{{ fatalDataError }}</p>
-        <p class="text-[10px] text-text-muted mt-3">{{ t('account.vaultProblemHint') }}</p>
+        <p class="text-xs text-text-muted mt-3">{{ t('account.vaultProblemHint') }}</p>
         <button @click="handleLock" class="mt-5 px-4 py-2 rounded-xl bg-brand text-surface-base text-xs font-bold">
           {{ t('lock.lockNow') }}
         </button>
@@ -681,16 +645,16 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
       <div v-if="autoLockCountdown > 0"
         class="flex items-center justify-between px-4 py-2 bg-warning/10 border-b border-warning/20 text-warning text-xs animate-fade-in">
         <span class="font-medium">{{ t('lock.autoLockWarning', { seconds: autoLockCountdown }) }}</span>
-        <button @click="resetAutoLock" class="px-2 py-0.5 rounded-lg bg-warning/20 hover:bg-warning/30 font-semibold transition-all duration-200 text-[10px]">
+        <button @click="resetAutoLock" class="px-2 py-0.5 rounded-lg bg-warning/20 hover:bg-warning/30 font-semibold transition-all duration-200 text-xs">
           {{ t('lock.stayUnlocked') }}
         </button>
       </div>
 
       <!-- Backup reminder banner -->
       <div v-if="needsBackup"
-        class="flex items-center justify-between px-4 py-2 bg-warning/8 border-b border-warning/15 text-[11px] text-warning animate-fade-in">
+        class="flex items-center justify-between px-4 py-2 bg-warning/8 border-b border-warning/15 text-xs text-warning animate-fade-in">
         <span class="font-medium">{{ t('lock.backupReminder') }}</span>
-        <button @click="needsBackup = false" class="p-0.5 rounded hover:bg-warning/15 transition-colors" :aria-label="t('common.close')">
+        <button @click="needsBackup = false" class="p-0.5 rounded hover:bg-warning/15 transition-colors min-w-8 min-h-8" :aria-label="t('common.close')">
           <span class="text-xs">&times;</span>
         </button>
       </div>
@@ -709,31 +673,10 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             :class="profileData?.picture ? '' : 'bg-brand flex items-center justify-center'">
             <img v-if="profileData?.picture" :src="profileData.picture" alt="" class="w-full h-full object-cover" @error="profileData.picture = null" />
             <div v-else-if="profileLoading && !profileData" class="w-full h-full skeleton-shimmer" />
-            <span v-else class="text-surface-base text-[10px] font-bold">{{ displayName[0]?.toUpperCase() }}</span>
+            <span v-else class="text-surface-base text-xs font-bold">{{ displayName[0]?.toUpperCase() }}</span>
           </div>
-          <!-- Name + mode badge -->
-          <div class="min-w-0">
-            <div v-if="profileLoading && !profileData && !displayName" class="skeleton-shimmer h-3.5 w-16 rounded" />
-            <div v-else class="text-[12px] font-extrabold truncate leading-tight max-w-[90px]">{{ displayName }}</div>
-            <div class="flex items-center gap-1">
-              <span v-if="activeAccount.mode === 'nip46' && nip46Status.reconnecting"
-                class="flex items-center gap-0.5 text-[7px] font-semibold px-1 py-px rounded-full shrink-0 bg-info/10 text-info">
-                <Loader2 class="w-2 h-2 animate-spin" />
-                {{ t('account.reconnecting') }}
-              </span>
-              <span v-else class="flex items-center gap-0.5 text-[7px] font-semibold px-1 py-px rounded-full shrink-0"
-                :class="activeAccount.mode === 'local'
-                  ? 'bg-success/10 text-success'
-                  : nip46Status.connected ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'">
-                <span class="w-1 h-1 rounded-full"
-                  :class="activeAccount.mode === 'local'
-                    ? 'bg-success'
-                    : nip46Status.connected ? 'bg-success' : 'bg-warning'" />
-                {{ activeAccount.mode === 'local' ? t('account.local') : t('account.external') }}
-              </span>
-            </div>
-          </div>
-          <ChevronDown class="w-3 h-3 text-text-muted transition-transform duration-200 shrink-0" :class="activeTab === 'identity' ? 'rotate-180' : ''" />
+          <div class="min-w-0"><p class="text-sm font-semibold truncate">{{ displayName }}</p></div>
+
         </button>
         <!-- Fallback when no account -->
         <div v-else class="flex items-center gap-2 shrink-0">
@@ -744,28 +687,16 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         <!-- Spacer -->
         <div class="flex-1" />
 
-        <!-- Wallet selector -->
-        <WalletSelector
-          :wallets="savedWallets"
-          :balance="walletStatus.balance"
-          :connected="walletStatus.connected"
-          :switching="walletSwitching"
-          @switch="handleSwitchWallet"
-          @add="showWalletConnect = true; activeTab = 'wallet'"
-          @rename="handleRenameWallet"
-          @remove="handleRemoveWallet"
-        />
-
         <!-- Pop out to detached window -->
         <div v-if="!isDetached" class="relative shrink-0 group/pop">
-          <button @click="openFullPage" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200">
+          <button :aria-label="t('settings.popOutTitle')" @click="openFullPage" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 min-w-8 min-h-8">
             <PictureInPicture2 class="w-3.5 h-3.5 text-text-muted group-hover/pop:text-brand transition-colors duration-200" />
           </button>
           <!-- Styled tooltip -->
           <div class="pointer-events-none absolute right-0 top-full mt-2 w-52 opacity-0 group-hover/pop:opacity-100 transition-all duration-200 translate-y-1 group-hover/pop:translate-y-0 z-50">
             <div class="bg-surface-card border border-border rounded-xl shadow-lg px-3 py-2.5">
-              <p class="text-[11px] font-semibold text-text-primary leading-tight">{{ t('settings.popOutTitle') }}</p>
-              <p class="text-[10px] text-text-muted leading-snug mt-1">{{ t('settings.popOutDesc') }}</p>
+              <p class="text-xs font-semibold text-text-primary leading-tight">{{ t('settings.popOutTitle') }}</p>
+              <p class="text-xs text-text-muted leading-snug mt-1">{{ t('settings.popOutDesc') }}</p>
             </div>
           </div>
         </div>
@@ -773,98 +704,18 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         <!-- Settings button + dropdown -->
         <div class="relative shrink-0" ref="settingsRef">
           <button @click.stop="showSettings = !showSettings"
-            class="p-1.5 rounded-lg transition-all duration-200"
+            class="p-1.5 rounded-lg transition-all duration-200 min-w-8 min-h-8"
             :class="showSettings ? 'bg-surface-elevated' : 'hover:bg-surface-elevated'"
-            title="Settings">
+            :aria-label="t('settings.allSettings')">
             <Settings class="w-4 h-4 transition-transform duration-200" :class="showSettings ? 'text-brand rotate-90' : 'text-text-muted'" />
           </button>
 
           <!-- Settings dropdown -->
           <div v-if="showSettings"
-            class="absolute right-0 top-full mt-1.5 w-56 bg-surface-card rounded-2xl border border-border shadow-lg z-50 animate-scale-in origin-top-right">
+            class="absolute right-0 top-full mt-1.5 w-80 bg-surface-card rounded-2xl border border-border shadow-lg z-50 animate-scale-in origin-top-right">
 
-            <!-- Dark / Light toggle -->
-            <button @click="toggleMode"
-              class="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-elevated transition-all duration-200 text-left">
-              <Sun v-if="currentMode === 'dark'" class="w-4 h-4 text-warning shrink-0" />
-              <Moon v-else class="w-4 h-4 text-info shrink-0" />
-              <span class="text-xs font-medium">{{ currentMode === 'dark' ? t('settings.switchToLight') : t('settings.switchToDark') }}</span>
-            </button>
-
-            <!-- Theme dots -->
-            <div class="px-4 pb-3 flex items-center gap-2">
-              <button v-for="id in themeIds" :key="id"
-                @click="setTheme(id)"
-                class="w-6 h-6 rounded-full flex items-center justify-center transition-all duration-150 shrink-0"
-                :class="currentTheme === id ? 'ring-2 ring-brand ring-offset-1 ring-offset-surface-card scale-110' : 'hover:scale-110'"
-                :title="themes[id]?.label"
-              >
-                <span class="w-4 h-4 rounded-full border border-border/50"
-                  :style="{ background: themes[id]?.dark?.['brand-primary'] || 'var(--text-muted)' }" />
-              </button>
-            </div>
-
-            <div class="h-px bg-border" />
-
-            <!-- Currency -->
-            <button @click="showCurrencyPicker = true; showSettings = false"
-              class="w-full flex items-center justify-between px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
-              <div class="flex items-center gap-3">
-                <Coins class="w-4 h-4 text-text-muted shrink-0" />
-                <span class="text-xs font-medium">{{ t('settings.currency') }}</span>
-              </div>
-              <span class="text-[11px] text-text-muted font-mono">{{ CURRENCIES.find(c => c.code === fiatCurrency)?.symbol }} {{ fiatCurrency.toUpperCase() }}</span>
-            </button>
-
-            <!-- Language -->
-            <button @click="showLanguagePicker = true; showSettings = false"
-              class="w-full flex items-center justify-between px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
-              <div class="flex items-center gap-3">
-                <Languages class="w-4 h-4 text-text-muted shrink-0" />
-                <span class="text-xs font-medium">{{ t('settings.language') }}</span>
-              </div>
-              <span class="text-[11px] text-text-muted">{{ locales.find(l => l.code === locale)?.native || 'English' }}</span>
-            </button>
-
-            <div class="h-px bg-border" />
-
-            <!-- Lock -->
-            <button @click="handleLock"
-              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left">
-              <Lock class="w-4 h-4 text-text-muted shrink-0" />
-              <span class="text-xs font-medium">{{ t('settings.lockExtension') }}</span>
-            </button>
-
-            <div class="h-px bg-border" />
-
-            <!-- Links to full settings pages -->
-            <div class="px-4 pt-2.5 pb-1.5">
-              <span class="text-[9px] uppercase tracking-widest text-text-muted font-semibold">{{ t('settings.more') }}</span>
-            </div>
-            <button @click="showRelaySettings = true; showSettings = false"
-              class="w-full flex items-center justify-between px-4 py-2 hover:bg-surface-elevated transition-all duration-200 text-left">
-              <div class="flex items-center gap-3">
-                <Radio class="w-3.5 h-3.5 text-text-muted shrink-0" />
-                <span class="text-[11px] text-text-secondary">{{ t('settings.relaySettings') }}</span>
-              </div>
-              <OpenInBrowserButton page="relays" />
-            </button>
-            <button @click="showNotificationSettings = true; showSettings = false"
-              class="w-full flex items-center justify-between px-4 py-2 hover:bg-surface-elevated transition-all duration-200 text-left">
-              <div class="flex items-center gap-3">
-                <Bell class="w-3.5 h-3.5 text-text-muted shrink-0" />
-                <span class="text-[11px] text-text-secondary">{{ t('notifications.settingsLabel') }}</span>
-              </div>
-              <OpenInBrowserButton page="preferences" />
-            </button>
-
-            <!-- Footer -->
-            <div class="px-4 py-2 flex items-center justify-between border-t border-border mt-1">
-              <button @click="openOptionsPage" class="text-[10px] text-brand font-medium hover:underline">
-                {{ t('settings.allSettings') }}
-              </button>
-              <span class="text-[9px] text-text-muted/50">v1.0.0</span>
-            </div>
+            <button @click="handleLock" class="w-full text-left px-4 py-3 text-sm">{{ t('settings.lockExtension') }}</button>
+            <button @click="openOptionsPage" class="w-full text-left px-4 py-3 text-sm">{{ t('settings.allSettings') }}</button>
           </div>
         </div>
       </header>
@@ -902,7 +753,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         </div>
 
         <!-- Scrollable content -->
-        <div v-else class="flex-1 flex flex-col overflow-y-auto" :class="activeTab === 'chat' && chatView === 'thread' ? 'overflow-hidden' : ''">
+        <div v-else id="primary-tab-panel" role="tabpanel" :aria-labelledby="`tab-${activeTab}`" class="flex-1 flex flex-col overflow-y-auto" :class="activeTab === 'chat' && chatView === 'thread' ? 'overflow-hidden' : ''">
 
           <!-- ══════════════════════════════════════════════ -->
           <!-- ══ Identity Tab                            ══ -->
@@ -921,7 +772,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             <!-- Connected sites popup -->
             <div v-else-if="showPermissionsPopup" class="space-y-3 animate-fade-in-up">
               <div class="flex items-center gap-2">
-                <button @click="showPermissionsPopup = false" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
+                <button @click="showPermissionsPopup = false" :aria-label="t('common.back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200 min-w-8 min-h-8">
                   <ArrowLeft class="w-4 h-4 text-text-muted" />
                 </button>
                 <span class="text-sm font-semibold">{{ t('account.connectedSites') }}</span>
@@ -939,8 +790,8 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                     <div class="min-w-0">
                       <span class="text-xs font-medium truncate block">{{ host }}</span>
                       <div class="flex items-center gap-1.5 mt-0.5">
-                        <span class="text-[9px] text-text-muted">{{ Object.keys(methods).length }} {{ t('sites.permissionsGranted') }}</span>
-                        <span v-if="siteBudgetPill(host)" class="text-[8px] px-1.5 py-px rounded-full font-semibold" :class="siteBudgetPill(host).color">
+                        <span class="text-xs text-text-muted">{{ Object.keys(methods).length }} {{ t('sites.permissionsGranted') }}</span>
+                        <span v-if="siteBudgetPill(host)" class="text-xs px-1.5 py-px rounded-full font-semibold" :class="siteBudgetPill(host).color">
                           {{ siteBudgetPill(host).paused ? t('sites.budgetPaused') : siteBudgetPill(host).label }}
                         </span>
                       </div>
@@ -953,13 +804,21 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               <div v-else class="bg-surface-card rounded-3xl border border-border shadow-sm p-6 text-center">
                 <Globe class="w-5 h-5 text-text-muted mx-auto mb-2" />
                 <p class="text-xs text-text-muted">{{ t('account.noSites') }}</p>
-                <p class="text-[10px] text-text-muted mt-0.5">{{ t('account.noSitesHint') }}</p>
+                <p class="text-xs text-text-muted mt-0.5">{{ t('account.noSitesHint') }}</p>
               </div>
             </div>
 
             <!-- Active identity card -->
             <template v-else>
-            <div v-if="activeAccount" class="bg-surface-card rounded-3xl border border-border shadow-sm animate-fade-in-up overflow-hidden">
+            <details v-if="activeAccount" class="bg-surface-card rounded-3xl border border-border shadow-sm animate-fade-in-up overflow-hidden">
+              <summary class="p-3 cursor-pointer list-none">
+                <div class="flex items-center gap-2">
+                  <AccountIdentity :account="{ ...activeAccount, profile: profileData || activeAccount.profile }" class="flex-1" />
+                  <button @click.stop.prevent="copyPubkey" :aria-label="t('common.copy')" class="w-10 h-10 shrink-0 flex items-center justify-center rounded-lg hover:bg-surface-elevated"><Copy class="w-4 h-4" /></button>
+                </div>
+                <span class="mt-2 block text-xs text-text-secondary">{{ t('prompt.details') }}</span>
+              </summary>
+
 
               <!-- Profile header — banner or gradient fallback -->
               <div class="relative">
@@ -984,11 +843,11 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                 </div>
 
                 <!-- Mode badge — sits on top of banner with backdrop blur -->
-                <div class="absolute top-2.5 right-3 flex items-center gap-1.5">
-                  <span class="flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border backdrop-blur-sm"
+                <div v-if="activeAccount.mode === 'nip46'" class="absolute top-2.5 right-3 flex items-center gap-1.5">
+                  <span class="flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-full border backdrop-blur-sm"
                     :class="activeAccount.mode === 'local'
                       ? 'bg-success/10 text-success border-success/20'
-                      : 'bg-warning/10 text-warning border-warning/20'">
+                      : 'bg-surface-elevated text-text-secondary border-border'">
                     <span class="w-1 h-1 rounded-full" :class="activeAccount.mode === 'local' ? 'bg-success' : 'bg-warning'" />
                     {{ activeAccount.mode === 'local' ? t('account.onThisDevice') : t('account.externalSigner') }}
                   </span>
@@ -1006,31 +865,31 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                   <template v-else>
                     <div class="flex items-center gap-1.5">
                       <span class="font-extrabold text-sm truncate">{{ displayName }}</span>
-                      <span v-if="profileData?.nip05" class="text-[9px] text-brand font-medium truncate">
+                      <span v-if="profileData?.nip05" class="text-xs text-brand font-medium truncate">
                         {{ profileData.nip05 }}
                       </span>
                     </div>
-                    <p v-if="profileData?.about" class="text-[10px] text-text-muted mt-0.5 line-clamp-2 leading-relaxed">
+                    <p v-if="profileData?.about" class="text-xs text-text-muted mt-0.5 line-clamp-2 leading-relaxed">
                       {{ profileData.about }}
                     </p>
-                    <p v-else class="text-[10px] text-text-muted mt-0.5">{{ t('account.activeDesc') }}</p>
+                    <p v-else class="text-xs text-text-muted mt-0.5">{{ t('account.activeDesc') }}</p>
                   </template>
                 </div>
 
                 <!-- Pubkey row -->
                 <div v-if="activeAccount.npub" class="space-y-2">
                   <div class="flex items-center gap-1.5">
-                    <button @click="cyclePubkeyFormat"
+                    <button @click="copyPubkey"
                       class="flex-1 flex items-center gap-1.5 bg-surface-base px-2.5 py-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 group min-w-0"
-                      :title="t('account.tapToCycle')">
-                      <span class="text-[8px] uppercase tracking-wider text-brand font-bold shrink-0">{{ pubkeyFormatLabel }}</span>
-                      <code class="text-[10px] font-mono text-text-muted truncate">{{ truncateKey(formattedPubkey, 14, 8) }}</code>
+                      :title="t('common.copy')">
+                      <span class="text-xs uppercase tracking-wider text-brand font-bold shrink-0">{{ pubkeyFormatLabel }}</span>
+                      <code class="text-xs font-mono text-text-muted truncate">{{ truncateKey(formattedPubkey, 14, 8) }}</code>
                     </button>
-                    <button @click="togglePubkeyQr" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0"
+                    <button @click="togglePubkeyQr" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0 min-w-8 min-h-8"
                       :title="t('account.showQr')">
                       <QrCode class="w-3.5 h-3.5" :class="showPubkeyQr ? 'text-brand' : 'text-text-muted'" />
                     </button>
-                    <button @click="copyPubkey" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0">
+                    <button @click="copyPubkey" :aria-label="t('common.copy')" class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 shrink-0 min-w-8 min-h-8">
                       <Check v-if="copied" class="w-3.5 h-3.5 text-success" />
                       <Copy v-else class="w-3.5 h-3.5 text-text-muted" />
                     </button>
@@ -1045,13 +904,13 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
 
                 <!-- Profile metadata pills -->
                 <div v-if="profileData?.lud16 || profileData?.lud19 || profileLoading" class="flex items-center gap-2 flex-wrap">
-                  <div v-if="profileData?.lud16" class="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
+                  <div v-if="profileData?.lud16" class="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
                     <WalletIcon class="w-2.5 h-2.5" />
                     <span class="truncate max-w-[180px]">{{ profileData.lud16 }}</span>
                   </div>
-                  <div v-else-if="profileData?.lud19" class="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
+                  <div v-else-if="profileData?.lud19" class="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-warning/8 text-warning border border-warning/15 font-medium">
                     <WalletIcon class="w-2.5 h-2.5" />
-                    <span>LNURL set</span>
+                    <span>{{ t('account.profileLightning') }}</span>
                   </div>
                   <div v-if="profileLoading && !profileData" class="skeleton-shimmer h-4 w-24 rounded-full" />
                 </div>
@@ -1059,7 +918,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                 <!-- Profile badges (NIP-58) -->
                 <div v-if="profileBadges.length > 0" class="flex items-center gap-1.5 flex-wrap">
                   <div v-for="badge in profileBadges" :key="badge.name"
-                    class="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full bg-brand/6 text-brand border border-brand/12 font-medium"
+                    class="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-brand/6 text-brand border border-brand/12 font-medium"
                     :title="badge.description || badge.name">
                     <img v-if="badge.thumbUrl" :src="badge.thumbUrl" alt="" class="w-3 h-3 rounded-sm object-cover" />
                     <span class="truncate max-w-[100px]">{{ badge.name }}</span>
@@ -1074,10 +933,10 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                     class="flex-1 flex items-center justify-between py-1.5 group">
                     <div class="flex items-center gap-1.5">
                       <ShieldCheck class="w-3 h-3 text-text-muted" />
-                      <span class="text-[10px] font-semibold uppercase tracking-wider text-text-muted">{{ t('account.connectedSites') }}</span>
+                      <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">{{ t('account.connectedSites') }}</span>
                     </div>
                     <div class="flex items-center gap-1.5">
-                      <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-elevated text-text-muted font-semibold">{{ permissionCount }}</span>
+                      <span class="text-xs px-1.5 py-0.5 rounded-full bg-surface-elevated text-text-muted font-semibold">{{ permissionCount }}</span>
                       <ChevronDown class="w-3 h-3 text-text-muted -rotate-90 group-hover:text-brand transition-all duration-200" />
                     </div>
                   </button>
@@ -1092,26 +951,26 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                     class="flex-1 flex items-center justify-between py-1.5 group">
                     <div class="flex items-center gap-1.5">
                       <Radio class="w-3 h-3 text-text-muted" />
-                      <span class="text-[10px] font-semibold uppercase tracking-wider text-text-muted">{{ t('account.connectedRelays') }}</span>
+                      <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">{{ t('account.connectedRelays') }}</span>
                     </div>
                     <div class="flex items-center gap-1.5">
-                      <span v-if="totalRelayCount > 0" class="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-elevated text-text-muted font-semibold">{{ totalRelayCount }}</span>
+                      <span v-if="totalRelayCount > 0" class="text-xs px-1.5 py-0.5 rounded-full bg-surface-elevated text-text-muted font-semibold">{{ totalRelayCount }}</span>
                       <ChevronDown class="w-3 h-3 text-text-muted -rotate-90 group-hover:text-brand transition-all duration-200" />
                     </div>
                   </button>
                   <OpenInBrowserButton page="relays" />
                 </div>
                 <div v-if="totalRelayCount > 0" class="flex items-center gap-2 mt-1.5 pl-[18px]">
-                  <span class="text-[9px] text-text-muted">{{ accountRelayCount }} {{ t('relay.tabAccount') }}</span>
-                  <span class="text-[9px] text-text-muted opacity-40">·</span>
-                  <span class="text-[9px] text-text-muted">{{ walletRelayCount }} {{ t('relay.tabWallet') }}</span>
-                  <span class="text-[9px] text-text-muted opacity-40">·</span>
-                  <span class="text-[9px] text-text-muted">{{ chatRelayCount }} {{ t('relay.tabChat') }}</span>
+                  <span class="text-xs text-text-muted">{{ accountRelayCount }} {{ t('relay.tabAccount') }}</span>
+                  <span class="text-xs text-text-muted opacity-40">·</span>
+                  <span class="text-xs text-text-muted">{{ walletRelayCount }} {{ t('relay.tabWallet') }}</span>
+                  <span class="text-xs text-text-muted opacity-40">·</span>
+                  <span class="text-xs text-text-muted">{{ chatRelayCount }} {{ t('relay.tabChat') }}</span>
                 </div>
               </div>
-            </div>
+            </details>
 
-            <LightningLogin v-if="activeAccount" :account="activeAccount" />
+            <details v-if="activeAccount" class="text-sm"><summary class="min-h-8 cursor-pointer">{{ t('lightningLogin.title') }}</summary><LightningLogin :account="activeAccount" /></details>
 
             <!-- Empty state -->
             <EmptyState
@@ -1124,72 +983,26 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
               @action="showWizard = true"
             />
 
-            <!-- Other accounts (switch) -->
-            <div v-if="accounts.length > 1" class="space-y-1.5 animate-fade-in-up stagger-2">
-              <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('account.switchAccount') }}</p>
-              <button
-                v-for="acc in accounts.filter(a => !a.isActive)"
-                :key="acc.id"
-                @click="requestSwitchAccount(acc.id)"
-                :disabled="!!switchingAccount"
-                class="w-full flex items-center justify-between px-3 py-2.5 rounded-3xl hover:bg-surface-card border border-transparent hover:border-border transition-all duration-200 text-sm group disabled:opacity-60"
-              >
-                <div class="flex items-center gap-2.5">
-                  <!-- Loading spinner replaces avatar when switching -->
-                  <div v-if="switchingAccount === acc.id"
-                    class="w-7 h-7 rounded-full bg-brand/10 flex items-center justify-center">
-                    <Loader2 class="w-3.5 h-3.5 text-brand animate-spin" />
-                  </div>
-                  <!-- Per-identity color makes same-letter identities distinguishable -->
-                  <div v-else class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                    :style="{ background: getAvatarColor(acc.pubkey) }">
-                    {{ (acc.name || '?')[0].toUpperCase() }}
-                  </div>
-                  <div class="text-left">
-                    <div>
-                      <span class="text-text-secondary font-medium">{{ acc.name }}</span>
-                      <span v-if="switchingAccount === acc.id" class="text-[9px] ml-1.5 text-brand font-medium">
-                        {{ t('account.switching') }}
-                      </span>
-                      <span v-else class="text-[9px] ml-1.5 px-1.5 py-px rounded font-medium"
-                        :class="acc.mode === 'nip46'
-                          ? 'bg-warning/10 text-warning'
-                          : 'bg-surface-elevated text-text-muted'">
-                        {{ acc.mode === 'nip46' ? t('account.external') : t('account.local') }}
-                      </span>
-                    </div>
-                    <code v-if="acc.npub" class="block text-[9px] font-mono text-text-muted/70">{{ truncateKey(acc.npub, 10, 4) }}</code>
-                  </div>
-                </div>
-                <span
-                  v-if="!switchingAccount"
-                  role="button"
-                  @click.stop="requestDelete(acc.id)"
-                  class="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-error/10 transition-all duration-200 cursor-pointer"
-                  title="Remove account"
-                >
-                  <Trash2 class="w-3.5 h-3.5 text-text-muted hover:text-error" />
-                </span>
-              </button>
-            </div>
+      <div v-if="accounts.length > 1" class="space-y-2">
+        <p class="text-xs text-text-secondary font-semibold">{{ t('account.switchAccount') }}</p>
+        <div v-for="acc in accounts.filter(a => !a.isActive)" :key="acc.id" class="flex items-center gap-2 rounded-xl border border-border p-2">
+          <button @click="requestSwitchAccount(acc.id)" :disabled="!!switchingAccount" class="flex-1 min-w-0 p-1 rounded-lg hover:bg-surface-elevated min-w-8 min-h-8">
+            <AccountIdentity :account="acc" />
+          </button>
+          <Loader2 v-if="switchingAccount === acc.id" class="w-5 h-5 animate-spin" />
+          <button @click="requestDelete(acc.id)" :disabled="!!switchingAccount" :aria-label="t('account.deleteTitle')" class="w-10 h-10 rounded-lg flex items-center justify-center text-text-secondary hover:bg-error/10 hover:text-error">
+            <Trash2 class="w-4 h-4" />
+          </button>
+        </div>
+      </div>
 
             <!-- Switch account confirmation (bottom sheet) -->
             <BottomSheet :open="!!confirmSwitchId" variant="brand" @close="cancelSwitch">
               <template #icon><AlertTriangle class="w-4 h-4 text-brand" /></template>
               <template #title>{{ t('account.switchConfirmTitle') }}</template>
               <template #description>
-                <div v-if="switchTargetAccount" class="flex items-center gap-2 justify-center mb-1">
-                  <div class="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                    :style="{ background: getAvatarColor(switchTargetAccount.pubkey) }">
-                    {{ (switchTargetAccount.name || '?')[0].toUpperCase() }}
-                  </div>
-                  <span class="font-semibold text-text-primary text-xs">{{ switchTargetAccount.name }}</span>
-                  <span class="text-[9px] px-1.5 py-px rounded font-medium"
-                    :class="switchTargetAccount.mode === 'nip46' ? 'bg-warning/10 text-warning' : 'bg-surface-elevated text-text-muted'">
-                    {{ switchTargetAccount.mode === 'nip46' ? t('account.external') : t('account.local') }}
-                  </span>
-                </div>
-                {{ t('account.switchConfirmDesc') }}
+                <AccountIdentity v-if="switchTargetAccount" :account="switchTargetAccount" class="mb-3" />
+          {{ t('account.switchConfirmDesc') }}
               </template>
               <template #actions>
                 <button @click="cancelSwitch"
@@ -1207,80 +1020,7 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
             </BottomSheet>
 
             <!-- Delete confirmation (bottom sheet) -->
-            <BottomSheet :open="!!confirmingDelete" variant="danger" @close="cancelDelete">
-              <template #title>{{ t('account.deleteTitle') }}</template>
-              <template #content>
-                <div class="space-y-4 px-1">
-                  <!-- Account being deleted -->
-                  <div v-if="deletingAccountObj" class="flex items-center gap-3 p-3 rounded-2xl bg-surface-base border border-border">
-                    <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                      :class="deletingAccountObj.mode === 'nip46' ? 'bg-warning/10 text-warning' : 'bg-error/10 text-error'">
-                      {{ (deletingAccountObj.name || '?')[0].toUpperCase() }}
-                    </div>
-                    <div class="min-w-0">
-                      <p class="text-sm font-semibold truncate">{{ deletingAccountObj.name }}</p>
-                      <span class="text-[9px] px-1.5 py-px rounded font-medium"
-                        :class="deletingAccountObj.mode === 'nip46' ? 'bg-warning/10 text-warning' : 'bg-surface-elevated text-text-muted'">
-                        {{ deletingAccountObj.mode === 'nip46' ? t('account.external') : t('account.local') }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <!-- Warning banner (local keys only) -->
-                  <div v-if="deletingAccountObj?.mode !== 'nip46'" class="flex gap-2.5 p-3 rounded-2xl bg-warning/8 border border-warning/15">
-                    <ShieldAlert class="w-4 h-4 text-warning shrink-0 mt-0.5" />
-                    <div>
-                      <p class="text-[11px] font-semibold text-warning leading-tight">{{ t('account.deleteBackupWarning') }}</p>
-                      <p class="text-[10px] text-text-muted leading-snug mt-1">{{ t('account.deleteBackupHint') }}</p>
-                    </div>
-                  </div>
-
-                  <!-- Remote signer info -->
-                  <div v-else class="flex gap-2.5 p-3 rounded-2xl bg-surface-base border border-border">
-                    <ShieldAlert class="w-4 h-4 text-text-muted shrink-0 mt-0.5" />
-                    <p class="text-[11px] text-text-muted leading-snug">{{ t('account.deleteDescRemote') }}</p>
-                  </div>
-
-                  <!-- This identity owns an eCash wallet -->
-                  <div v-if="deletingAccountHasWallet" class="flex gap-2.5 p-3 rounded-2xl bg-error/8 border border-error/15">
-                    <WalletIcon class="w-4 h-4 text-error shrink-0 mt-0.5" />
-                    <p class="text-[11px] text-text-muted leading-snug">{{ t('account.deleteWalletWarning') }}</p>
-                  </div>
-
-                  <!-- Description -->
-                  <p class="text-[11px] text-text-muted leading-relaxed text-center">
-                    {{ deletingAccountObj?.mode === 'nip46' ? t('account.deleteRemoteExplain') : t('account.deleteLocalExplain') }}
-                  </p>
-
-                  <!-- Action buttons -->
-                  <div class="space-y-2">
-                    <!-- Backup CTA (local keys only) -->
-                    <button v-if="deletingAccountObj?.mode !== 'nip46'"
-                      @click="openBackupPage"
-                      class="w-full flex items-center justify-center gap-2 py-2.5 text-xs rounded-2xl bg-surface-elevated hover:bg-surface-hover border border-border transition-all duration-200 font-semibold text-text-primary">
-                      <KeyRound class="w-3.5 h-3.5" />
-                      {{ t('account.deleteBackupCta') }}
-                    </button>
-
-                    <!-- Delete button -->
-                    <button @click="confirmDelete"
-                      :disabled="deletingAccount"
-                      class="w-full py-2.5 text-xs rounded-2xl bg-error text-white hover:bg-error/90 transition-all duration-200 font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60">
-                      <Loader2 v-if="deletingAccount" class="w-3 h-3 animate-spin" />
-                      <Trash2 v-else class="w-3 h-3" />
-                      {{ deletingAccount ? t('account.removing') : t('account.deleteForever') }}
-                    </button>
-
-                    <!-- Cancel -->
-                    <button @click="cancelDelete"
-                      :disabled="deletingAccount"
-                      class="w-full py-2 text-xs rounded-2xl text-text-muted hover:text-text-secondary transition-all duration-200 font-medium disabled:opacity-60">
-                      {{ t('common.cancel') }}
-                    </button>
-                  </div>
-                </div>
-              </template>
-            </BottomSheet>
+            <DeleteAccountSheet :account="deletingAccountObj" :has-wallet="deletingAccountHasWallet" :busy="deletingAccount" @close="cancelDelete" @confirm="confirmDelete" @backup="openBackupPage" />
 
             <button @click="showWizard = true"
               class="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm rounded-3xl border border-dashed border-border text-text-muted hover:text-brand hover:border-brand transition-all duration-200">
@@ -1316,13 +1056,25 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
                 @navigate-site="navigateToSiteDetail"
                 class="mx-4 mb-2"
               />
-              <WalletHome
+                      <!-- Wallet selector -->
+        <WalletSelector v-if="walletView === 'home'"
+          :wallets="savedWallets"
+          :balance="walletStatus.balance"
+          :connected="walletStatus.connected"
+          :switching="walletSwitching"
+          @switch="handleSwitchWallet"
+          @add="showWalletConnect = true; activeTab = 'wallet'"
+          @rename="handleRenameWallet"
+          @remove="handleRemoveWallet"
+        />
+
+
+<WalletHome
                 v-if="walletView === 'home'"
                 @send="showSendPanel = true"
                 @receive="showReceivePanel = true"
                 @history="walletView = 'history'"
                 @detail="showTxDetail"
-                @disconnect="handleDisconnectWallet"
               />
 
               <TransactionHistory
@@ -1375,13 +1127,13 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
         />
 
         <!-- Send slide panel -->
-        <SlidePanel :open="showSendPanel" @close="showSendPanel = false">
-          <SendFlow @back="showSendPanel = false" @done="showSendPanel = false" />
+        <SlidePanel :open="showSendPanel" @close="sendFlowRef?.requestClose()">
+          <SendFlow ref="sendFlowRef" @back="showSendPanel = false" @done="showSendPanel = false" />
         </SlidePanel>
 
         <!-- Receive slide panel -->
-        <SlidePanel :open="showReceivePanel" @close="showReceivePanel = false">
-          <ReceiveFlow @back="showReceivePanel = false" @done="showReceivePanel = false" />
+        <SlidePanel :open="showReceivePanel" @close="receiveFlowRef?.requestClose()">
+          <ReceiveFlow ref="receiveFlowRef" @back="showReceivePanel = false" @done="showReceivePanel = false" />
         </SlidePanel>
 
         <!-- Site budget panel (opened from SiteContextBar on wallet tab) -->
@@ -1406,24 +1158,6 @@ watch([locked, lockLoading], async ([isLocked, isLoading]) => {
       </template>
     </BottomSheet>
 
-    <!-- Currency picker bottom sheet -->
-    <BottomSheet :open="showCurrencyPicker" @close="showCurrencyPicker = false">
-      <template #title>{{ t('settings.currency') }}</template>
-      <template #content>
-        <div class="grid grid-cols-2 gap-1">
-          <button v-for="cur in CURRENCIES" :key="cur.code"
-            @click="setFiatCurrency(cur.code); showCurrencyPicker = false"
-            class="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs transition-all duration-200"
-            :class="fiatCurrency === cur.code
-              ? 'bg-brand/10 text-brand font-semibold border border-brand/20'
-              : 'text-text-secondary hover:bg-surface-elevated border border-transparent'"
-          >
-            <span class="font-mono w-4 text-center">{{ cur.symbol }}</span>
-            <span class="flex-1 truncate">{{ cur.code.toUpperCase() }}</span>
-            <Check v-if="fiatCurrency === cur.code" class="w-3 h-3 text-brand shrink-0" />
-          </button>
-        </div>
-      </template>
-    </BottomSheet>
+
   </div>
 </template>

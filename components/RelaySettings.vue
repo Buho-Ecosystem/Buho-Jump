@@ -1,4 +1,5 @@
 <script setup>
+import BackButton from './BackButton.vue'
 /**
  * Relay Settings — full-page overlay with three pool tabs (Account, Wallet, Chat).
  * Each tab shows the relay list with status, add/remove, and reset to defaults.
@@ -189,15 +190,13 @@ function relayHostname(url) {
   <div class="space-y-3 animate-fade-in-up">
 
     <!-- Header -->
-    <div class="flex items-center gap-2">
-      <button v-if="!hideBack" @click="emit('back')" :aria-label="t('common.back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
-        <ArrowLeft class="w-4 h-4 text-text-muted" />
-      </button>
+    <div v-if="!hideBack" class="flex items-center gap-2">
+      <BackButton @click="emit('back')" />
       <span class="text-sm font-semibold flex-1">{{ t('relay.title') }}</span>
       <button
         @click="checkAllStatuses"
         :disabled="checkingAll"
-        class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200"
+        class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 min-w-8 min-h-8"
         :title="t('relay.refreshStatus')"
       >
         <RefreshCw class="w-3.5 h-3.5 text-text-muted" :class="checkingAll ? 'animate-spin' : ''" />
@@ -207,7 +206,7 @@ function relayHostname(url) {
     <!-- Warning banner -->
     <div class="flex items-start gap-2.5 px-3 py-2.5 rounded-3xl bg-warning/8 border border-warning/15">
       <AlertTriangle class="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
-      <p class="text-[10px] text-warning leading-relaxed font-medium">{{ t('relay.warning') }}</p>
+      <p class="text-xs text-warning leading-relaxed font-medium">{{ t('relay.warning') }}</p>
     </div>
 
     <!-- Pool tabs -->
@@ -233,13 +232,12 @@ function relayHostname(url) {
     </div>
 
     <div v-else class="space-y-1 max-h-52 overflow-y-auto">
-      <button
+      <div
         v-for="url in activeRelays"
         :key="url"
-        @click="infoRelayUrl = url"
         class="w-full flex items-center justify-between px-3 py-2.5 bg-surface-card rounded-3xl shadow-sm border border-border hover:border-brand/30 transition-all group text-left"
       >
-        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+        <button @click="infoRelayUrl = url" class="flex items-center gap-2.5 min-w-0 flex-1 text-left">
           <div class="w-10 h-10 rounded-[10px] bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden">
             <img
               v-if="relayIcons[url] && !iconFailed[url]"
@@ -260,27 +258,27 @@ function relayHostname(url) {
               <span v-else-if="relayStatus[url] === 'unreachable'"
                 class="w-2 h-2 rounded-full bg-error shrink-0" :title="t('relay.statusUnreachable')" />
             </div>
-            <span class="text-[9px] text-text-muted truncate block">{{ url }}</span>
+            <span class="text-xs text-text-muted truncate block">{{ url }}</span>
           </div>
-        </div>
+        </button>
 
         <div class="flex items-center gap-1.5 shrink-0">
           <button
-            @click.stop="confirmRemoveUrl = url"
-            class="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-error/10 transition-all"
+            @click.stop="confirmRemoveUrl = url" :aria-label="t('relay.remove') + ': ' + relayHostname(url)"
+            class="p-1 rounded-md opacity-100 hover:bg-error/10 transition-all min-w-8 min-h-8"
           >
             <Trash2 class="w-3 h-3 text-text-muted hover:text-error" />
           </button>
         </div>
-      </button>
+      </div>
 
       <!-- Empty state -->
       <div v-if="activeRelays.length === 0" class="bg-surface-card rounded-3xl border border-border shadow-sm p-6 text-center space-y-2">
         <Globe class="w-5 h-5 text-text-muted mx-auto" />
         <p class="text-xs text-text-muted">{{ t('relay.empty') }}</p>
-        <p class="text-[10px] text-text-muted">{{ t('relay.emptyHint') }}</p>
+        <p class="text-xs text-text-muted">{{ t('relay.emptyHint') }}</p>
         <button @click="confirmReset = true"
-          class="text-[11px] text-brand font-medium hover:underline transition-all duration-200">
+          class="text-xs text-brand font-medium hover:underline transition-all duration-200">
           {{ t('relay.resetDefaults') }}
         </button>
       </div>
@@ -290,13 +288,13 @@ function relayHostname(url) {
     <div class="space-y-1">
       <div class="flex gap-2">
         <input
-          v-model="newRelayUrl"
+          v-model="newRelayUrl" :aria-label="t('relay.addPlaceholder')"
           :placeholder="t('relay.addPlaceholder')"
           class="flex-1 bg-surface-base border border-border rounded-lg px-2.5 py-2 text-xs outline-none focus:border-brand transition-all duration-200 placeholder:text-text-muted font-mono"
           @keydown.enter="handleAdd"
         />
         <button
-          @click="handleAdd"
+          @click="handleAdd" :aria-label="t('relay.addRelay')"
           :disabled="adding || !newRelayUrl.trim()"
           class="px-3 py-2 text-xs rounded-2xl bg-brand text-surface-base font-semibold hover:bg-brand-hover disabled:opacity-40 transition-all duration-200 flex items-center gap-1 btn-primary"
         >
@@ -304,9 +302,10 @@ function relayHostname(url) {
           <Plus v-else class="w-3.5 h-3.5" />
         </button>
       </div>
-      <p v-if="addError" class="text-[10px] text-error px-1">{{ addError }}</p>
+      <p v-if="addError" class="text-xs text-error px-1">{{ addError }}</p>
     </div>
 
+    <details class="text-sm"><summary class="min-h-8 cursor-pointer">{{ t('prompt.details') }}</summary>
     <!-- Reset to defaults -->
     <button
       @click="confirmReset = true"
@@ -320,7 +319,7 @@ function relayHostname(url) {
     <div v-if="activePool === 'account'" class="bg-surface-card rounded-2xl border border-border p-3.5 space-y-3">
       <div>
         <p class="text-xs font-semibold">{{ t('relay.nip65Title') }}</p>
-        <p class="text-[10px] text-text-muted mt-0.5 leading-relaxed">{{ t('relay.nip65Desc') }}</p>
+        <p class="text-xs text-text-muted mt-0.5 leading-relaxed">{{ t('relay.nip65Desc') }}</p>
       </div>
 
       <div v-if="isLocalAccount" class="grid grid-cols-2 gap-2">
@@ -333,7 +332,7 @@ function relayHostname(url) {
             <Loader2 v-if="publishing" class="w-4 h-4 animate-spin text-brand" />
             <Upload v-else class="w-4 h-4 text-brand" />
           </div>
-          <span class="text-[11px] font-semibold text-text-secondary">
+          <span class="text-xs font-semibold text-text-secondary">
             {{ publishing ? t('relay.publishing') : t('relay.publishList') }}
           </span>
         </button>
@@ -346,20 +345,23 @@ function relayHostname(url) {
             <Loader2 v-if="fetching" class="w-4 h-4 animate-spin text-brand" />
             <Download v-else class="w-4 h-4 text-brand" />
           </div>
-          <span class="text-[11px] font-semibold text-text-secondary">
+          <span class="text-xs font-semibold text-text-secondary">
             {{ fetching ? t('relay.fetching') : t('relay.fetchList') }}
           </span>
         </button>
       </div>
 
-      <div v-else class="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-elevated text-[11px] text-text-muted">
+      <div v-else class="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-elevated text-xs text-text-muted">
         <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
         <span>{{ t('relay.nip65LocalOnly') }}</span>
       </div>
     </div>
 
+    </details>
+
     <!-- Remove confirmation (bottom sheet) -->
     <BottomSheet :open="!!confirmRemoveUrl" variant="danger" @close="confirmRemoveUrl = null">
+      <template #title>{{ t('relay.remove') }}</template>
       <template #icon><AlertTriangle class="w-4 h-4 text-error" /></template>
       <template #description>{{ t('relay.removeConfirm', { url: confirmRemoveUrl, pool: activePool }) }}</template>
       <template #actions>
@@ -378,6 +380,7 @@ function relayHostname(url) {
 
     <!-- Reset confirmation (bottom sheet) -->
     <BottomSheet :open="confirmReset" variant="brand" @close="confirmReset = false">
+      <template #title>{{ t('relay.resetDefaults') }}</template>
       <template #icon><RotateCcw class="w-4 h-4 text-brand" /></template>
       <template #description>{{ t('relay.resetConfirm', { pool: activePool }) }}</template>
       <template #actions>

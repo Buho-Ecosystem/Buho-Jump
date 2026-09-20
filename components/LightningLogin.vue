@@ -1,4 +1,5 @@
 <script setup>
+import BackButton from './BackButton.vue'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -126,15 +127,15 @@ async function approveLogin() {
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2">
           <h3 class="text-[12px] font-bold">{{ t('lightningLogin.title') }}</h3>
-          <span v-if="capability.supported" class="text-[8px] uppercase tracking-wide font-bold text-success bg-success/10 rounded-full px-1.5 py-0.5">
+          <span v-if="capability.supported" class="text-xs uppercase tracking-wide font-bold text-success bg-success/10 rounded-full px-1.5 py-0.5">
             {{ t('lightningLogin.ready') }}
           </span>
         </div>
-        <p class="text-[10px] text-text-muted leading-relaxed mt-1">
+        <p class="text-xs text-text-muted leading-relaxed mt-1">
           {{ capability.supported ? t('lightningLogin.description') : unsupportedReason }}
         </p>
         <button v-if="capability.supported" @click="expanded = true"
-          class="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-brand hover:text-brand-hover transition-colors">
+          class="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-brand hover:text-brand-hover transition-colors">
           <KeyRound class="w-3.5 h-3.5" />
           {{ t('lightningLogin.start') }}
         </button>
@@ -142,9 +143,7 @@ async function approveLogin() {
     </div>
 
     <div v-else class="p-4 space-y-4">
-      <button @click="closeFlow" class="inline-flex items-center gap-1 text-[10px] text-text-muted hover:text-text-secondary font-medium">
-        <ArrowLeft class="w-3.5 h-3.5" /> {{ t('common.back') }}
-      </button>
+      <BackButton @click="closeFlow" />
 
       <div v-if="result" class="text-center space-y-3 py-2">
         <div class="w-11 h-11 rounded-full mx-auto flex items-center justify-center"
@@ -156,13 +155,13 @@ async function approveLogin() {
           <h3 class="text-[13px] font-bold">
             {{ result.ok ? t('lightningLogin.success') : result.requestSent ? t('lightningLogin.requestSent') : t('lightningLogin.failed') }}
           </h3>
-          <p class="text-[10px] text-text-muted mt-1 leading-relaxed">
+          <p class="text-xs text-text-muted mt-1 leading-relaxed">
             {{ result.ok || result.requestSent
               ? t('lightningLogin.returnToWebsite', { domain: result.domain })
               : (result.reason || t('lightningLogin.tryAgain')) }}
           </p>
         </div>
-        <button @click="closeFlow" class="w-full py-2.5 rounded-2xl bg-brand text-surface-base text-[11px] font-bold">
+        <button @click="closeFlow" class="w-full py-2.5 rounded-2xl bg-brand text-surface-base text-xs font-bold">
           {{ t('common.done') }}
         </button>
       </div>
@@ -173,24 +172,24 @@ async function approveLogin() {
             <ShieldCheck class="w-5 h-5" />
           </div>
           <h3 class="text-[13px] font-bold break-all">{{ challenge.origin }}</h3>
-          <p class="text-[10px] text-text-muted">{{ actionLabel }}</p>
+          <p class="text-xs text-text-muted">{{ actionLabel }}</p>
         </div>
 
-        <div class="p-3 rounded-2xl bg-surface-base border border-border text-[10px] text-text-muted leading-relaxed">
+        <div class="p-3 rounded-2xl bg-surface-base border border-border text-xs text-text-muted leading-relaxed">
           {{ t('lightningLogin.confirmHint', { domain: challenge.domain }) }}
         </div>
 
-        <div v-if="error" class="flex items-start gap-2 p-3 rounded-2xl bg-error/8 border border-error/15 text-[10px] text-error">
+        <div v-if="error" class="flex items-start gap-2 p-3 rounded-2xl bg-error/8 border border-error/15 text-xs text-error">
           <TriangleAlert class="w-3.5 h-3.5 shrink-0 mt-px" /> {{ error }}
         </div>
 
         <div class="grid grid-cols-2 gap-2">
           <button @click="challenge = null; error = ''" :disabled="loading"
-            class="py-2.5 rounded-2xl bg-surface-elevated text-text-secondary text-[11px] font-semibold disabled:opacity-50">
+            class="py-2.5 rounded-2xl bg-surface-elevated text-text-secondary text-xs font-semibold disabled:opacity-50">
             {{ t('common.cancel') }}
           </button>
           <button @click="approveLogin" :disabled="loading"
-            class="py-2.5 rounded-2xl bg-brand text-surface-base text-[11px] font-bold flex items-center justify-center gap-1.5 disabled:opacity-50">
+            class="py-2.5 rounded-2xl bg-brand text-surface-base text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50">
             <Loader2 v-if="loading" class="w-3.5 h-3.5 animate-spin" />
             {{ loading ? t('lightningLogin.signingIn') : t('lightningLogin.approve') }}
           </button>
@@ -200,24 +199,24 @@ async function approveLogin() {
       <template v-else>
         <div>
           <h3 class="text-[13px] font-bold">{{ t('lightningLogin.enterCode') }}</h3>
-          <p class="text-[10px] text-text-muted mt-1 leading-relaxed">{{ t('lightningLogin.enterCodeHint') }}</p>
+          <p class="text-xs text-text-muted mt-1 leading-relaxed">{{ t('lightningLogin.enterCodeHint') }}</p>
         </div>
 
         <QrScanner v-if="showScanner" @scan="onScanned" @close="showScanner = false" />
-        <textarea v-else v-model="input" rows="3" :placeholder="t('lightningLogin.codePlaceholder')"
-          class="w-full bg-surface-base border border-border rounded-xl px-3.5 py-3 text-[11px] font-mono outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 resize-none placeholder:font-sans placeholder:text-text-muted/50" />
+        <textarea v-else v-model="input" :aria-label="t('lightningLogin.codePlaceholder')" rows="3" :placeholder="t('lightningLogin.codePlaceholder')"
+          class="w-full bg-surface-base border border-border rounded-xl px-3.5 py-3 text-xs font-mono outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 resize-none placeholder:font-sans placeholder:text-text-muted" />
 
-        <div v-if="error" class="flex items-start gap-2 p-3 rounded-2xl bg-error/8 border border-error/15 text-[10px] text-error">
+        <div v-if="error" class="flex items-start gap-2 p-3 rounded-2xl bg-error/8 border border-error/15 text-xs text-error">
           <TriangleAlert class="w-3.5 h-3.5 shrink-0 mt-px" /> {{ error }}
         </div>
 
         <div class="grid grid-cols-2 gap-2">
           <button @click="showScanner = !showScanner"
-            class="py-2.5 rounded-2xl bg-surface-elevated border border-border text-text-secondary text-[11px] font-semibold flex items-center justify-center gap-1.5">
+            class="py-2.5 rounded-2xl bg-surface-elevated border border-border text-text-secondary text-xs font-semibold flex items-center justify-center gap-1.5">
             <ScanLine class="w-3.5 h-3.5" /> {{ showScanner ? t('common.typeInstead') : t('common.scanQr') }}
           </button>
           <button @click="readChallenge" :disabled="!input.trim()"
-            class="py-2.5 rounded-2xl bg-brand text-surface-base text-[11px] font-bold disabled:opacity-40">
+            class="py-2.5 rounded-2xl bg-brand text-surface-base text-xs font-bold disabled:opacity-40">
             {{ t('common.continue') }}
           </button>
         </div>

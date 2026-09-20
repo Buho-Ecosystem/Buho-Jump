@@ -121,9 +121,9 @@ onBeforeUnmount(() => {
     >
       <QrCode class="w-8 h-8 text-text-muted" :class="failed ? '' : 'animate-pulse'" />
     </div>
-    <p v-if="totalParts > 1" class="text-[10px] text-text-muted mt-2 font-medium tabular-nums">
+    <p v-if="totalParts > 1" class="text-xs text-text-muted mt-2 font-medium tabular-nums">
       {{ t('qr.animatedPart', { current: partNumber || 1, total: totalParts }) }}
     </p>
-    <p v-if="failed" class="text-[10px] text-error mt-2">{{ t('wallet.qrFailed') }}</p>
+    <p v-if="failed" class="text-xs text-error mt-2">{{ t('wallet.qrFailed') }}</p>
   </div>
 </template>

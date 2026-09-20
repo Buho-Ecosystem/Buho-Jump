@@ -90,11 +90,11 @@ function navigateToSite() {
       <!-- Domain + status text -->
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
-          <span class="text-[11px] font-medium text-text-secondary truncate">{{ tabHost }}</span>
-          <span v-if="budgetPaused" class="text-[9px] font-semibold text-text-muted">
+          <span class="text-xs font-medium text-text-secondary truncate">{{ tabHost }}</span>
+          <span v-if="budgetPaused" class="text-xs font-semibold text-text-muted">
             {{ t('sites.budgetPaused') }}
           </span>
-          <span v-else-if="spentPercent >= 90" class="text-[9px] font-semibold" :class="statusColor === 'error' ? 'text-error' : 'text-warning'">
+          <span v-else-if="spentPercent >= 90" class="text-xs font-semibold" :class="statusColor === 'error' ? 'text-error' : 'text-warning'">
             {{ spentPercent >= 100 ? t('sites.budgetBar.exhausted') : t('sites.budgetBar.almostOut') }}
           </span>
         </div>
@@ -105,12 +105,12 @@ function navigateToSite() {
         <div class="w-10 h-1 bg-surface-elevated rounded-full overflow-hidden">
           <div v-if="!budgetPaused" class="h-full rounded-full transition-all duration-500" :class="barColorClass" :style="{ width: spentPercent + '%' }" />
         </div>
-        <span class="text-[10px] font-mono text-text-muted tabular-nums whitespace-nowrap">
+        <span class="text-xs font-mono text-text-muted tabular-nums whitespace-nowrap">
           {{ formatSats(allowance.spent) }}<span class="opacity-40">/</span>{{ formatSats(allowance.budget) }}
         </span>
       </div>
 
-      <ChevronRight class="w-3 h-3 text-text-muted/40 shrink-0 group-hover:text-brand transition-colors" />
+      <ChevronRight class="w-3 h-3 text-text-muted shrink-0 group-hover:text-brand transition-colors" />
     </button>
 
     <!-- No budget — subtle invite -->
@@ -123,11 +123,11 @@ function navigateToSite() {
         <img v-if="tabFavicon && !faviconFailed" :src="tabFavicon" class="w-full h-full object-contain" @error="faviconFailed = true" />
         <Globe v-else class="w-3 h-3 text-text-muted" />
       </div>
-      <span class="text-[11px] text-text-muted truncate flex-1">{{ tabHost }}</span>
-      <span class="text-[10px] text-text-muted/60 group-hover:text-brand transition-colors font-medium shrink-0">
+      <span class="text-xs text-text-muted truncate flex-1">{{ tabHost }}</span>
+      <span class="text-xs text-text-muted group-hover:text-brand transition-colors font-medium shrink-0">
         {{ t('sites.budgetBar.setLimit') }}
       </span>
-      <ChevronRight class="w-3 h-3 text-text-muted/30 shrink-0 group-hover:text-brand transition-colors" />
+      <ChevronRight class="w-3 h-3 text-text-muted shrink-0 group-hover:text-brand transition-colors" />
     </button>
   </template>
 </template>

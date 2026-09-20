@@ -191,7 +191,7 @@ function hostname(url) {
         @click="showMintExplainer = !showMintExplainer"
         @keydown.esc="showMintExplainer = false"
         :aria-expanded="showMintExplainer"
-        class="flex items-center gap-1.5 text-[11px] text-text-muted hover:text-brand transition-colors duration-200"
+        class="flex items-center gap-1.5 text-xs text-text-muted hover:text-brand transition-colors duration-200"
       >
         <Info class="w-3.5 h-3.5" />
         <span class="font-medium">{{ t('cashu.whatsAMint') }}</span>
@@ -199,39 +199,39 @@ function hostname(url) {
       <!-- Tooltip -->
       <div v-if="showMintExplainer" class="absolute left-0 top-full mt-2 w-[340px] z-50 animate-scale-in">
         <div class="bg-surface-card border border-border rounded-2xl shadow-xl p-4 space-y-3">
-          <p class="text-[11px] text-text-secondary leading-relaxed">
+          <p class="text-xs text-text-secondary leading-relaxed">
             {{ t('cashu.mintExplainerIntro') }}
           </p>
           <div class="grid grid-cols-2 gap-3">
             <div class="space-y-1.5">
-              <p class="text-[10px] font-bold uppercase tracking-wider text-brand">{{ t('cashu.mintTooltipGood') }}</p>
+              <p class="text-xs font-bold uppercase tracking-wider text-brand">{{ t('cashu.mintTooltipGood') }}</p>
               <ul class="space-y-1">
-                <li class="flex items-start gap-1.5 text-[10px] text-text-secondary leading-snug">
+                <li class="flex items-start gap-1.5 text-xs text-text-secondary leading-snug">
                   <span class="text-success mt-px shrink-0">&#10003;</span>
                   {{ t('cashu.mintBulletInstant') }}
                 </li>
-                <li class="flex items-start gap-1.5 text-[10px] text-text-secondary leading-snug">
+                <li class="flex items-start gap-1.5 text-xs text-text-secondary leading-snug">
                   <span class="text-success mt-px shrink-0">&#10003;</span>
                   {{ t('cashu.mintBulletNoSetup') }}
                 </li>
-                <li class="flex items-start gap-1.5 text-[10px] text-text-secondary leading-snug">
+                <li class="flex items-start gap-1.5 text-xs text-text-secondary leading-snug">
                   <span class="text-success mt-px shrink-0">&#10003;</span>
                   {{ t('cashu.mintBulletPrivacy') }}
                 </li>
               </ul>
             </div>
             <div class="space-y-1.5">
-              <p class="text-[10px] font-bold uppercase tracking-wider text-warning">{{ t('cashu.mintTooltipKnow') }}</p>
+              <p class="text-xs font-bold uppercase tracking-wider text-warning">{{ t('cashu.mintTooltipKnow') }}</p>
               <ul class="space-y-1">
-                <li class="flex items-start gap-1.5 text-[10px] text-text-secondary leading-snug">
+                <li class="flex items-start gap-1.5 text-xs text-text-secondary leading-snug">
                   <span class="text-warning mt-px shrink-0">!</span>
                   {{ t('cashu.mintBulletCustodial') }}
                 </li>
-                <li class="flex items-start gap-1.5 text-[10px] text-text-secondary leading-snug">
+                <li class="flex items-start gap-1.5 text-xs text-text-secondary leading-snug">
                   <span class="text-warning mt-px shrink-0">!</span>
                   {{ t('cashu.mintBulletSmall') }}
                 </li>
-                <li class="flex items-start gap-1.5 text-[10px] text-text-secondary leading-snug">
+                <li class="flex items-start gap-1.5 text-xs text-text-secondary leading-snug">
                   <span class="text-warning mt-px shrink-0">!</span>
                   {{ t('cashu.mintBulletAdvanced') }}
                 </li>
@@ -256,7 +256,7 @@ function hostname(url) {
         <span class="text-sm font-semibold block truncate group-hover:text-brand transition-colors">
           {{ hostname(mintUrl) }}
         </span>
-        <span class="text-[10px] text-text-muted font-mono truncate block">{{ mintUrl }}</span>
+        <span class="text-xs text-text-muted font-mono truncate block">{{ mintUrl }}</span>
       </div>
       <Info class="w-4 h-4 text-text-muted group-hover:text-brand shrink-0 transition-colors" />
     </button>
@@ -265,8 +265,8 @@ function hostname(url) {
       <AlertTriangle class="w-4 h-4 text-warning shrink-0 mt-0.5" />
       <div class="flex-1">
         <p class="text-xs font-bold text-warning">{{ t('cashu.mintAccessTitle') }}</p>
-        <p class="text-[11px] text-text-secondary leading-relaxed mt-1">{{ t('cashu.mintAccessDesc', { host: hostname(mintUrl) }) }}</p>
-        <button @click="allowCurrentMint" class="mt-2 px-3 py-1.5 rounded-lg bg-warning text-white text-[10px] font-bold">
+        <p class="text-xs text-text-secondary leading-relaxed mt-1">{{ t('cashu.mintAccessDesc', { host: hostname(mintUrl) }) }}</p>
+        <button @click="allowCurrentMint" class="mt-2 px-3 py-1.5 rounded-lg bg-warning text-white text-xs font-bold">
           {{ t('cashu.allowMintAccess') }}
         </button>
       </div>
@@ -276,12 +276,12 @@ function hostname(url) {
       <AlertTriangle class="w-4 h-4 text-warning shrink-0 mt-0.5" />
       <div>
         <p class="text-xs font-bold text-warning">{{ t('cashu.defaultMintTestingTitle') }}</p>
-        <p class="text-[11px] text-text-secondary leading-relaxed mt-1">{{ t('cashu.defaultMintTestingDesc') }}</p>
+        <p class="text-xs text-text-secondary leading-relaxed mt-1">{{ t('cashu.defaultMintTestingDesc') }}</p>
       </div>
     </div>
 
     <div v-if="mintBalances.length" class="space-y-2">
-      <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+      <p class="text-xs uppercase tracking-widest text-text-muted font-semibold">
         {{ t('cashu.fundsByMint') }}
       </p>
       <div
@@ -293,11 +293,11 @@ function hostname(url) {
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5">
             <span class="text-xs font-semibold truncate">{{ hostname(item.mint) }}</span>
-            <span v-if="item.preferred" class="text-[8px] px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-bold">
+            <span v-if="item.preferred" class="text-xs px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-bold">
               {{ t('cashu.preferredMint') }}
             </span>
           </div>
-          <p class="text-[9px] text-text-muted font-mono truncate">{{ item.mint }}</p>
+          <p class="text-xs text-text-muted font-mono truncate">{{ item.mint }}</p>
         </div>
         <span class="text-xs font-bold tabular-nums">{{ formatSats(item.balance) }} {{ t('wallet.sats') }}</span>
       </div>
@@ -320,25 +320,25 @@ function hostname(url) {
           <AlertTriangle class="w-3.5 h-3.5 text-warning" />
           <span class="text-xs font-bold">{{ t('cashu.newMint') }}</span>
         </div>
-        <button @click="showChangeForm = false; newMintUrl = ''; validateError = ''"
-          class="p-1 rounded-lg hover:bg-surface-elevated transition-colors">
+        <button @click="showChangeForm = false; newMintUrl = ''; validateError = ''" :aria-label="t('common.cancel')"
+          class="p-1 rounded-lg hover:bg-surface-elevated transition-colors min-w-8 min-h-8">
           <X class="w-3.5 h-3.5 text-text-muted" />
         </button>
       </div>
 
       <!-- Advanced warning -->
-      <div class="text-[10px] text-warning/80 leading-relaxed">
+      <div class="text-xs text-warning leading-relaxed">
         {{ t('cashu.changeWarningInline') }}
       </div>
 
       <input
-        v-model="newMintUrl"
+        v-model="newMintUrl" :aria-label="t('cashu.newMint')"
         placeholder="mint.example.com"
         class="w-full bg-surface-base border border-border rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-brand transition-colors font-mono placeholder:text-text-muted"
         @keydown.enter="validateNewMint"
       />
 
-      <p v-if="validateError" class="text-[11px] text-error flex items-center gap-1.5">
+      <p v-if="validateError" class="text-xs text-error flex items-center gap-1.5">
         <AlertTriangle class="w-3 h-3 shrink-0" />
         {{ validateError }}
       </p>
@@ -363,7 +363,7 @@ function hostname(url) {
             <p v-if="mintInfo.description" class="text-xs text-text-muted leading-relaxed">
               {{ mintInfo.description }}
             </p>
-            <p v-if="mintInfo.description_long" class="text-[11px] text-text-muted leading-relaxed">
+            <p v-if="mintInfo.description_long" class="text-xs text-text-muted leading-relaxed">
               {{ mintInfo.description_long }}
             </p>
           </div>
@@ -378,7 +378,7 @@ function hostname(url) {
               <Mail class="w-3.5 h-3.5 text-text-muted shrink-0 mt-0.5" />
               <span class="text-text-muted">{{ t('cashu.contact') }}</span>
               <div class="ml-auto text-right">
-                <div v-for="c in mintInfo.contact" :key="c.method + c.info" class="text-text-secondary text-[11px]">
+                <div v-for="c in mintInfo.contact" :key="c.method + c.info" class="text-text-secondary text-xs">
                   {{ c.info }}
                 </div>
               </div>
@@ -386,21 +386,21 @@ function hostname(url) {
             <div v-if="mintInfo.nuts" class="flex items-center gap-3 text-xs">
               <Shield class="w-3.5 h-3.5 text-text-muted shrink-0" />
               <span class="text-text-muted">{{ t('cashu.supportedNuts') }}</span>
-              <span class="ml-auto font-mono text-text-secondary text-[11px]">
+              <span class="ml-auto font-mono text-text-secondary text-xs">
                 {{ Object.keys(mintInfo.nuts).join(', ') }}
               </span>
             </div>
           </div>
 
           <div class="space-y-2">
-            <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+            <p class="text-xs uppercase tracking-widest text-text-muted font-semibold">
               {{ t('cashu.safetyFeatures') }}
             </p>
             <div class="grid grid-cols-1 gap-1.5">
               <div
                 v-for="capability in mintCapabilities"
                 :key="capability.key"
-                class="flex items-center gap-2 text-[11px] rounded-lg px-2.5 py-2"
+                class="flex items-center gap-2 text-xs rounded-lg px-2.5 py-2"
                 :class="capability.ready ? 'bg-success/8 text-text-secondary' : 'bg-warning/8 text-warning'"
               >
                 <Check v-if="capability.ready" class="w-3.5 h-3.5 text-success shrink-0" />
@@ -410,7 +410,7 @@ function hostname(url) {
             </div>
           </div>
 
-          <div class="flex items-center gap-2 p-3 rounded-xl bg-surface-elevated text-[11px] font-mono text-text-muted break-all">
+          <div class="flex items-center gap-2 p-3 rounded-xl bg-surface-elevated text-xs font-mono text-text-muted break-all">
             <Globe class="w-3.5 h-3.5 shrink-0" />
             {{ mintUrl }}
           </div>
@@ -424,7 +424,7 @@ function hostname(url) {
       <template #title>{{ t('cashu.confirmChangeTitle') }}</template>
       <template #description>
         <span class="block mb-2">{{ t('cashu.confirmChangeDesc') }}</span>
-        <span class="block text-[11px] font-mono bg-surface-elevated px-2 py-1 rounded-lg">
+        <span class="block text-xs font-mono bg-surface-elevated px-2 py-1 rounded-lg">
           {{ hostname(mintUrl) }} &rarr; {{ hostname(newMintUrl) }}
         </span>
         <span v-if="validatedInfo?.name" class="block mt-2 text-text-secondary font-semibold">

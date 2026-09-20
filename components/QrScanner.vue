@@ -13,11 +13,16 @@ const scanning = ref(false)
 const error = ref('')
 const cameraUnavailable = ref(false)
 // Extension popups cannot access getUserMedia — skip camera entirely
-const isExtensionPopup = typeof chrome !== 'undefined' && !!chrome.runtime?.id
+const isExtensionPopup = ref(false)
+let disposed = false
 let scanner = null
+let startPromise = null
 
 async function startScanning() {
-  if (isExtensionPopup) {
+  // action popups have no tab; detached windows and settings pages do.
+  try { isExtensionPopup.value = !!globalThis.chrome?.runtime?.id && !(await chrome.tabs.getCurrent()) } catch { isExtensionPopup.value = false }
+  if (disposed) return
+  if (isExtensionPopup.value) {
     cameraUnavailable.value = true
     return
   }
@@ -32,18 +37,21 @@ async function startScanning() {
       return
     }
 
+    if (disposed) return
     scanner = new Html5Qrcode(readerId)
     scanning.value = true
 
-    await scanner.start(
+    startPromise = scanner.start(
       { facingMode: 'environment' },
       { fps: 10, qrbox: { width: 220, height: 220 } },
       (text) => {
         stopScanning()
-        emit('scan', text)
+        if (!disposed) emit('scan', text)
       },
       () => {} // ignore partial results
     )
+    await startPromise
+    if (disposed) await stopScanning()
   } catch (err) {
     scanning.value = false
     const msg = err.toString()
@@ -64,23 +72,27 @@ async function handleFileUpload(event) {
   if (!file) return
   error.value = ''
 
+  let fileScanner
   try {
-    const fileScanner = new Html5Qrcode(readerId + '-file')
+    fileScanner = new Html5Qrcode(readerId + '-file')
     const result = await fileScanner.scanFile(file, true)
-    fileScanner.clear()
-    emit('scan', result)
+    if (!disposed) emit('scan', result)
   } catch {
-    error.value = t('qr.noQrFound')
+    if (!disposed) error.value = t('qr.noQrFound')
+  } finally {
+    try { fileScanner?.clear() } catch {}
   }
 }
 
-function stopScanning() {
-  if (scanner) {
-    scanner.stop().catch(() => {})
-    scanner.clear()
-    scanner = null
-  }
+async function stopScanning() {
+  const current = scanner
+  const started = startPromise
+  scanner = null
+  startPromise = null
   scanning.value = false
+  if (!current) return
+  try { await started; await current.stop() } catch {}
+  finally { try { current.clear() } catch {} }
 }
 
 function close() {
@@ -93,6 +105,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   stopScanning()
 })
 </script>
@@ -104,7 +117,7 @@ onBeforeUnmount(() => {
         <Camera class="w-3.5 h-3.5" />
         {{ t('qr.scanTitle') }}
       </div>
-      <button @click="close" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
+      <button :aria-label="t('common.close')" @click="close" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200 min-w-8 min-h-8">
         <X class="w-3.5 h-3.5 text-text-muted" />
       </button>
     </div>
@@ -132,7 +145,7 @@ onBeforeUnmount(() => {
         <span class="text-xs font-medium" :class="cameraUnavailable ? 'text-text-primary' : 'text-text-muted'">
           {{ cameraUnavailable ? t('qr.uploadImage') : t('qr.orUpload') }}
         </span>
-        <p v-if="cameraUnavailable && isExtensionPopup" class="text-[10px] text-text-muted mt-1">
+        <p v-if="cameraUnavailable && isExtensionPopup" class="text-xs text-text-muted mt-1">
           {{ t('qr.extensionHint') }}
         </p>
       </div>
@@ -148,7 +161,7 @@ onBeforeUnmount(() => {
       <span>{{ error }}</span>
     </div>
 
-    <p v-if="!cameraUnavailable" class="text-[10px] text-text-muted text-center">
+    <p v-if="!cameraUnavailable" class="text-xs text-text-muted text-center">
       {{ t('qr.pointCamera') }}
     </p>
   </div>

@@ -1,4 +1,5 @@
 <script setup>
+import UnlockForm from './UnlockForm.vue'
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useLocale } from '../composables/useLocale.js'
@@ -96,7 +97,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center min-h-[460px] px-6 py-8">
+  <UnlockForm v-if="!isSetup" :error="error" :loading="loading" @submit="emit('unlock', $event)" class="min-h-[460px]" />
+  <div v-else class="flex flex-col items-center justify-center min-h-[460px] px-6 py-8">
 
     <!-- Icon + branding area -->
     <div class="animate-scale-in mb-6">
@@ -114,7 +116,8 @@ onMounted(() => {
           : t('lock.unlockDesc')
         }}
       </p>
-      <p v-if="lastUnlockedLabel" class="text-[10px] text-text-muted/60 mt-1">
+      <p class="text-xs text-text-secondary">{{ t('welcome.noReset') }}</p>
+      <p v-if="lastUnlockedLabel" class="text-xs text-text-muted mt-1">
         {{ t('lock.lastSession', { time: lastUnlockedLabel }) }}
       </p>
     </div>
@@ -123,12 +126,12 @@ onMounted(() => {
     <div class="w-full space-y-3 animate-fade-in-up stagger-2" @keydown="handleKeydown">
       <!-- Password field -->
       <div class="space-y-1.5">
-        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+        <label for="setup-password" class="text-xs uppercase tracking-widest text-text-muted font-semibold">
           {{ isSetup ? t('lock.newPassword') : t('lock.password') }}
         </label>
         <div class="relative">
           <input
-            ref="passwordInput"
+            ref="passwordInput" id="setup-password"
             v-model="password"
             :type="showPassword ? 'text' : 'password'"
             :placeholder="isSetup ? t('lock.minChars') : t('lock.enterPassword')"
@@ -137,8 +140,8 @@ onMounted(() => {
           />
           <button
             @click="showPassword = !showPassword"
-            class="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-secondary transition-all duration-200"
-            tabindex="-1"
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-secondary transition-all duration-200 min-w-8 min-h-8"
+            :aria-label="showPassword ? t('prompt.hidePassword') : t('prompt.showPassword')"
           >
             <EyeOff v-if="showPassword" class="w-3.5 h-3.5" />
             <Eye v-else class="w-3.5 h-3.5" />
@@ -154,24 +157,24 @@ onMounted(() => {
               :class="i <= passwordStrength.level ? strengthColor : 'bg-border'"
             />
           </div>
-          <p class="text-[10px] transition-colors" :class="strengthTextColor">{{ passwordStrength.label }}</p>
+          <p class="text-xs transition-colors" :class="strengthTextColor">{{ passwordStrength.label }}</p>
         </div>
       </div>
 
       <!-- Confirm field (setup only) -->
       <div v-if="isSetup" class="space-y-1.5">
-        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+        <label for="setup-confirm-password" class="text-xs uppercase tracking-widest text-text-muted font-semibold">
           {{ t('lock.confirmPassword') }}
         </label>
         <input
-          v-model="confirmPassword"
+          v-model="confirmPassword" id="setup-confirm-password"
           :type="showPassword ? 'text' : 'password'"
           :placeholder="t('lock.repeatPassword')"
           autocomplete="new-password"
           class="w-full bg-surface-base border border-border rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors placeholder:text-text-muted"
           :class="mismatch ? 'border-error/50' : ''"
         />
-        <p v-if="mismatch" class="text-[10px] text-error flex items-center gap-1">
+        <p v-if="mismatch" class="text-xs text-error flex items-center gap-1">
           <AlertTriangle class="w-2.5 h-2.5" /> {{ t('lock.mismatch') }}
         </p>
       </div>
@@ -209,7 +212,7 @@ onMounted(() => {
           <div class="flex items-center justify-between px-5 pt-4 pb-2 border-b border-border">
             <h3 class="text-sm font-bold">{{ t('settings.language') }}</h3>
             <button @click="showLangGrid = false"
-              class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200">
+              class="p-1.5 rounded-lg hover:bg-surface-elevated transition-all duration-200 min-w-8 min-h-8">
               <X class="w-4 h-4 text-text-muted" />
             </button>
           </div>

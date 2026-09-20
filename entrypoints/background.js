@@ -1,3 +1,4 @@
+import { setSitePermission } from '../lib/permissions.js'
 /**
  * Background service worker — handles all extension logic:
  * - Master password / lock state
@@ -151,7 +152,7 @@ let lnbitsWsHandle = null // LNbits WebSocket handle (from createLnbitsWs)
 let remoteSigner = null
 let remoteSignerAccountId = null
 let _cachedPassword = null // In-memory cache of session password
-let rejectedOrigins = new Set() // Anti-spam: tracks rejected origins
+let rejectedOrigins = new Map() // Anti-spam: tracks rejected origins
 let _nostrConnectAbort = null // AbortController for pending nostrconnect flow
 let _accountSwitching = false // Guard against in-flight requests during account switch
 const requestCoordinator = createRequestCoordinator()
@@ -338,7 +339,7 @@ function isUnlocked() {
 // ── Permission prompt ────────────────────────────────────────────
 // All standard permission methods for "allow all" feature
 const ALL_PERMISSION_METHODS = [
-  'getPublicKey', 'signEvent',
+  'getPublicKey', 'getRelays', 'signEvent',
   'nip04_encrypt', 'nip04_decrypt',
   'nip44_encrypt', 'nip44_decrypt',
   'weblnEnable',
@@ -359,9 +360,10 @@ async function requestPermission(origin, method, kind, eventData, meta) {
     kind: method === 'signEvent' ? kind : null,
   }
 
-  // Payment prompts always show — never auto-approve from stored perms
+  // A saved denial also blocks payments. Only non-payment grants auto-approve.
+  const existing = await checkPermission(origin, method, kind, activeId)
+  if (existing === 'deny') return { allowed: false, profileId: activeId }
   if (!isPayment) {
-    const existing = await checkPermission(origin, method, kind, activeId)
     if (existing === 'allow') return { allowed: true, profileId: activeId }
     if (existing === 'deny') return { allowed: false, profileId: activeId }
     if (permissionSession.hasGrant(scope)) return { allowed: true, profileId: activeId }
@@ -384,9 +386,7 @@ async function requestPermission(origin, method, kind, eventData, meta) {
           `/prompt.html?requestId=${requestId}&origin=${encodeURIComponent(origin)}&method=${encodeURIComponent(method)}&kind=${kind ?? ''}&profileId=${encodeURIComponent(activeId)}&siteTitle=${encodeURIComponent(siteTitle)}&siteFavicon=${encodeURIComponent(siteFavicon)}&queued=${queuedBehind}`
         )
 
-        const isTallPrompt = method === 'signEvent' || isPayment
-        const promptHeight = isTallPrompt ? 600 : 520
-        return openPromptWindow(url, { width: 420, height: promptHeight })
+        return openPromptWindow(url, { width: 420, height: 680 })
       }).then((win) => {
         requestCoordinator.attachWindowClose(requestId, win, false)
       }).catch((err) => {
@@ -544,14 +544,18 @@ async function handleSignEvent(params, sender) {
   return { result: await signer.signEvent(event) }
 }
 
-async function handleGetRelays() {
-  const signer = await getSigner()
+async function handleGetRelays(sender) {
+  const origin = getSenderOrigin(sender)
+  await requireUnlocked(origin)
+  const { allowed, profileId } = await requestPermission(origin, 'getRelays', null, null, getSiteMeta(sender))
+  if (!allowed) return { error: 'PERMISSION_DENIED' }
+  const signer = await getSigner(profileId)
   if (signer?.getRelays) {
     try { return { result: await signer.getRelays() } } catch { /* fall through */ }
   }
 
   // Fallback: return stored account relays as NIP-07 relay map
-  const account = await getActiveAccount(_cachedPassword)
+  const account = (await getAccounts(_cachedPassword))[profileId]
   if (account?.pubkey) {
     const relays = await getPoolRelays(account.pubkey, 'account')
     const map = {}
@@ -1264,6 +1268,7 @@ async function handleWeblnSendPayment(params, sender) {
   const origin = await requireWeblnEnabled(sender)
   if (!origin) return { error: 'PERMISSION_DENIED' }
 
+  if (await checkPermission(origin, 'weblnSendPayment', null, await getActiveAccountId()) === 'deny') return { error: 'PERMISSION_DENIED' }
   const invoice = validateInvoice(params[0])
   if (!safeDecode11(invoice)) return { error: 'INVALID_REQUEST' }
   const amountSats = parseBolt11Amount(invoice)
@@ -1319,6 +1324,7 @@ async function handleWeblnKeysend(params, sender) {
   const origin = await requireWeblnEnabled(sender)
   if (!origin) return { error: 'PERMISSION_DENIED' }
 
+  if (await checkPermission(origin, 'weblnKeysend', null, await getActiveAccountId()) === 'deny') return { error: 'PERMISSION_DENIED' }
   const { destination, amount: amountSats, customRecords } = validateKeysend(params[0])
 
   // Permission check + budget (same flow as sendPayment)
@@ -1370,7 +1376,7 @@ async function walletKeysend(destination, amountSats, customRecords) {
 const PUBLIC_HANDLERS = {
   NIP07_GET_PUBLIC_KEY: (params, sender) => handleGetPublicKey(sender),
   NIP07_SIGN_EVENT: (params, sender) => handleSignEvent(params, sender),
-  NIP07_GET_RELAYS: () => handleGetRelays(),
+  NIP07_GET_RELAYS: (_, sender) => handleGetRelays(sender),
   NIP04_ENCRYPT: (params, sender) => handleEncryptDecrypt('NIP04_ENCRYPT', params, sender),
   NIP04_DECRYPT: (params, sender) => handleEncryptDecrypt('NIP04_DECRYPT', params, sender),
   NIP44_ENCRYPT: (params, sender) => handleEncryptDecrypt('NIP44_ENCRYPT', params, sender),
@@ -1568,8 +1574,8 @@ export default defineBackground(() => {
 
           // Anti-spam: reject if origin was previously denied
           const origin = getSenderOrigin(sender)
-          if (origin && rejectedOrigins.has(origin)) {
-            return { error: 'Access denied. Reload the page to try again.' }
+          if (origin && (rejectedOrigins.get(origin) || 0) > Date.now()) {
+            return { error: 'Request declined. Try again in a few seconds.' }
           }
 
           const handler = PUBLIC_HANDLERS[action]
@@ -1580,7 +1586,7 @@ export default defineBackground(() => {
           } catch (err) {
             // Track rejected permissions for anti-spam
             if (err.message === 'Permission denied' && origin) {
-              rejectedOrigins.add(origin)
+              rejectedOrigins.set(origin, Date.now() + 3000)
             }
             throw err
           }
@@ -1933,9 +1939,8 @@ export default defineBackground(() => {
             const key = `backupExported_${acct.id}`
             const data = await chrome.storage.local.get(key)
             const exported = data[key]
-            // Remind if local account older than 7 days and never exported
-            const ageMs = Date.now() - (acct.createdAt * 1000)
-            const needsBackup = acct.mode === 'local' && !exported && ageMs > 7 * 24 * 60 * 60 * 1000
+            // Setup may defer backup; remind immediately until verification succeeds.
+            const needsBackup = acct.mode === 'local' && !exported
             return { result: { needsBackup } }
           }
 
@@ -2068,6 +2073,15 @@ export default defineBackground(() => {
             const [pubkey] = params
             const relays = pubkey ? await getPoolRelays(pubkey, 'account').catch(() => undefined) : undefined
             const profile = await fetchProfile(pubkey, relays)
+            // Seed imported account names without replacing a name the user set.
+            const name = typeof profile?.display_name === 'string' ? profile.display_name : profile?.name
+            if (isUnlocked() && typeof name === 'string' && name.trim()) {
+              const accounts = await getAccounts(_cachedPassword)
+              const account = Object.values(accounts).find(a => a.pubkey === pubkey)
+              if (account && (!account.name || account.name === 'Remote Signer')) {
+                await updateAccount(_cachedPassword, account.id, { name: name.trim().slice(0, 80) })
+              }
+            }
             return { result: profile }
           }
 
@@ -2986,6 +3000,16 @@ export default defineBackground(() => {
             await removePermission(params?.[0], params?.[1], activeId)
             return { result: { removed: true } }
           }
+          case 'BLOCK_SITE_PERMISSIONS': {
+            const activeId = await getActiveAccountId()
+            const origin = normalizeWebOrigin(params?.[0])
+            if (!activeId || !origin) return { error: 'INVALID_REQUEST' }
+            await setSitePermission(origin, [...ALL_PERMISSION_METHODS, ...PAYMENT_METHODS], 'deny', activeId)
+            permissionSession.clearOrigin(activeId, origin)
+            await removeAllowance(origin)
+            await requestCoordinator.resolveWhere(context => context?.profileId === activeId && context?.origin === origin, false, { removeEventData: true, closePrompt: true })
+            return { result: { blocked: true } }
+          }
           case 'REMOVE_DOMAIN_PERMISSIONS': {
             const activeId = await getActiveAccountId()
             await removeDomainPermissions(params?.[0], activeId)
@@ -3048,7 +3072,8 @@ export default defineBackground(() => {
             const report = createReportEvent(targets, secretKey, reason || '')
             const relays = await getPoolRelays(account.pubkey, 'account')
             const pool = getPool()
-            await Promise.allSettled(relays.map(url => pool.publish([url], report)))
+            const results = await Promise.allSettled(relays.map(url => pool.publish([url], report)))
+            if (!results.some(result => result.status === 'fulfilled')) return { error: 'REPORT_FAILED' }
             return { result: { reported: true } }
           }
 
@@ -3262,10 +3287,15 @@ export default defineBackground(() => {
             }
             const { profileId, origin, method, kind } = scope
             if (!profileId || !origin || !method) return { error: 'INVALID_PERMISSION_SCOPE' }
+            if (!isUnlocked() || profileId !== await getActiveAccountId()) return { error: 'EXPIRED_PERMISSION_REQUEST' }
+
+            if (scope.isPayment && !['allow_once', 'deny_once', 'deny_all'].includes(decision)) {
+              return { error: 'INVALID_PERMISSION_RESPONSE' }
+            }
 
             // Persist a user-selected budget before waking the payment handler,
             // so its just-approved payment is counted against the new limit.
-            if (setBudget && decision.startsWith('allow')) {
+            if (scope.isPayment && setBudget && decision === 'allow_once') {
               try {
                 const safeBudget = validateSats(setBudget)
                 await setAllowance(origin, safeBudget)
@@ -3277,14 +3307,12 @@ export default defineBackground(() => {
 
             if (decision === 'allow_all') {
               // Grant all standard permissions for this exact origin.
-              for (const m of ALL_PERMISSION_METHODS) {
-                await setPermission(origin, m, 'allow', null, profileId)
-              }
+              await setSitePermission(origin, ALL_PERMISSION_METHODS, 'allow', profileId)
               await requestCoordinator.resolve(requestId, true)
             } else if (decision === 'deny_all') {
-              for (const m of [...ALL_PERMISSION_METHODS, ...PAYMENT_METHODS]) {
-                await setPermission(origin, m, 'deny', null, profileId)
-              }
+              await setSitePermission(origin, [...ALL_PERMISSION_METHODS, ...PAYMENT_METHODS], 'deny', profileId)
+              permissionSession.clearOrigin(profileId, origin)
+              await removeAllowance(origin)
               await requestCoordinator.resolve(requestId, false)
             } else if (decision === 'allow_session') {
               if (!scope.isPayment) permissionSession.grant(scope)

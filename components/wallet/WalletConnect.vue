@@ -130,14 +130,14 @@ function handleConnectNutbits() {
           class="w-full flex items-center gap-4 p-4 rounded-2xl bg-surface-card border border-brand/20 hover:border-brand/40 hover:bg-brand/3 transition-all duration-200 text-left group relative overflow-hidden"
         >
           <div class="absolute top-1.5 right-2">
-            <span class="text-[8px] px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-bold uppercase tracking-wider">{{ t('nutbits.oneClick') }}</span>
+            <span class="text-xs px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-bold uppercase tracking-wider">{{ t('nutbits.oneClick') }}</span>
           </div>
           <img src="/NUTbits/pixel-nut-v2b-128.png" alt="NUTbits" class="w-11 h-11 rounded-xl shrink-0" />
           <div class="flex-1 min-w-0">
             <span class="text-sm font-bold block group-hover:text-brand transition-colors">NUTbits</span>
-            <span class="text-[10px] text-text-muted leading-relaxed">{{ t('nutbits.connectDesc') }}</span>
+            <span class="text-xs text-text-muted leading-relaxed">{{ t('nutbits.connectDesc') }}</span>
           </div>
-          <Wallet class="w-4 h-4 text-brand shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <Wallet class="w-4 h-4 text-brand shrink-0 opacity-100 transition-opacity" />
         </button>
 
         <!-- NWC option -->
@@ -148,7 +148,7 @@ function handleConnectNutbits() {
           <img src="/nwc/nwc-logo.svg" alt="NWC" class="w-11 h-11 rounded-xl shrink-0" />
           <div class="flex-1 min-w-0">
             <span class="text-sm font-bold block group-hover:text-brand transition-colors">Nostr Wallet Connect</span>
-            <span class="text-[10px] text-text-muted leading-relaxed">{{ t('wallet.nwcDesc') }}</span>
+            <span class="text-xs text-text-muted leading-relaxed">{{ t('wallet.nwcDesc') }}</span>
           </div>
         </button>
 
@@ -160,7 +160,7 @@ function handleConnectNutbits() {
           <img src="/lnbits/lnbits.svg" alt="LNbits" class="w-11 h-11 rounded-xl shrink-0" />
           <div class="flex-1 min-w-0">
             <span class="text-sm font-bold block group-hover:text-brand transition-colors">LNbits</span>
-            <span class="text-[10px] text-text-muted leading-relaxed">{{ t('wallet.lnbitsDesc') }}</span>
+            <span class="text-xs text-text-muted leading-relaxed">{{ t('wallet.lnbitsDesc') }}</span>
           </div>
         </button>
       </div>
@@ -174,16 +174,19 @@ function handleConnectNutbits() {
         <img src="/nwc/nwc-logo.svg" alt="NWC" class="w-14 h-14" />
         <div class="text-center">
           <p class="text-sm font-extrabold">Nostr Wallet Connect</p>
-          <p class="text-[10px] text-text-muted mt-1">{{ t('wallet.nwcHelp') }}</p>
+          <p class="text-xs text-text-muted mt-1">{{ t('wallet.nwcHelp') }}</p>
         </div>
       </div>
 
       <!-- Wallet name -->
-      <input
+      <label class="flex flex-col gap-1 min-w-0 text-sm text-text-secondary">
+        <span>{{ t('wallet.walletName') }}</span>
+        <input
         v-model="walletName"
         :placeholder="t('wallet.walletName')"
         class="w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-brand transition-all duration-200 placeholder:text-text-muted"
       />
+      </label>
 
       <!-- QR scanner overlay -->
       <QrScanner v-if="showScanner" @scan="onScan" @close="showScanner = false" />
@@ -191,16 +194,19 @@ function handleConnectNutbits() {
       <!-- NWC URI input -->
       <div v-else class="space-y-1.5">
         <div class="relative">
-          <input
+          <label class="flex flex-col gap-1 min-w-0 text-sm text-text-secondary">
+            <span>{{ t('wallet.connectionPlaceholder') }}</span>
+            <input
             v-model="nwcUri"
-            placeholder="nostr+walletconnect://..."
+            :placeholder="t('wallet.connectionPlaceholder')"
             class="w-full bg-surface-card border border-border rounded-xl pl-3.5 pr-10 py-2.5 text-sm outline-none focus:border-brand transition-all duration-200 font-mono placeholder:text-text-muted"
           />
+          </label>
           <button
             type="button"
             @click="showScanner = true"
             :title="t('common.scanQr')"
-            class="absolute top-1/2 -translate-y-1/2 right-2.5 p-1 rounded-md text-text-muted hover:text-brand hover:bg-brand/10 transition-all duration-150"
+            class="absolute top-1/2 -translate-y-1/2 right-2.5 p-1 rounded-md text-text-muted hover:text-brand hover:bg-brand/10 transition-all duration-150 min-w-8 min-h-8"
           >
             <ScanLine class="w-4 h-4" />
           </button>
@@ -208,7 +214,7 @@ function handleConnectNutbits() {
       </div>
 
       <!-- Error -->
-      <p v-if="error" class="text-[11px] text-error px-1">{{ error }}</p>
+      <p v-if="error" class="text-xs text-error px-1">{{ error }}</p>
 
       <button
         @click="handleConnectNwc"
@@ -229,48 +235,51 @@ function handleConnectNutbits() {
         <img src="/lnbits/lnbits.svg" alt="LNbits" class="w-14 h-14 rounded-2xl" />
         <div class="text-center">
           <p class="text-sm font-extrabold">LNbits</p>
-          <p class="text-[10px] text-text-muted mt-1">{{ t('wallet.lnbitsHelp') }}</p>
+          <p class="text-xs text-text-muted mt-1">{{ t('wallet.lnbitsHelp') }}</p>
         </div>
       </div>
 
       <!-- Wallet name -->
-      <input
+      <label class="flex flex-col gap-1 min-w-0 text-sm text-text-secondary">
+        <span>{{ t('wallet.walletName') }}</span>
+        <input
         v-model="walletName"
         :placeholder="t('wallet.walletName')"
         class="w-full bg-surface-card border border-border rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-brand transition-all duration-200 placeholder:text-text-muted"
       />
+      </label>
 
       <!-- LNbits URL -->
       <div class="space-y-1">
-        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">
+        <label class="text-xs uppercase tracking-widest text-text-muted font-semibold px-1">
           {{ t('wallet.lnbitsUrl') }}
         </label>
         <div class="relative">
           <input
-            v-model="lnbitsUrl"
-            placeholder="https://your-lnbits.com"
+            v-model="lnbitsUrl" :aria-label="t('relay.addPlaceholder')"
+            :placeholder="t('relay.addPlaceholder')"
             class="w-full bg-surface-card border border-border rounded-xl pl-3.5 pr-10 py-2.5 text-sm outline-none focus:border-brand transition-all duration-200 font-mono placeholder:text-text-muted"
           />
-          <Server class="absolute top-1/2 -translate-y-1/2 right-3 w-4 h-4 text-text-muted/40 pointer-events-none" />
+          <Server class="absolute top-1/2 -translate-y-1/2 right-3 w-4 h-4 text-text-muted pointer-events-none" />
         </div>
       </div>
 
       <!-- Admin Key -->
       <div class="space-y-1">
-        <label class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">
+        <label class="text-xs uppercase tracking-widest text-text-muted font-semibold px-1">
           {{ t('wallet.lnbitsAdminKey') }}
         </label>
         <div class="relative">
           <input
-            v-model="lnbitsKey"
+            v-model="lnbitsKey" :aria-label="t('wallet.lnbitsAdminKey')"
             :type="showKey ? 'text' : 'password'"
-            placeholder="admin key"
+            :placeholder="t('wallet.lnbitsAdminKey')"
             class="w-full bg-surface-card border border-border rounded-xl pl-3.5 pr-10 py-2.5 text-sm outline-none focus:border-brand transition-all duration-200 font-mono placeholder:text-text-muted"
           />
           <button
             type="button"
-            @click="showKey = !showKey"
-            class="absolute top-1/2 -translate-y-1/2 right-2.5 p-1 text-text-muted hover:text-text-secondary transition-all duration-200"
+            @click="showKey = !showKey" :aria-label="showKey ? t('prompt.hidePassword') : t('prompt.showPassword')" :aria-pressed="showKey"
+            class="absolute top-1/2 -translate-y-1/2 right-2.5 p-1 text-text-muted hover:text-text-secondary transition-all duration-200 min-w-8 min-h-8"
             tabindex="-1"
           >
             <EyeOff v-if="showKey" class="w-3.5 h-3.5" />
@@ -280,7 +289,7 @@ function handleConnectNutbits() {
       </div>
 
       <!-- Error -->
-      <p v-if="error" class="text-[11px] text-error px-1">{{ error }}</p>
+      <p v-if="error" class="text-xs text-error px-1">{{ error }}</p>
 
       <button
         @click="handleConnectLnbits"

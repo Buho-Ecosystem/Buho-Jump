@@ -1,4 +1,5 @@
 <script setup>
+import BackButton from './BackButton.vue'
 /**
  * Per-site detail view — shows permissions, budget allowance, and actions
  * for a specific connected domain. Opened from the permissions list.
@@ -42,6 +43,14 @@ const savingBudget = ref(false)
 const togglingEnabled = ref(false)
 const confirmRemoveBudget = ref(false)
 const confirmRevokeAll = ref(false)
+const blocking = ref(false)
+async function blockSite() {
+  if (blocking.value) return
+  blocking.value = true
+  try { await send('BLOCK_SITE_PERMISSIONS', props.host); emit('revoked') }
+  catch { toast.error(t('common.error')) }
+  finally { blocking.value = false }
+}
 const revokingAll = ref(false)
 const revokingMethod = ref(null)
 
@@ -55,7 +64,7 @@ function methodLabel(method) {
   const key = `sites.methodLabel_${method}`
   const translated = t(key)
   // If no translation found, fall back to the raw method name
-  return translated !== key ? translated : method
+  return translated !== key ? translated : t('prompt.permSignLabel')
 }
 
 const remaining = computed(() => {
@@ -191,9 +200,7 @@ async function handleRevokeAll() {
 
     <!-- Header -->
     <div class="flex items-center gap-2">
-      <button @click="emit('back')" :aria-label="t('common.back')" class="p-1 rounded-md hover:bg-surface-elevated transition-all duration-200">
-        <ArrowLeft class="w-4 h-4 text-text-muted" />
-      </button>
+      <BackButton @click="emit('back')" />
       <span class="text-sm font-semibold">{{ t('sites.title') }}</span>
     </div>
 
@@ -205,43 +212,44 @@ async function handleRevokeAll() {
       </div>
       <div>
         <div class="text-sm font-extrabold">{{ host }}</div>
-        <div class="text-[10px] text-text-muted">{{ Object.keys(methods).length + sessionGrants.length }} {{ t('sites.permissionsGranted') }}</div>
+        <div class="text-xs text-text-muted">{{ Object.keys(methods).length + sessionGrants.length }} {{ t('sites.permissionsGranted') }}</div>
       </div>
     </div>
 
     <div v-if="sessionGrants.length" class="space-y-1.5">
-      <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('sites.sessionPermissions') }}</p>
+      <p class="text-xs uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('sites.sessionPermissions') }}</p>
       <div v-for="grant in sessionGrants" :key="grant.key"
         class="flex items-center justify-between px-3 py-2 bg-brand/5 rounded-2xl border border-brand/15">
         <div class="flex items-center gap-2 min-w-0">
-          <span class="text-[9px] px-1.5 py-px rounded-full font-medium bg-brand/10 text-brand">{{ t('sites.thisVisit') }}</span>
-          <span class="text-xs font-medium truncate">{{ methodLabel(grant.method) }}</span>
-          <span v-if="grant.kind != null" class="text-[9px] text-text-muted">kind {{ grant.kind }}</span>
+          <span class="text-xs px-1.5 py-px rounded-full font-medium bg-brand/10 text-brand">{{ t('sites.thisVisit') }}</span>
+          <span class="text-xs font-medium truncate">{{ grant.kind != null ? eventKindLabel(grant.kind, t) : methodLabel(grant.method) }}</span>
         </div>
         <button @click="handleRevokeSession(grant.key)" :disabled="revokingMethod === grant.key"
           :aria-label="t('sites.revokeSession')"
-          class="text-text-muted hover:text-error p-1 disabled:opacity-40">
+          class="text-text-muted hover:text-error p-1 disabled:opacity-40 min-w-8 min-h-8">
           <Loader2 v-if="revokingMethod === grant.key" class="w-3 h-3 animate-spin" />
           <X v-else class="w-3 h-3" />
         </button>
       </div>
     </div>
 
+    <button @click="blockSite" :disabled="blocking" class="w-full min-h-11 text-sm text-error rounded-xl border border-border">{{ t('prompt.blockSite') }}</button>
+
     <!-- Permissions list (only if any exist) -->
     <div v-if="Object.keys(methods).length" class="space-y-1.5">
-      <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('sites.permissions') }}</p>
+      <p class="text-xs uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('sites.permissions') }}</p>
       <div v-for="(entry, method) in methods" :key="method"
         class="flex items-center justify-between px-3 py-2 bg-surface-card rounded-2xl border border-border">
         <div class="flex items-center gap-2">
-          <span class="text-[9px] px-1.5 py-px rounded-full font-medium"
+          <span class="text-xs px-1.5 py-px rounded-full font-medium"
             :class="entry.decision === 'allow' ? 'bg-success/10 text-success' : 'bg-error/10 text-error'">
             {{ entry.decision === 'allow' ? t('sites.allowed') : t('sites.denied') }}
           </span>
           <span class="text-xs font-medium">{{ methodLabel(method) }}</span>
         </div>
-        <button @click="handleRevokeMethod(method)"
+        <button @click="handleRevokeMethod(method)" :aria-label="t('common.remove') + ': ' + methodLabel(method)"
           :disabled="revokingMethod === method"
-          class="text-[10px] text-text-muted hover:text-error transition-all duration-200 font-medium flex items-center gap-1">
+          class="text-xs text-text-muted hover:text-error transition-all duration-200 font-medium flex items-center gap-1">
           <Loader2 v-if="revokingMethod === method" class="w-2.5 h-2.5 animate-spin" />
           <X v-else class="w-3 h-3" />
         </button>
@@ -250,7 +258,7 @@ async function handleRevokeAll() {
 
     <!-- Budget allowance -->
     <div class="space-y-2">
-      <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('sites.budget') }}</p>
+      <p class="text-xs uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('sites.budget') }}</p>
 
       <div v-if="loadingAllowance" class="skeleton-shimmer h-20 rounded-3xl" />
 
@@ -262,7 +270,7 @@ async function handleRevokeAll() {
           <button @click="toggleEnabled" :disabled="togglingEnabled"
             class="w-full flex items-center justify-between px-2 py-1.5 rounded-xl transition-all duration-200"
             :class="budgetEnabled ? 'bg-success/8 hover:bg-success/12' : 'bg-surface-elevated hover:bg-surface-hover'">
-            <span class="text-[10px] font-semibold" :class="budgetEnabled ? 'text-success' : 'text-text-muted'">
+            <span class="text-xs font-semibold" :class="budgetEnabled ? 'text-success' : 'text-text-muted'">
               {{ budgetEnabled ? t('sites.budgetEnabled') : t('sites.budgetPaused') }}
             </span>
             <div class="w-7 h-4 rounded-full transition-all duration-200 relative"
@@ -274,11 +282,11 @@ async function handleRevokeAll() {
 
           <!-- Progress -->
           <div class="space-y-1" :class="!budgetEnabled && 'opacity-40'">
-            <div class="flex items-center justify-between text-[10px]">
+            <div class="flex items-center justify-between text-xs">
               <span class="text-text-muted font-medium">{{ t('sites.spent') }}</span>
               <div class="text-right">
                 <span class="font-semibold">{{ allowance.spent.toLocaleString() }} / {{ allowance.budget.toLocaleString() }} {{ t('wallet.sats') }}</span>
-                <span v-if="allowance.spent > 0 && toFiat(allowance.spent)" class="text-[9px] text-text-muted ml-1">({{ toFiat(allowance.spent) }})</span>
+                <span v-if="allowance.spent > 0 && toFiat(allowance.spent)" class="text-xs text-text-muted ml-1">({{ toFiat(allowance.spent) }})</span>
               </div>
             </div>
             <div class="h-1.5 bg-surface-elevated rounded-full overflow-hidden">
@@ -286,7 +294,7 @@ async function handleRevokeAll() {
                 :class="spentPercent > 90 ? 'bg-error' : spentPercent > 70 ? 'bg-warning' : 'bg-brand'"
                 :style="{ width: spentPercent + '%' }" />
             </div>
-            <div class="flex items-center justify-between text-[9px] text-text-muted">
+            <div class="flex items-center justify-between text-xs text-text-muted">
               <span>{{ remaining.toLocaleString() }} {{ t('sites.remaining') }}</span>
               <button v-if="allowance.spent > 0" @click="resetSpend" :disabled="savingBudget"
                 class="flex items-center gap-0.5 hover:text-brand transition-all duration-200 disabled:opacity-40">
@@ -298,7 +306,7 @@ async function handleRevokeAll() {
           <!-- Edit budget -->
           <div class="space-y-1 pt-1 border-t border-border/50">
             <div class="flex gap-2">
-              <input v-model="budgetInput" type="number" min="1"
+              <input v-model="budgetInput" :aria-label="t('sites.budgetPlaceholder')" type="number" min="1"
                 :placeholder="t('sites.budgetPlaceholder')"
                 class="flex-1 bg-surface-elevated border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-brand transition-colors tabular-nums placeholder:text-text-muted" />
               <button @click="saveBudget" :disabled="savingBudget || !budgetInput"
@@ -308,10 +316,10 @@ async function handleRevokeAll() {
               </button>
             </div>
             <div class="flex items-center justify-between px-0.5">
-              <p v-if="budgetInputFiat" class="text-[9px] text-text-muted tabular-nums">≈ {{ budgetInputFiat }}</p>
+              <p v-if="budgetInputFiat" class="text-xs text-text-muted tabular-nums">≈ {{ budgetInputFiat }}</p>
               <span v-else />
               <button @click="confirmRemoveBudget = true" :disabled="savingBudget"
-                class="text-[9px] text-text-muted hover:text-error transition-all duration-200 font-medium">
+                class="text-xs text-text-muted hover:text-error transition-all duration-200 font-medium">
                 {{ t('sites.removeBudget') }}
               </button>
             </div>
@@ -320,10 +328,10 @@ async function handleRevokeAll() {
 
         <!-- No budget yet — explainer + set -->
         <template v-else>
-          <p class="text-[10px] text-text-muted leading-relaxed">{{ t('sites.budgetExplainer') }}</p>
+          <p class="text-xs text-text-muted leading-relaxed">{{ t('sites.budgetExplainer') }}</p>
           <div class="space-y-1">
             <div class="flex gap-2">
-              <input v-model="budgetInput" type="number" min="1"
+              <input v-model="budgetInput" :aria-label="t('sites.budgetPlaceholder')" type="number" min="1"
                 :placeholder="t('sites.budgetPlaceholder')"
                 class="flex-1 bg-surface-elevated border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-brand transition-colors tabular-nums placeholder:text-text-muted" />
               <button @click="saveBudget" :disabled="savingBudget || !budgetInput"
@@ -332,7 +340,7 @@ async function handleRevokeAll() {
                 {{ t('common.save') }}
               </button>
             </div>
-            <p v-if="budgetInputFiat" class="text-[9px] text-text-muted px-0.5 tabular-nums">≈ {{ budgetInputFiat }}</p>
+            <p v-if="budgetInputFiat" class="text-xs text-text-muted px-0.5 tabular-nums">≈ {{ budgetInputFiat }}</p>
           </div>
         </template>
       </div>
@@ -340,7 +348,7 @@ async function handleRevokeAll() {
 
     <!-- Recent auto-approved payments -->
     <div v-if="recentPayments.length" class="space-y-1.5">
-      <p class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('sites.recentPayments') }}</p>
+      <p class="text-xs uppercase tracking-widest text-text-muted font-semibold px-1">{{ t('sites.recentPayments') }}</p>
       <div class="bg-surface-card rounded-3xl border border-border shadow-sm overflow-hidden divide-y divide-border">
         <div v-for="(p, i) in recentPayments" :key="i"
           class="flex items-center justify-between px-3 py-2">
@@ -348,10 +356,10 @@ async function handleRevokeAll() {
             <Wallet class="w-3 h-3 text-warning shrink-0" />
             <div class="min-w-0">
               <span class="text-xs font-medium">{{ p.amount.toLocaleString() }} sats</span>
-              <span v-if="toFiat(p.amount)" class="text-[9px] text-text-muted ml-1">({{ toFiat(p.amount) }})</span>
+              <span v-if="toFiat(p.amount)" class="text-xs text-text-muted ml-1">({{ toFiat(p.amount) }})</span>
             </div>
           </div>
-          <div class="flex items-center gap-1 text-[9px] text-text-muted shrink-0">
+          <div class="flex items-center gap-1 text-xs text-text-muted shrink-0">
             <Clock class="w-2.5 h-2.5" />
             <span>{{ formatPaymentTime(p.timestamp) }}</span>
           </div>
@@ -368,6 +376,7 @@ async function handleRevokeAll() {
 
     <!-- Remove budget confirmation -->
     <BottomSheet :open="confirmRemoveBudget" variant="danger" @close="confirmRemoveBudget = false">
+      <template #title>{{ t('sites.revokeAll') }}</template>
       <template #icon><AlertTriangle class="w-4 h-4 text-warning" /></template>
       <template #description>{{ t('sites.removeBudgetConfirm', { host }) }}</template>
       <template #actions>
@@ -385,6 +394,7 @@ async function handleRevokeAll() {
 
     <!-- Revoke all confirmation (bottom sheet) -->
     <BottomSheet :open="confirmRevokeAll" variant="danger" @close="confirmRevokeAll = false">
+      <template #title>{{ t('sites.revokeAll') }}</template>
       <template #icon><AlertTriangle class="w-4 h-4 text-error" /></template>
       <template #description>{{ t('sites.revokeAllConfirm', { host }) }}</template>
       <template #actions>

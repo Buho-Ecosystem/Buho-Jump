@@ -222,10 +222,10 @@ function confirmWordMints() {
       <img src="/Onboarding wizard/Hidden mining-bro.svg" alt="" class="w-16 h-16 object-contain shrink-0" />
       <div>
         <h3 class="text-xs font-bold">{{ t('wallet.ecashRecoveryTitle') }}</h3>
-        <p class="text-[10px] text-text-muted mt-1 leading-relaxed">{{ t('wallet.ecashRecoveryIntro') }}</p>
+        <p class="text-xs text-text-muted mt-1 leading-relaxed">{{ t('wallet.ecashRecoveryIntro') }}</p>
       </div>
     </div>
-    <h3 class="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-1">
+    <h3 class="text-xs uppercase tracking-widest text-text-muted font-semibold px-1">
       {{ t('wallet.backupWallet') }}
     </h3>
     <p class="text-xs text-text-muted px-1">{{ t('wallet.backupDesc') }}</p>
@@ -249,8 +249,8 @@ function confirmWordMints() {
         </div>
         <div>
           <div class="text-xs font-semibold">{{ t('wallet.backupExport') }}</div>
-          <div class="text-[10px] text-text-muted mt-0.5">{{ t('wallet.backupWarning') }}</div>
-          <div class="text-[10px] text-text-muted mt-0.5">{{ t('wallet.backupPasswordHint') }}</div>
+          <div class="text-xs text-text-muted mt-0.5">{{ t('wallet.backupWarning') }}</div>
+          <div class="text-xs text-text-muted mt-0.5">{{ t('wallet.backupPasswordHint') }}</div>
         </div>
       </button>
 
@@ -278,24 +278,24 @@ function confirmWordMints() {
           <KeyRound class="w-4 h-4 text-brand shrink-0 mt-0.5" />
           <div class="min-w-0 flex-1">
             <p class="text-xs font-bold">{{ t('wallet.backupPasswordTitle') }}</p>
-            <p class="text-[10px] text-text-muted mt-1 leading-relaxed">
+            <p class="text-xs text-text-muted mt-1 leading-relaxed">
               {{ t('wallet.backupPasswordPrompt') }}
             </p>
-            <p class="text-[10px] text-text-secondary mt-1.5 truncate">{{ selectedImport.name }}</p>
+            <p class="text-xs text-text-secondary mt-1.5 truncate">{{ selectedImport.name }}</p>
           </div>
-          <button type="button" @click="clearImport" :aria-label="t('common.cancel')" class="p-1 rounded-lg hover:bg-surface-elevated">
+          <button type="button" @click="clearImport" :aria-label="t('common.cancel')" class="p-1 rounded-lg hover:bg-surface-elevated min-w-8 min-h-8">
             <X class="w-3.5 h-3.5 text-text-muted" />
           </button>
         </div>
         <input
-          v-model="importPassword"
+          v-model="importPassword" :aria-label="t('wallet.backupPasswordPlaceholder')"
           type="password"
           autocomplete="current-password"
           :placeholder="t('wallet.backupPasswordPlaceholder')"
           class="w-full bg-surface-base border border-border rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-brand transition-colors"
         />
         <button type="submit" :disabled="!importPassword || importing"
-          class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand text-white text-[11px] font-bold disabled:opacity-60">
+          class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand text-white text-xs font-bold disabled:opacity-60">
           <Loader2 v-if="importing" class="w-3 h-3 animate-spin" />
           {{ t('wallet.backupReview') }}
         </button>
@@ -306,22 +306,22 @@ function confirmWordMints() {
           <ShieldCheck class="w-4 h-4 text-brand shrink-0 mt-0.5" />
           <div class="min-w-0 flex-1">
             <p class="text-xs font-bold">{{ t('wallet.backupReadyTitle') }}</p>
-            <p class="text-[10px] text-text-muted mt-1 leading-relaxed">
+            <p class="text-xs text-text-muted mt-1 leading-relaxed">
               {{ t('wallet.backupReadyDesc', { count: pendingImport.proofCount || 0 }) }}
             </p>
-            <p v-if="pendingImport.hasReceivingKey" class="text-[10px] text-brand mt-1.5 leading-relaxed">
+            <p v-if="pendingImport.hasReceivingKey" class="text-xs text-brand mt-1.5 leading-relaxed">
               {{ t('wallet.backupReceivingKeyFound') }}
             </p>
-            <p v-if="pendingImport.mints?.length" class="text-[10px] text-text-secondary mt-1.5 break-words">
+            <p v-if="pendingImport.mints?.length" class="text-xs text-text-secondary mt-1.5 break-words">
               {{ pendingImport.mints.map(hostname).join(', ') }}
             </p>
           </div>
-          <button @click="clearImport" :aria-label="t('common.cancel')" class="p-1 rounded-lg hover:bg-surface-elevated">
+          <button @click="clearImport" :aria-label="t('common.cancel')" class="p-1 rounded-lg hover:bg-surface-elevated min-w-8 min-h-8">
             <X class="w-3.5 h-3.5 text-text-muted" />
           </button>
         </div>
         <button @click="confirmImport" :disabled="importing"
-          class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand text-white text-[11px] font-bold disabled:opacity-60">
+          class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand text-white text-xs font-bold disabled:opacity-60">
           <Loader2 v-if="importing" class="w-3 h-3 animate-spin" />
           {{ t('wallet.backupConfirmRestore') }}
         </button>
@@ -340,10 +340,10 @@ function confirmWordMints() {
         </div>
         <div>
           <div class="text-xs font-semibold">{{ t('wallet.backupRestore') }}</div>
-          <div class="text-[10px] text-text-muted mt-0.5">{{ t('wallet.backupRestoreDesc') }}</div>
+          <div class="text-xs text-text-muted mt-0.5">{{ t('wallet.backupRestoreDesc') }}</div>
         </div>
       </button>
-      <p v-if="activeAccount && !canRelayRestore" class="text-[10px] text-text-muted px-2 leading-relaxed">
+      <p v-if="activeAccount && !canRelayRestore" class="text-xs text-text-muted px-2 leading-relaxed">
         {{ t('wallet.relayRestoreUnavailable') }}
       </p>
 
@@ -352,22 +352,22 @@ function confirmWordMints() {
           <ShieldCheck class="w-4 h-4 text-brand shrink-0 mt-0.5" />
           <div class="min-w-0 flex-1">
             <p class="text-xs font-bold">{{ t('wallet.relayBackupReadyTitle') }}</p>
-            <p class="text-[10px] text-text-muted mt-1 leading-relaxed">
+            <p class="text-xs text-text-muted mt-1 leading-relaxed">
               {{ t('wallet.relayBackupReadyDesc', { count: pendingRelay.proofCount || 0 }) }}
             </p>
-            <p v-if="pendingRelay.hasReceivingKey" class="text-[10px] text-brand mt-1.5 leading-relaxed">
+            <p v-if="pendingRelay.hasReceivingKey" class="text-xs text-brand mt-1.5 leading-relaxed">
               {{ t('wallet.relayReceivingKeyFound') }}
             </p>
-            <p v-if="pendingRelay.mints?.length" class="text-[10px] text-text-secondary mt-1.5 break-words">
+            <p v-if="pendingRelay.mints?.length" class="text-xs text-text-secondary mt-1.5 break-words">
               {{ pendingRelay.mints.map(hostname).join(', ') }}
             </p>
           </div>
-          <button @click="pendingRelay = null" :aria-label="t('common.cancel')" class="p-1 rounded-lg hover:bg-surface-elevated">
+          <button @click="pendingRelay = null" :aria-label="t('common.cancel')" class="p-1 rounded-lg hover:bg-surface-elevated min-w-8 min-h-8">
             <X class="w-3.5 h-3.5 text-text-muted" />
           </button>
         </div>
         <button @click="confirmRelayRestore" :disabled="restoring"
-          class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand text-white text-[11px] font-bold disabled:opacity-60">
+          class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand text-white text-xs font-bold disabled:opacity-60">
           <Loader2 v-if="restoring" class="w-3 h-3 animate-spin" />
           {{ t('wallet.backupAllowAndRestore') }}
         </button>
@@ -378,9 +378,9 @@ function confirmWordMints() {
         <div class="flex items-start justify-between gap-2">
           <div>
             <p class="text-xs font-bold">{{ t('wallet.wordMintsFound') }}</p>
-            <p class="text-[10px] text-text-muted mt-1 leading-relaxed">{{ t('wallet.wordMintsFoundDesc') }}</p>
+            <p class="text-xs text-text-muted mt-1 leading-relaxed">{{ t('wallet.wordMintsFoundDesc') }}</p>
           </div>
-          <button @click="pendingWordMints = null" :aria-label="t('common.cancel')" class="p-1 rounded-lg hover:bg-surface-elevated">
+          <button @click="pendingWordMints = null" :aria-label="t('common.cancel')" class="p-1 rounded-lg hover:bg-surface-elevated min-w-8 min-h-8">
             <X class="w-3.5 h-3.5 text-text-muted" />
           </button>
         </div>
@@ -390,10 +390,10 @@ function confirmWordMints() {
           class="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-surface-card border border-border cursor-pointer hover:border-brand/30 transition-colors"
         >
           <input type="checkbox" v-model="entry.checked" class="accent-[var(--brand)] w-3.5 h-3.5" />
-          <span class="text-[11px] font-medium truncate">{{ hostname(entry.url) }}</span>
+          <span class="text-xs font-medium truncate">{{ hostname(entry.url) }}</span>
         </label>
         <button @click="confirmWordMints" :disabled="restoringWords"
-          class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand text-white text-[11px] font-bold disabled:opacity-60">
+          class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand text-white text-xs font-bold disabled:opacity-60">
           <Loader2 v-if="restoringWords" class="w-3 h-3 animate-spin" />
           {{ t('wallet.backupAllowAndRestore') }}
         </button>
@@ -411,10 +411,10 @@ function confirmWordMints() {
         </div>
         <div>
           <div class="text-xs font-semibold">{{ t('wallet.restoreFromWords') }}</div>
-          <div class="text-[10px] text-text-muted mt-0.5">{{ t('wallet.restoreFromWordsDesc') }}</div>
+          <div class="text-xs text-text-muted mt-0.5">{{ t('wallet.restoreFromWordsDesc') }}</div>
         </div>
       </button>
-      <p v-if="activeAccount && !canWordRestore" class="text-[10px] text-text-muted px-2 leading-relaxed">
+      <p v-if="activeAccount && !canWordRestore" class="text-xs text-text-muted px-2 leading-relaxed">
         {{ t('wallet.wordRestoreUnavailable') }}
       </p>
     </div>

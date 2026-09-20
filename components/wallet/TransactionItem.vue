@@ -96,7 +96,6 @@ const subtitle = computed(() => {
       :class="[statusColor, txState === 'pending' ? 'animate-pulse' : '']"
     >
       <img v-if="metadata.merchantVerification?.logoUrl" :src="metadata.merchantVerification.logoUrl" alt="" class="w-full h-full object-contain rounded-[10px] bg-white p-1" />
-      <span v-else-if="metadata.payout || metadata.source === 'mobile'" class="text-base">📱</span>
       <component v-else :is="statusIcon" class="w-4 h-4" />
     </div>
 
@@ -106,7 +105,7 @@ const subtitle = computed(() => {
         <div class="text-xs font-semibold truncate">{{ title }}</div>
         <BadgeCheck v-if="metadata.merchantVerification" class="w-3 h-3 text-success shrink-0" />
       </div>
-      <div class="text-[10px] text-text-muted truncate">{{ subtitle }}</div>
+      <div class="text-xs text-text-muted truncate">{{ subtitle }}</div>
     </div>
 
     <!-- Amount + fiat badge pill -->
@@ -119,13 +118,13 @@ const subtitle = computed(() => {
       </div>
       <span
         v-if="metadata.payout"
-        class="text-[8px] font-semibold px-1.5 py-px rounded-full bg-info/10 text-info"
+        class="text-xs font-semibold px-1.5 py-px rounded-full bg-info/10 text-info"
       >
         {{ metadata.payout.amount }} {{ metadata.payout.code }}
       </span>
       <span
         v-else-if="fiatAmount"
-        class="text-[8px] font-medium px-1.5 py-px rounded-full"
+        class="text-xs font-medium px-1.5 py-px rounded-full"
         :class="isIncoming ? 'bg-incoming/10 text-incoming' : 'bg-outgoing/10 text-outgoing'"
       >
         {{ fiatAmount }}

@@ -1,4 +1,5 @@
 <script setup>
+import BackButton from '../BackButton.vue'
 /**
  * Telegram-style chat thread — message bubbles with grouping, date pills,
  * inline timestamps, scroll-to-bottom button, and inline zap support.
@@ -17,6 +18,8 @@ import { nip19 } from 'nostr-core'
 import { formatSats } from '../../lib/utils.js'
 import { fetchLnurlPayParams, resolveLnurlServiceUrl } from '../../lib/lnurl.js'
 import { hasOriginAccess, requestOriginAccess } from '../../lib/browser/hostPermissions.js'
+import ReportDialog from './ReportDialog.vue'
+import BottomSheet from '../BottomSheet.vue'
 import ChatBubble from './ChatBubble.vue'
 import ErrorBanner from '../ErrorBanner.vue'
 import { searchEmojis } from '../../lib/emojiData.js'
@@ -33,7 +36,7 @@ const props = defineProps({
 
 const emit = defineEmits(['back', 'report'])
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { getMessages, sendMessage, retryMessage, markRead, addZapMessage, updateZapStatus, currentAccountPubkey, reactions, isDeleted } = useChat()
 const { fetchProfile, getCachedProfile } = useContacts()
 const { status: walletStatus, sendZap } = useWallet()
@@ -64,15 +67,16 @@ const showComposeMenu = ref(false)
 
 // Reply state
 const replyingTo = ref(null)
+const reportMessage = ref(null)
 
 // Expiring message state (NIP-40)
 const expiryMinutes = ref(0) // 0 = no expiry
-const EXPIRY_OPTIONS = [
-  { label: 'Off', minutes: 0 },
-  { label: '5m', minutes: 5 },
-  { label: '1h', minutes: 60 },
-  { label: '24h', minutes: 1440 },
-]
+const EXPIRY_OPTIONS = computed(() => [0,5,60,1440].map(minutes => ({
+  minutes,
+  label: minutes === 0 ? t('chat.expiryOff') : new Intl.NumberFormat(locale.value, {
+    style: 'unit', unit: minutes < 60 ? 'minute' : 'hour', unitDisplay: 'short',
+  }).format(minutes < 60 ? minutes : minutes / 60),
+})))
 
 // Content warning state (NIP-36)
 const cwEnabled = ref(false)
@@ -94,7 +98,7 @@ const messageList = getMessages(props.pubkey)
 const avatarColor = computed(() => getAvatarColor(props.pubkey))
 
 const displayName = computed(() =>
-  profile.value?.display_name || profile.value?.name || truncateNpub(props.pubkey)
+  profile.value?.display_name || profile.value?.name || t('chat.unknownUser')
 )
 
 const nip05Display = computed(() => profile.value?.nip05 || '')
@@ -158,9 +162,9 @@ function formatDateLabel(date) {
 function truncateNpub(pubkey) {
   try {
     const npub = nip19.npubEncode(pubkey)
-    return 'User ' + npub.slice(5, 9) + '...' + npub.slice(-4)
+    return t('chat.unknownUser')
   } catch {
-    return 'User ' + pubkey.slice(0, 6) + '...'
+    return t('chat.unknownUser')
   }
 }
 
@@ -223,8 +227,7 @@ async function handleDeleteMessage(message) {
 }
 
 function handleReport(message) {
-  // Emit up to parent to open report dialog
-  emit('report', { pubkey: props.pubkey, messageId: message.id })
+  reportMessage.value = message
 }
 
 function handleForward(message) {
@@ -284,7 +287,7 @@ async function handleRetry(msgId) {
 
 function copyNpub() {
   try {
-    navigator.clipboard.writeText(nip19.npubEncode(props.pubkey))
+    navigator.clipboard.writeText('https://njump.me/' + nip19.npubEncode(props.pubkey))
     copied.value = true
     setTimeout(() => (copied.value = false), 2500)
   } catch {}
@@ -432,16 +435,18 @@ watch(messageList, () => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full animate-slide-in-right">
+  <div class="flex flex-col flex-1 min-h-0 animate-slide-in-right">
+    <BottomSheet :open="!!reportMessage" @close="reportMessage = null">
+      <template #title>{{ t('chat.reportTitle') }}</template>
+      <template #content><ReportDialog embedded v-if="reportMessage" :pubkey="pubkey" :message-id="reportMessage.id" @close="reportMessage = null" /></template>
+    </BottomSheet>
 
     <!-- Header (Telegram-style) -->
     <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-border shrink-0 bg-surface-base">
-      <button @click="emit('back')" class="p-1 rounded-full hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.back')">
-        <ArrowLeft class="w-5 h-5 text-text-secondary" />
-      </button>
+      <BackButton @click="emit('back')" />
 
       <!-- Avatar + name -->
-      <div class="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer" @click="showMenu = !showMenu">
+      <button class="flex items-center gap-2.5 flex-1 min-w-0 text-left" @click="showMenu = !showMenu" :aria-expanded="showMenu">
         <div
           class="w-9 h-9 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
           :style="!profile?.picture ? { background: avatarColor } : {}"
@@ -451,15 +456,15 @@ watch(messageList, () => {
         </div>
         <div class="min-w-0">
           <div class="text-[14px] font-semibold truncate leading-tight">{{ displayName }}</div>
-          <div v-if="!online" class="text-[10px] text-error leading-tight">{{ t('common.offline') }}</div>
-          <div v-else-if="!relayHealthy" class="text-[10px] text-warning leading-tight">{{ t('chat.connectionSlow') }}</div>
-          <div v-else-if="nip05Display" class="text-[11px] text-brand truncate leading-tight">{{ nip05Display }}</div>
+          <div v-if="!online" class="text-xs text-error leading-tight">{{ t('common.offline') }}</div>
+          <div v-else-if="!relayHealthy" class="text-xs text-warning leading-tight">{{ t('chat.connectionSlow') }}</div>
+          <div v-else-if="nip05Display" class="text-xs text-brand truncate leading-tight">{{ nip05Display }}</div>
         </div>
-      </div>
+      </button>
 
       <!-- Menu -->
-      <div ref="menuRef" class="relative">
-        <button @click.stop="showMenu = !showMenu" class="p-1.5 rounded-full hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.menu')">
+      <div ref="menuRef" class="relative" @keydown.esc.stop="showMenu = false; menuRef?.querySelector('button')?.focus()">
+        <button @click.stop="showMenu = !showMenu" :aria-expanded="showMenu" class="p-1.5 rounded-full hover:bg-surface-elevated transition-all duration-200 min-w-8 min-h-8" :aria-label="t('common.menu')">
           <MoreHorizontal class="w-5 h-5 text-text-muted" />
         </button>
         <div v-if="showMenu" class="absolute right-0 top-full mt-1 w-44 bg-surface-card rounded-3xl border border-border shadow-lg z-50 overflow-hidden animate-scale-in origin-top-right">
@@ -467,7 +472,7 @@ watch(messageList, () => {
             class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left text-xs">
             <Check v-if="copied" class="w-4 h-4 text-success" />
             <Copy v-else class="w-4 h-4 text-text-muted" />
-            {{ copied ? t('common.copied') : t('chat.copyNpub') }}
+            {{ copied ? t('common.copied') : t('chat.copyProfileLink') }}
           </button>
           <button @click="viewProfile"
             class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-surface-elevated transition-all duration-200 text-left text-xs">
@@ -488,7 +493,7 @@ watch(messageList, () => {
     <!-- Messages area (wrapper for scroll + floating button) -->
     <div class="flex-1 relative min-h-0">
       <div
-        ref="scrollRef"
+        ref="scrollRef" data-chat-messages role="log" :aria-label="t('tabs.chat')"
         @scroll="onScroll"
         class="absolute inset-0 overflow-y-auto px-3 py-2"
         style="background: color-mix(in srgb, var(--surface-base) 95%, var(--brand-primary));"
@@ -522,7 +527,7 @@ watch(messageList, () => {
             <Lock class="w-6 h-6 text-brand" />
           </div>
           <p class="text-xs text-text-muted font-medium mb-1">{{ t('chat.emptyThreadTitle') }}</p>
-          <p class="text-[10px] text-text-muted/70">{{ t('chat.encryptedHint') }}</p>
+          <p class="text-xs text-text-muted">{{ t('chat.encryptedHint') }}</p>
         </div>
       </div>
 
@@ -544,9 +549,9 @@ watch(messageList, () => {
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-1.5">
             <Zap class="w-3.5 h-3.5 text-warning" />
-            <span class="text-[11px] font-semibold">{{ t('chat.zapTitle') }}</span>
+            <span class="text-xs font-semibold">{{ t('chat.zapTitle') }}</span>
           </div>
-          <button @click="showZapPicker = false" class="p-0.5 rounded hover:bg-surface-elevated transition-all duration-200" :aria-label="t('common.close')">
+          <button @click="showZapPicker = false" class="p-0.5 rounded hover:bg-surface-elevated transition-all duration-200 min-w-8 min-h-8" :aria-label="t('common.close')">
             <X class="w-3.5 h-3.5 text-text-muted" />
           </button>
         </div>
@@ -556,30 +561,30 @@ watch(messageList, () => {
             :key="amt"
             @click="handleZap(amt)"
             :disabled="zapping"
-            class="flex-1 py-1.5 text-[10px] font-semibold rounded-2xl bg-surface-elevated hover:bg-warning/10 hover:text-warning transition-all duration-200 disabled:opacity-40"
+            class="flex-1 py-1.5 text-xs font-semibold rounded-2xl bg-surface-elevated hover:bg-warning/10 hover:text-warning transition-all duration-200 disabled:opacity-40"
           >
             {{ formatSats(amt) }}
           </button>
         </div>
         <div class="flex gap-1.5">
           <input
-            v-model="customZapAmount"
+            v-model="customZapAmount" :aria-label="t('chat.customAmount')"
             type="number"
             min="1"
             :placeholder="t('chat.customAmount')"
-            class="flex-1 bg-surface-base border border-border rounded-lg px-2.5 py-1.5 text-[10px] outline-none focus:border-warning transition-colors tabular-nums placeholder:text-text-muted"
+            class="flex-1 bg-surface-base border border-border rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-warning transition-colors tabular-nums placeholder:text-text-muted"
           />
           <button
             @click="handleZap()"
             :disabled="zapping || !customZapAmount"
-            class="px-3 py-1.5 text-[10px] rounded-2xl font-semibold transition-all duration-200 disabled:opacity-40 flex items-center gap-1 chat-bubble-zap"
+            class="px-3 py-1.5 text-xs rounded-2xl font-semibold transition-all duration-200 disabled:opacity-40 flex items-center gap-1 chat-bubble-zap"
             :aria-label="t('chat.zapTitle')"
           >
             <Loader2 v-if="zapping" class="w-3 h-3 animate-spin" />
             <Zap v-else class="w-3 h-3" />
           </button>
         </div>
-        <p v-if="lightningAddress" class="text-[9px] text-text-muted mt-1.5 truncate">
+        <p v-if="lightningAddress" class="text-xs text-text-muted mt-1.5 truncate">
           → {{ lightningAddress }}
         </p>
       </div>
@@ -591,15 +596,15 @@ watch(messageList, () => {
     <!-- Active compose options (pills above input) -->
     <div v-if="expiryMinutes > 0 || cwEnabled" class="flex items-center gap-1.5 px-3 py-1.5 border-t border-border bg-surface-base">
       <button v-if="expiryMinutes > 0" @click="expiryMinutes = 0"
-        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning/10 text-warning text-[10px] font-medium hover:bg-warning/15 transition-colors">
+        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning/10 text-warning text-xs font-medium hover:bg-warning/15 transition-colors">
         <TimerOff class="w-3 h-3" />
         {{ EXPIRY_OPTIONS.find(o => o.minutes === expiryMinutes)?.label }}
         <X class="w-2.5 h-2.5 opacity-60" />
       </button>
-      <div v-if="cwEnabled" class="flex items-center gap-1 flex-1 min-w-0 px-2 py-0.5 rounded-full bg-surface-elevated text-[10px]">
+      <div v-if="cwEnabled" class="flex items-center gap-1 flex-1 min-w-0 px-2 py-0.5 rounded-full bg-surface-elevated text-xs">
         <EyeOff class="w-3 h-3 text-text-muted shrink-0" />
-        <input v-model="cwReason" :placeholder="t('chat.cwPlaceholder')" class="flex-1 bg-transparent outline-none min-w-0 text-text-secondary" />
-        <button @click="cwEnabled = false; cwReason = ''" class="text-text-muted opacity-60 hover:opacity-100">
+        <input v-model="cwReason" :aria-label="t('chat.cwPlaceholder')" :placeholder="t('chat.cwPlaceholder')" class="flex-1 bg-transparent outline-none min-w-0 text-text-secondary" />
+        <button @click="cwEnabled = false; cwReason = ''" :aria-label="t('common.remove') + ': ' + t('chat.contentWarning')" class="text-text-muted opacity-60 hover:opacity-100">
           <X class="w-2.5 h-2.5" />
         </button>
       </div>
@@ -608,10 +613,10 @@ watch(messageList, () => {
     <!-- Reply preview bar -->
     <div v-if="replyingTo" class="flex items-center gap-2 px-3 py-1.5 bg-surface-elevated border-t border-border">
       <div class="flex-1 min-w-0 border-l-2 border-brand pl-2">
-        <p class="text-[10px] text-brand font-semibold">{{ t('chat.replyingTo') }}</p>
-        <p class="text-[11px] text-text-muted truncate">{{ replyingTo.content?.slice(0, 80) }}</p>
+        <p class="text-xs text-brand font-semibold">{{ t('chat.replyingTo') }}</p>
+        <p class="text-xs text-text-muted truncate">{{ replyingTo.content?.slice(0, 80) }}</p>
       </div>
-      <button @click="replyingTo = null" class="p-1 rounded hover:bg-surface-hover transition-colors" :aria-label="t('common.cancel')">
+      <button @click="replyingTo = null" class="p-1 rounded hover:bg-surface-hover transition-colors min-w-8 min-h-8" :aria-label="t('common.cancel')">
         <X class="w-3.5 h-3.5 text-text-muted" />
       </button>
     </div>
@@ -626,7 +631,7 @@ watch(messageList, () => {
           :class="idx === emojiSelectedIdx ? 'bg-brand/10 text-brand' : 'hover:bg-surface-elevated text-text-secondary'"
         >
           <span class="text-base">{{ emoji }}</span>
-          <span class="font-mono text-[11px] text-text-muted">:{{ name }}:</span>
+          <span class="font-mono text-xs text-text-muted">:{{ name }}:</span>
         </button>
       </div>
     </div>
@@ -636,7 +641,7 @@ watch(messageList, () => {
       <div class="flex items-center gap-1 py-1">
         <button
           @click="expiryMinutes = expiryMinutes === 0 ? 5 : (EXPIRY_OPTIONS[(EXPIRY_OPTIONS.findIndex(o => o.minutes === expiryMinutes) + 1) % EXPIRY_OPTIONS.length].minutes)"
-          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium transition-colors"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors"
           :class="expiryMinutes > 0 ? 'bg-warning/10 text-warning' : 'bg-surface-card text-text-secondary hover:bg-surface-elevated'"
         >
           <TimerOff class="w-3.5 h-3.5" />
@@ -644,7 +649,7 @@ watch(messageList, () => {
         </button>
         <button
           @click="cwEnabled = !cwEnabled; showComposeMenu = false"
-          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium transition-colors"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors"
           :class="cwEnabled ? 'bg-warning/10 text-warning' : 'bg-surface-card text-text-secondary hover:bg-surface-elevated'"
         >
           <EyeOff class="w-3.5 h-3.5" />
@@ -653,7 +658,7 @@ watch(messageList, () => {
         <button
           v-if="canZap"
           @click="showZapPicker = !showZapPicker; showComposeMenu = false"
-          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium transition-colors"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors"
           :class="showZapPicker ? 'bg-warning/10 text-warning' : 'bg-surface-card text-text-secondary hover:bg-surface-elevated'"
         >
           <Zap class="w-3.5 h-3.5" />
@@ -680,7 +685,7 @@ watch(messageList, () => {
       <div class="flex-1 relative">
         <textarea
           ref="textareaRef"
-          v-model="input"
+          v-model="input" :aria-label="t('chat.inputPlaceholder')"
           @keydown="onKeydown"
           @input="autoResize"
           :placeholder="t('chat.inputPlaceholder')"
@@ -689,8 +694,8 @@ watch(messageList, () => {
           class="chat-input-pill w-full resize-none max-h-[120px]"
         />
         <span v-if="input.length > 4500"
-          class="absolute right-2 bottom-1 text-[9px] tabular-nums"
-          :class="input.length > 4900 ? 'text-error' : 'text-text-muted/50'">
+          class="absolute right-2 bottom-1 text-xs tabular-nums"
+          :class="input.length > 4900 ? 'text-error' : 'text-text-muted'">
           {{ input.length }}/5000
         </span>
       </div>

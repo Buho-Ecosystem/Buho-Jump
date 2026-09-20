@@ -63,7 +63,7 @@ onMounted(async () => {
       <div class="relative">
         <Search class="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         <input
-          v-model="search"
+          v-model="search" :aria-label="t('chat.searchPlaceholder')"
           :placeholder="t('chat.searchPlaceholder')"
           class="chat-input-pill w-full pl-10 pr-4"
         />
@@ -111,7 +111,7 @@ onMounted(async () => {
       <!-- Muted conversations -->
       <div v-if="mutedConversations.length > 0" class="mt-1">
         <button @click="showMuted = !showMuted"
-          class="w-full flex items-center gap-2 px-4 py-2 text-[10px] text-text-muted font-semibold uppercase tracking-wider hover:text-text-secondary transition-colors">
+          class="w-full flex items-center gap-2 px-4 py-2 text-xs text-text-muted font-semibold uppercase tracking-wider hover:text-text-secondary transition-colors">
           <VolumeX class="w-3 h-3" />
           {{ t('chat.mutedSection', { count: mutedConversations.length }) }}
           <ChevronDown class="w-3 h-3 ml-auto transition-transform duration-200" :class="showMuted ? 'rotate-180' : ''" />
