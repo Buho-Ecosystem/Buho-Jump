@@ -503,7 +503,7 @@
     "noWalletFeatureZap": "ノストルをザップ",
     "chooseType": "ウォレットの接続方法を選択",
     "nwcDesc": "Nostrリレー経由で接続 — Alby、Buho、LNbits、Coinosなどに対応",
-    "nwcHelp": "Get this from your wallet app (Alby, Mutiny, Coinos). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
+    "nwcHelp": "Get this from your wallet app (Alby, Coinos, Rizful). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
     "lnbitsDesc": "REST APIでLNbitsインスタンスに直接接続",
     "lnbitsHelp": "URLとAdmin KeyはLNbitsウォレット設定のAPI情報にあります。",
     "lnbitsUrl": "LNbits サーバーアドレス",

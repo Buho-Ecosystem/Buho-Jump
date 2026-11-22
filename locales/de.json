@@ -503,7 +503,7 @@
     "noWalletFeatureZap": "Auf Nostr zappen",
     "chooseType": "Wähle, wie du dein Wallet verbinden möchtest",
     "nwcDesc": "Verbindung über Nostr-Relay — funktioniert mit Alby, Buho, LNbits, Coinos und mehr",
-    "nwcHelp": "Du findest das in deiner Wallet-App (Alby, Mutiny, Coinos). Suche in den Einstellungen nach „Nostr Wallet Connect“.",
+    "nwcHelp": "Du findest das in deiner Wallet-App (Alby, Coinos, Rizful). Suche in den Einstellungen nach „Nostr Wallet Connect“.",
     "lnbitsDesc": "Direkt mit deiner LNbits-Instanz über REST-API verbinden",
     "lnbitsHelp": "Du findest deine URL und den Admin-Key in deinen LNbits-Wallet-Einstellungen unter API-Info.",
     "lnbitsUrl": "LNbits-URL",

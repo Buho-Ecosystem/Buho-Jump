@@ -503,7 +503,7 @@
     "noWalletFeatureZap": "Zap บน Nostr",
     "chooseType": "เลือกวิธีเชื่อมต่อกระเป๋าเงินของคุณ",
     "nwcDesc": "เชื่อมต่อผ่าน Nostr รีเลย์ — ใช้ได้กับ Alby, Buho, LNbits, Coinos และอื่นๆ",
-    "nwcHelp": "รับจากแอปกระเป๋าเงินของคุณ (Alby, Mutiny, Coinos) มองหา \"Nostr Wallet Connect\" ในการตั้งค่ากระเป๋าเงิน",
+    "nwcHelp": "รับจากแอปกระเป๋าเงินของคุณ (Alby, Coinos, Rizful) มองหา \"Nostr Wallet Connect\" ในการตั้งค่ากระเป๋าเงิน",
     "lnbitsDesc": "เชื่อมต่อโดยตรงกับอินสแตนซ์ LNbits ผ่าน REST API",
     "lnbitsHelp": "ค้นหา URL และ Admin Key ในการตั้งค่ากระเป๋าเงิน LNbits ภายใต้ข้อมูล API",
     "lnbitsUrl": "ที่อยู่เซิร์ฟเวอร์ LNbits",

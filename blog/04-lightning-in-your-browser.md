@@ -48,4 +48,4 @@ The active wallet handles all WebLN requests. Switch wallets, the next payment g
 
 ---
 
-*Works with LNbits, Alby Hub, Coinos, Mutiny, and any NWC-compatible wallet. Your sats stay where they are - the extension just connects to them.*
+*Works with LNbits, Alby Hub, Coinos, Rizful, and any NWC-compatible wallet. Your sats stay where they are - the extension just connects to them.*
