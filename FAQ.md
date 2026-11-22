@@ -22,7 +22,7 @@ Buho Jump supports three wallet types:
 
 | Type | How it connects |
 |------|----------------|
-| **NWC** | Any Nostr Wallet Connect compatible wallet (Alby Hub, Coinos, Minibits, etc.) |
+| **NWC** | Any Nostr Wallet Connect compatible wallet (Alby Hub, Coinos, Minibits, Rizful, etc.) |
 | **Cashu** | Ecash wallet connected to a Cashu mint |
 | **LNbits** | Direct connection to an LNbits instance |
 

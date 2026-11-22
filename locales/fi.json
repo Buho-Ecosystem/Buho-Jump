@@ -503,7 +503,7 @@
     "noWalletFeatureZap": "Anna tippi Nostrissa",
     "chooseType": "Valitse miten yhdistät lompakkosi",
     "nwcDesc": "Yhteys Nostr-releen kautta — toimii Albyn, Buhon, LNbitsin, Coinosin ja muiden kanssa",
-    "nwcHelp": "Get this from your wallet app (Alby, Mutiny, Coinos). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
+    "nwcHelp": "Get this from your wallet app (Alby, Coinos, Rizful). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
     "lnbitsDesc": "Yhdistä suoraan LNbits-instanssiisi REST API:n kautta",
     "lnbitsHelp": "Löydät URL:n ja Admin Keyn LNbits-lompakon asetuksista API-tiedoissa.",
     "lnbitsUrl": "LNbits URL",

@@ -503,7 +503,7 @@
     "noWalletFeatureZap": "Dávejte spropitné na Nostru",
     "chooseType": "Vyberte způsob připojení peněženky",
     "nwcDesc": "Připojení přes Nostr relay — funguje s Alby, Buho, LNbits, Coinos a dalšími",
-    "nwcHelp": "Get this from your wallet app (Alby, Mutiny, Coinos). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
+    "nwcHelp": "Get this from your wallet app (Alby, Coinos, Rizful). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
     "lnbitsDesc": "Přímé připojení k vaší instanci LNbits přes REST API",
     "lnbitsHelp": "Najděte svou URL a Admin Key v nastavení peněženky LNbits pod API info.",
     "lnbitsUrl": "LNbits URL",

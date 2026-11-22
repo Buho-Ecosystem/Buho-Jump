@@ -503,7 +503,7 @@
     "noWalletFeatureZap": "Зап на Ностр",
     "chooseType": "Выберите способ подключения кошелька",
     "nwcDesc": "Подключение через реле Nostr — работает с Alby, Buho, LNbits, Coinos и другими",
-    "nwcHelp": "Get this from your wallet app (Alby, Mutiny, Coinos). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
+    "nwcHelp": "Get this from your wallet app (Alby, Coinos, Rizful). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
     "lnbitsDesc": "Прямое подключение к вашему экземпляру LNbits через REST API",
     "lnbitsHelp": "Найдите URL и ключ администратора в настройках кошелька LNbits в разделе API.",
     "lnbitsUrl": "URL LNbits",

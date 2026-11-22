@@ -503,7 +503,7 @@
     "noWalletFeatureZap": "Ge dricks på Nostr",
     "chooseType": "Välj hur du vill ansluta din plånbok",
     "nwcDesc": "Anslut via Nostr-relay — fungerar med Alby, Buho, LNbits, Coinos med mera",
-    "nwcHelp": "Get this from your wallet app (Alby, Mutiny, Coinos). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
+    "nwcHelp": "Get this from your wallet app (Alby, Coinos, Rizful). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
     "lnbitsDesc": "Anslut direkt till din LNbits-instans via REST API",
     "lnbitsHelp": "Hitta din URL och Admin Key i LNbits plånboksinställningar under API-info.",
     "lnbitsUrl": "LNbits URL",

@@ -503,7 +503,7 @@
     "noWalletFeatureZap": "攻击诺斯特",
     "chooseType": "选择连接钱包的方式",
     "nwcDesc": "通过Nostr中继连接——支持Alby、Buho、LNbits、Coinos等",
-    "nwcHelp": "Get this from your wallet app (Alby, Mutiny, Coinos). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
+    "nwcHelp": "Get this from your wallet app (Alby, Coinos, Rizful). Look for \"Nostr Wallet Connect\" in the wallet's settings.",
     "lnbitsDesc": "通过REST API直接连接到您的LNbits实例",
     "lnbitsHelp": "在LNbits钱包设置的API信息中找到您的URL和Admin Key。",
     "lnbitsUrl": "LNbits服务器地址",

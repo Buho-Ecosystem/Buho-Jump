@@ -16,7 +16,7 @@ We wanted something different. An extension that treats Nostr identity, Lightnin
 
 **Identity:** Local keys, mnemonic backup (NIP-06), or NIP-46 remote signing. Multi-account with one-tap switching. Profile publishing. NIP-05 verification display.
 
-**Wallet:** Connect any NWC-compatible wallet - Alby, Buho, Coinos, LNbits, Mutiny, whatever. Or use the built-in Cashu wallet with zero setup. Multi-wallet support. Per-site spending budgets. Fiat conversion in 19 currencies.
+**Wallet:** Connect any NWC-compatible wallet - Alby, Buho, Coinos, LNbits, Rizful, whatever. Or use the built-in Cashu wallet with zero setup. Multi-wallet support. Per-site spending budgets. Fiat conversion in 19 currencies.
 
 **Chat:** NIP-17 encrypted DMs with gift wraps. NIP-04 + NIP-44 fallback. Reply, react, forward, delete. Content warnings. Expiring messages.
 
